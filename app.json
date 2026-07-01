@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Quantis",
+    "slug": "quantis-trading",
+    "version": "4.3.2",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0d0f17"
+    },
+    "android": {
+      "package": "com.quantis.trading",
+      "versionCode": 37,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0d0f17"
+      },
+      "permissions": ["INTERNET", "VIBRATE", "RECEIVE_BOOT_COMPLETED"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#3b7dff"
+        }
+      ]
+    ]
+  }
+}
