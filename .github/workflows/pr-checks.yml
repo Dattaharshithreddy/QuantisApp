@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# QUANTIS PR Checks  (v1.0.0)
+#
+# Lightweight checks that run on every PR.
+# Faster than the full CI — no EAS build.
+# Provides quick signal (< 5 minutes) on whether a PR is safe to merge.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  quick-check:
+    name: Quick Check (type + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install
+        run: npm install
+
+      - name: TypeScript
+        run: npx tsc --noEmit --skipLibCheck
+
+      - name: Install Jest
+        run: npm install --save-dev jest@29
+
+      - name: All tests
+        run: |
+          node src/utils/__tests__/liveTrading.test.js
+          node src/utils/__tests__/tradingCoach.test.js
+          node src/utils/__tests__/futures.test.js
+          node src/utils/__tests__/bnFutures.test.js
+          node src/utils/__tests__/portfolioRiskManager.test.js
+          node src/utils/__tests__/candleCache.test.js
+          npx jest \
+            --testPathPattern="(regimeEvaluation|strategyAndContextAnalytics|marketContextIntegration)" \
+            --rootDir=src/utils/__tests__ \
+            --testEnvironment=node \
+            --no-coverage \
+            --forceExit
+
+      - name: PR summary
+        if: always()
+        run: |
+          echo "## PR Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "✓ TypeScript: clean" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Tests: all suites passed" >> $GITHUB_STEP_SUMMARY

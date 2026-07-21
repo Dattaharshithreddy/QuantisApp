@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# QUANTIS Nightly  (v1.0.0)
+#
+# Runs at 2am IST every night (8:30pm UTC).
+# Builds a fresh APK from main so there is always a recent build ready.
+# Also runs the full test suite to catch any regressions introduced by
+# async changes (data drift, API changes, etc.).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '30 20 * * *'   # 8:30pm UTC = 2:00am IST
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    name: Nightly Test + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install
+        run: npm install
+
+      - name: TypeScript check
+        run: npx tsc --noEmit --skipLibCheck
+
+      - name: Install Jest
+        run: npm install --save-dev jest@29
+
+      - name: Full test suite
+        run: |
+          node src/utils/__tests__/liveTrading.test.js
+          node src/utils/__tests__/tradingCoach.test.js
+          node src/utils/__tests__/futures.test.js
+          node src/utils/__tests__/bnFutures.test.js
+          node src/utils/__tests__/portfolioRiskManager.test.js
+          node src/utils/__tests__/candleCache.test.js
+          npx jest \
+            --testPathPattern="(regimeEvaluation|strategyAndContextAnalytics|marketContextIntegration)" \
+            --rootDir=src/utils/__tests__ \
+            --testEnvironment=node \
+            --no-coverage \
+            --forceExit
+
+      - name: Build nightly APK
+        run: npx eas-cli build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Nightly summary
+        if: always()
+        run: |
+          echo "## Nightly Build — $(date -u '+%Y-%m-%d')" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: main" >> $GITHUB_STEP_SUMMARY
+          echo "Time: $(date -u '+%H:%M UTC')" >> $GITHUB_STEP_SUMMARY
