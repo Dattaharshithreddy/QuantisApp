@@ -79,8 +79,7 @@ export function runMonteCarlo(trades: ExecTrade[], startingCapital: number, iter
   const drawdownThresholds = [10, 20, 30, 50];
   const drawdownExceedance = drawdownThresholds.map(thresholdPct => ({
     thresholdPct,
-    probability: (drawdowns.filter(d => d > thresholdPct).length / drawdowns.length) * 100,
-  }));
+    probability: (drawdowns.filter(d => d > thresholdPct).length / drawdowns.length) * 100}));
 
   let realEquity = startingCapital;
   pctReturns.forEach(r => { realEquity *= (1 + r / 100); });
@@ -100,6 +99,5 @@ export function runMonteCarlo(trades: ExecTrade[], startingCapital: number, iter
     ci90Low: pAt(0.05), ci90High: pAt(0.95),
     p5: pAt(0.05), p25: pAt(0.25), p75: pAt(0.75), p95: pAt(0.95),
     drawdownExceedance,
-    originalReturnPct, originalPercentile,
-  };
+    originalReturnPct, originalPercentile};
 }

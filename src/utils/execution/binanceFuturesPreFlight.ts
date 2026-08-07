@@ -60,8 +60,7 @@ export async function runBnFuturesPreFlight(
     symbolTrading:    null, balanceOk:        null,
     priceAvailable:   null, markPrice:        null,
     availableBalance: null, marginNeeded,
-    result: 'FAIL',         failCode: null,
-  };
+    result: 'FAIL',         failCode: null};
 
   function fail(code: BnPreFlightFailCode, reason: string): BnFuturesPreFlightResult {
     log.result = 'FAIL'; log.failCode = code;

@@ -6,17 +6,14 @@
 // breakdown with actionable recommendations.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
-import { useData }  from '../context/DataContext';
-import {
-  computePortfolioRisk, PortfolioRiskReport, AccountSnapshot, PositionRisk,
-} from '../utils/portfolioRiskManager';
+import { useData } from '../context/DataContext';
+import { computePortfolioRisk, PortfolioRiskReport, AccountSnapshot, PositionRisk} from '../utils/portfolioRiskManager';
 import { SPACING } from '../theme/colors';
 import { OnboardingTooltip } from '../components/OnboardingTooltip';
 import { TOOLTIP_IDS } from '../utils/onboarding';
-import { HelpButton } from '../components/HelpBottomSheet';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

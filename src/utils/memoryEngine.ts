@@ -126,6 +126,7 @@ function rs(a: RegimeLabel, b: RegimeLabel, v: number) {
   REGIME_SIMILARITY.set(`${b}|${a}`, v);
 }
 
+console.log('[QUANTIS_DIAG] M-memoryEngine-A: starting REGIME_SIMILARITY Map population');
 // Self-similarity
 REGIME_LABELS.forEach(r => rs(r, r, 1.0));
 
@@ -194,6 +195,7 @@ rs('DISTRIBUTION',   'CRISIS',         0.4);
 rs('DISTRIBUTION',   'UNKNOWN',        0.3);
 
 rs('CRISIS',         'UNKNOWN',        0.2);
+console.log('[QUANTIS_DIAG] M-memoryEngine-B: REGIME_SIMILARITY Map populated OK (' + REGIME_SIMILARITY.size + ' entries)');
 
 function regimeSimilarity(a: string, b: string): number {
   return REGIME_SIMILARITY.get(`${a}|${b}`) ?? 0.3; // default for unknown labels
@@ -294,8 +296,7 @@ export function buildEpisodeStore(input: EpisodeBuildInput): EpisodeStore {
   const {
     symbol, timeframe, candles, allFeatures, regimeLabels,
     predictions, primaryHorizon, architectureVersion, featureCount,
-    episodicContexts,
-  } = input;
+    episodicContexts} = input;
 
   const episodes: Episode[] = [];
 
@@ -322,8 +323,7 @@ export function buildEpisodeStore(input: EpisodeBuildInput): EpisodeStore {
       returnPct,
       cleanMove,
       context: episodicContexts?.[i] ?? null,
-      barIndex: i,
-    });
+      barIndex: i});
   }
 
   logger.info('memoryEngine', `${symbol}/${timeframe}: built ${episodes.length} episodes from ${candles.length} candles`);
@@ -335,8 +335,7 @@ export function buildEpisodeStore(input: EpisodeBuildInput): EpisodeStore {
     timeframe,
     episodes,
     builtAt:        Date.now(),
-    primaryHorizon,
-  };
+    primaryHorizon};
 }
 
 // ── Persistence ────────────────────────────────────────────────────────────────
@@ -454,8 +453,7 @@ export function queryMemory(
     available: false, similarCount: 0,
     topKWinRate: 0, topKAvgReturn: 0,
     regimeMatchRate: 0, bestSimilarity: 0,
-    confidenceAdjust: 0, failurePatterns: [], topEpisodes: [],
-  };
+    confidenceAdjust: 0, failurePatterns: [], topEpisodes: []};
 
   if (!store || store.episodes.length < 10) return unavailable;
   if (currentFeatures.length !== store.featureCount) return unavailable;
@@ -463,8 +461,7 @@ export function queryMemory(
   // Score all episodes
   const scored = store.episodes.map(episode => ({
     episode,
-    similarity: hybridSimilarity(currentFeatures, episode, currentRegime, currentAtrNorm),
-  }));
+    similarity: hybridSimilarity(currentFeatures, episode, currentRegime, currentAtrNorm)}));
 
   // Sort descending by similarity
   scored.sort((a, b) => b.similarity - a.similarity);
@@ -497,8 +494,7 @@ export function queryMemory(
     bestSimilarity,
     confidenceAdjust,
     failurePatterns,
-    topEpisodes:      qualifiedK,
-  };
+    topEpisodes:      qualifiedK};
 }
 
 // ── Utility: format memory result for display ─────────────────────────────────
@@ -514,8 +510,7 @@ export function formatMemoryResult(result: MemoryQueryResult): {
       headline:    'No similar history',
       subtitle:    'Insufficient matching episodes in memory',
       adjustLabel: '',
-      patterns:    [],
-    };
+      patterns:    []};
   }
 
   const wr = (result.topKWinRate * 100).toFixed(0);

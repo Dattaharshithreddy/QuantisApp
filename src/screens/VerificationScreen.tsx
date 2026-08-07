@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { Card, SectionLabel, PrimaryButton, Pill } from '../components/Common';
 import { Candle } from '../utils/indicators';
+import { fetchCdxCandles } from '../api/coindcx';
 import { fetchBnKlines } from '../api/binance';
 import { aoCandles } from '../api/angelOne';
 import { fetchAVKlines } from '../api/alphaVantage';
@@ -106,7 +107,8 @@ export default function VerificationScreen() {
     try {
       let c: Candle[] = [];
       if (asset.src === 'binance' && asset.bnSym) c = await fetchBnKlines(asset.bnSym, tf, 1000);
-      else if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx) c = await aoCandles(asset.aoToken, asset.aoEx, tf, aoSession);
+      else if ((asset.src === 'ao' || asset.src === 'ao_futures') && aoSession?.jwtToken && asset.aoToken && asset.aoEx) c = await aoCandles(asset.aoToken, asset.aoEx, tf, aoSession);
+      else if (asset.src === 'coindcx' && (asset as any).cdxSym) c = await fetchCdxCandles((asset as any).cdxSym, tf);
       else if (asset.src === 'av' && asset.avSym && avKey) c = await fetchAVKlines(asset.avSym, tf, avKey);
       else { setErr('No live data source connected for this asset.'); setLoading(''); return; }
 

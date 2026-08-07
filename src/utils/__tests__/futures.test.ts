@@ -88,7 +88,7 @@ describe('buildStaticContracts', () => {
   test('NIFTY July 2026 symbol is correct', () => {
     const now = new Date(2026, 6, 1);   // July 1 — current month is July
     const contracts = buildStaticContracts('NIFTY', now);
-    expect(contracts.current.symbol).toBe('NIFTY26JUL75FUT');
+    expect(contracts.current.symbol).toBe('NIFTY26JULFUT');
     expect(contracts.current.lotSize).toBe(75);
     expect(contracts.current.exchange).toBe('NFO');
   });

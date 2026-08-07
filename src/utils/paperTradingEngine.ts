@@ -22,7 +22,7 @@ import { precomputeSMC } from './smc/smcEngine';
 import { precomputeStructure } from './structure/marketStructure';
 import { atr as atrFn } from './technicalIndicators';
 import { evaluateIntracandleFill, DEFAULT_EXECUTION_CONFIG, FillResult } from './executionEngine';
-import { evaluatePortfolioRisk, DEFAULT_PORTFOLIO_RISK_CONFIG, PortfolioRiskResult } from './portfolioRiskEngine';
+import { evaluatePortfolioRisk, DEFAULT_PORTFOLIO_RISK_CONFIG } from './portfolioRiskEngine';
 
 // LONG and SHORT share this exact same engine — every function below is
 // parameterized by `position.direction`, never duplicated per-side. The one
@@ -94,8 +94,7 @@ export async function attemptOpenPosition(
     // not an AI gate, so the user needs visibility that their override attempt failed here.
     const dupSignal = {
       action: prediction.action, confidence: overallConfidence ?? prediction.confidence,
-      ensembleProbUp: prediction.ensembleProbUp, regime: regimeLabelOverride ?? 'UNKNOWN',
-    };
+      ensembleProbUp: prediction.ensembleProbUp, regime: regimeLabelOverride ?? 'UNKNOWN'};
     recordShadowTrade({ symbol, timeframe, direction: prediction.action === 'BUY' ? 'LONG' : 'SHORT',
       entryPrice: prediction.suggestedEntry, stopLoss: prediction.suggestedStopLoss,
       takeProfit: prediction.suggestedTakeProfit, blockReason: dupReason,
@@ -150,7 +149,6 @@ export async function attemptOpenPosition(
     signalType: undefined as string | undefined,  // filled in by signal gate path below
   };
 
-
   const settings = await getRiskSettings();
 
   // FIX (Paper Trading Audit — root cause): portfolioValue was previously
@@ -201,8 +199,7 @@ export async function attemptOpenPosition(
     remainingHeadroom:   +remainingSymbolHeadroom.toFixed(2),
     qty:                 sizing.qty,
     positionValue:       +(sizing.positionValue ?? 0).toFixed(2),
-    bypassGates,
-  }));
+    bypassGates}));
 
   if (sizing.qty <= 0) {
     const riskBudget = settings.accountSize * settings.riskPerTradePct / 100;
@@ -216,8 +213,7 @@ export async function attemptOpenPosition(
       `with a closer stop-loss.`;
     const sizingSignal = {
       action: prediction.action, confidence: overallConfidence ?? prediction.confidence,
-      ensembleProbUp: prediction.ensembleProbUp, regime: regimeCheck?.currentRegime ?? 'UNKNOWN',
-    };
+      ensembleProbUp: prediction.ensembleProbUp, regime: regimeCheck?.currentRegime ?? 'UNKNOWN'};
     recordShadowTrade({ symbol, timeframe, direction,
       entryPrice: prediction.suggestedEntry, stopLoss, takeProfit,
       blockReason: sizingReason, blockGate: 'POSITION_SIZING',
@@ -228,8 +224,7 @@ export async function attemptOpenPosition(
         riskPerTradePct: settings.riskPerTradePct,
         accountSize:     settings.accountSize,
         currentPrice:    +currentPrice.toFixed(4),
-        stopLoss:        +stopLoss.toFixed(4),
-      },
+        stopLoss:        +stopLoss.toFixed(4)},
       marketContext: marketContext ?? null }).catch(() => {});
     logger.warn('paperTradingEngine',
       `POSITION_SIZING blocked ${symbol}: qty=0, stopDist=${stopDist.toFixed(4)}, riskBudget=${riskBudget.toFixed(2)}, bypassGates=${bypassGates}`);
@@ -269,14 +264,12 @@ export async function attemptOpenPosition(
       ? (((sizing as any).positionValue ?? positionValue) / realPortfolioValue) * 100 : null,
     maxExposurePerSymbolPct: riskExtras.maxExposurePerSymbolPct,
     leverage: 1, // no leverage concept exists anywhere in this engine — confirmed during the audit, not omitted
-    gateAllowed: gate.allowed, rejectionReason: gate.allowed ? null : gate.reason,
-  }));
+    gateAllowed: gate.allowed, rejectionReason: gate.allowed ? null : gate.reason}));
 
   if (!gate.allowed && !bypassGates) {
     const confGateData: BlockedGateData = {
       gate: 'CONFIDENCE', reason: gate.reason || 'Blocked by risk controls.',
-      details: { confidence: +(overallConfidence ?? prediction.confidence).toFixed(1), regime: regimeCheck?.currentRegime ?? 'UNKNOWN' },
-    };
+      details: { confidence: +(overallConfidence ?? prediction.confidence).toFixed(1), regime: regimeCheck?.currentRegime ?? 'UNKNOWN' }};
     recordShadowTrade({ symbol, timeframe, direction, entryPrice: prediction.suggestedEntry,
       stopLoss, takeProfit, blockReason: confGateData.reason, blockGate: 'CONFIDENCE',
       signal: shadowSignal, signalId: prediction.signalId, gateDetails: confGateData.details,
@@ -322,8 +315,7 @@ export async function attemptOpenPosition(
       accountSize: settings.accountSize,
       baseRiskPct: settings.riskPerTradePct,
       feePct: FEE_PCT, slippagePct: SLIPPAGE_PCT,
-      candleSeries,
-    },
+      candleSeries},
     realPortfolioValue,
     DEFAULT_PORTFOLIO_RISK_CONFIG,
   );
@@ -384,9 +376,7 @@ export async function attemptOpenPosition(
         regime:      regimeForRecord,
         signalType:  signalGateResult.signalType,
         blockSource: signalGateResult.blockSource ?? 'REGIME',
-        ...(activeStratId ? { strategyId: activeStratId } : {}),
-      },
-    };
+        ...(activeStratId ? { strategyId: activeStratId } : {})}};
     logger.info('paperTradingEngine', `Signal gate BLOCKED ${symbol} [${signalGateResult.blockSource}]: ${signalGateResult.reason}`);
     // Fill signalType on the shared shadowSignal object now that we have it.
     shadowSignal.signalType = signalGateResult.signalType;
@@ -453,10 +443,13 @@ export async function attemptOpenPosition(
       modelVersion:   prediction.modelVersion,
       regimeLabel:    regimeForRecord,
       strategyId:     activeStratId ?? null,
-      capturedAt:     Date.now(),
-    },
+      capturedAt:     Date.now()},
     entryFee: finalEntryFee, // FIX: use post-REDUCE_SIZE fee (in sync with stored qty)
     maxUnrealizedProfit: 0, maxUnrealizedDrawdown: 0,
+    // FIX: Initialize peak-profit withdrawal tracking fields (Audit item #2 and #3).
+    // Both start at 0 — peakProfit grows whenever unrealized exceeds it; maxProfitWithdrawn
+    // grows whenever (peakProfit - currentUnrealizedPnL) exceeds the previous max.
+    peakProfit: 0, maxProfitWithdrawn: 0,
     tradeEconomics,
     entrySnapshot: { recentCandles: recentCandles.slice(-30), topFeatures: prediction.topFeatures, marketRegime: regimeForRecord, orderBookSnapshot: prediction.orderBookSnapshot, marketContext: marketContext ?? prediction.marketContext ?? null },
     // Fix 2: compute OB freshness directly from the SMC engine on recentCandles.
@@ -482,8 +475,7 @@ export async function attemptOpenPosition(
       return initManagementState(
         entryPrice, stopLoss, direction, regimeForRecord, obFresh, DEFAULT_MGMT_CONFIG,
       );
-    })(),
-  };
+    })()};
 
   // Cash balance guard: ensure sufficient cash before deducting.
   // calcPositionSize caps notional by remainingSymbolHeadroom, but doesn't
@@ -533,7 +525,21 @@ export async function attemptOpenPosition(
 // CloseReason: the engine-level exit reason stored on journal records.
 // MANUAL_EXIT is kept as a legacy alias — new code should use MANUAL_CLOSE.
 // TIME_EXIT fires when maxBarsHeld (from strategy profile) is reached.
-export type CloseReason = 'STOP_LOSS' | 'TAKE_PROFIT' | 'MANUAL_CLOSE' | 'MANUAL_EXIT' | 'TIME_EXIT' | 'AI_EXIT_SIGNAL';
+export type CloseReason =
+  | 'STOP_LOSS'        // initial stop hit at a loss
+  | 'TRAILING_STOP'    // trailing stop hit while in profit
+  | 'BREAK_EVEN_STOP'  // break-even stop hit (near-zero P&L)
+  | 'TAKE_PROFIT'
+  | 'MANUAL_CLOSE'
+  | 'MANUAL_EXIT'
+  | 'TIME_EXIT'
+  | 'AI_EXIT_SIGNAL'
+  // FIX (Audit item #1): PARTIAL_CLOSE records the fraction of a position closed
+  // via closePositionPartial(). Previously partial closes updated realizedPnL on
+  // the portfolio without writing any journal record, causing Portfolio Realized P&L
+  // to diverge from the sum seen in Analytics/Trade Review. Now every partial close
+  // writes a record with this exitReason so all screens see identical totals.
+  | 'PARTIAL_CLOSE';
 
 const closingPositionIds = new Set<string>();
 
@@ -612,9 +618,27 @@ async function closePositionInner(positionId: string, exitPrice: number, exitRea
 
   await addToDailyPnL(pnl);
 
-  if (exitReason === 'STOP_LOSS') notifyStopLossHit(position.symbol, pnl).catch(() => {});
-  else if (exitReason === 'TAKE_PROFIT') notifyTakeProfitHit(position.symbol, pnl).catch(() => {});
-  else notifyTradeClosed(record).catch(() => {});
+  // Dispatch the correct notification based on enriched exit reason.
+  // TRAILING_STOP and BREAK_EVEN_STOP are profitable/neutral stop exits —
+  // they must never show the "Closed at a loss" message.
+  switch (exitReason) {
+    case 'TAKE_PROFIT':
+      notifyTakeProfitHit(position.symbol, pnl).catch(() => {});
+      break;
+    case 'TRAILING_STOP':
+      notifyStopLossHit(position.symbol, pnl).catch(() => {}); // pnl>0 → shows profit message
+      break;
+    case 'BREAK_EVEN_STOP':
+      notifyStopLossHit(position.symbol, pnl).catch(() => {}); // pnl≈0 → shows break-even message
+      break;
+    case 'STOP_LOSS':
+      notifyStopLossHit(position.symbol, pnl).catch(() => {});
+      break;
+    default:
+      // TIME_EXIT, AI_EXIT_SIGNAL, MANUAL_CLOSE, MANUAL_EXIT: general close notification
+      notifyTradeClosed(record).catch(() => {});
+      break;
+  }
 
   logger.info('paperTradingEngine', `Closed ${position.direction} ${position.symbol} @ ${effectiveExit.toFixed(2)}, pnl=${pnl.toFixed(2)}, reason=${exitReason}`);
 }
@@ -645,7 +669,52 @@ export async function closePositionPartial(positionId: string, fraction: number,
   position.entryFee -= attributedEntryFee;
   await savePortfolio(portfolio);
   await addToDailyPnL(pnl);
-  logger.info('paperTradingEngine', `Partial close ${position.direction} ${position.symbol}: ${(fraction * 100).toFixed(0)}% @ ${effectiveExit.toFixed(2)}, pnl=${pnl.toFixed(2)}`);
+
+  // FIX (Audit item #1 — root cause of Portfolio Realized P&L ≠ Trade Review/Analytics sum):
+  // Partial closes were updating portfolio.realizedPnL (+= pnl) but NEVER writing a
+  // PaperTradeRecord to the journal. This caused:
+  //   portfolio.realizedPnL       = sum of ALL closed pnl (full + partial)
+  //   sum(trades[].pnl)           = sum of FULL closes ONLY
+  // Result: Portfolio screen showed a HIGHER realized P&L than Analytics "best trade" sum
+  // and Trade Review totals, because partial-close P&L existed in realizedPnL but not
+  // in the journal that Analytics and Trade Review both read.
+  //
+  // Fix: record a journal entry for every partial close. The record carries:
+  //   - grossPnl / pnl / pnlPct for the PARTIAL qty only (not the full original position)
+  //   - exitReason: 'PARTIAL_CLOSE' so Analytics/Journal can distinguish partial from full
+  //   - maxUnrealizedProfit / peakProfit / maxProfitWithdrawn: snapshotted at partial-close
+  //     time (the remaining open portion continues tracking from here)
+  //   - qty: the CLOSED fraction's quantity (closedQty), not position.qty (which is post-deduction)
+  //
+  // IMPORTANT: position.qty has already been decremented above, so we reconstruct closedQty here.
+  const closedQtyForRecord = position.qty / (1 - fraction) * fraction; // = original_qty * fraction; position.qty is already reduced
+  const grossPnlPartial = calculatePnL({ entryPrice: position.entryPrice, exitPrice: effectiveExit, qty: closedQtyForRecord, direction: position.direction, fees: 0 });
+  const pnlPctPartial   = calculatePnLPct(pnl, position.entryPrice, closedQtyForRecord);
+
+  // Build a synthetic PaperPosition snapshot representing the CLOSED portion only.
+  // We clone the key identity/metadata fields from the live position, but override
+  // qty and entryFee to reflect only the fraction that was just closed.
+  const partialSnapshot = {
+    ...position,
+    id: `${position.id}_partial_${Date.now()}`, // unique id so it appears as a separate journal entry
+    qty:      closedQtyForRecord,
+    entryFee: attributedEntryFee,
+    // Peak metrics up to this moment — the remaining open portion inherits the live position's
+    // running values (unchanged above) and continues from here.
+    maxUnrealizedProfit:  position.maxUnrealizedProfit,
+    maxUnrealizedDrawdown: position.maxUnrealizedDrawdown,
+    peakProfit:           position.peakProfit ?? Math.max(0, position.maxUnrealizedProfit),
+    maxProfitWithdrawn:   position.maxProfitWithdrawn ?? 0,
+  };
+
+  const partialRecord = buildTradeRecord(
+    partialSnapshot as any,
+    Date.now(), effectiveExit, fees, grossValue * (SLIPPAGE_PCT / 100),
+    'PARTIAL_CLOSE', pnl, pnlPctPartial, grossPnlPartial,
+  );
+  await recordCompletedTrade(partialRecord);
+
+  logger.info('paperTradingEngine', `Partial close ${position.direction} ${position.symbol}: ${(fraction * 100).toFixed(0)}% @ ${effectiveExit.toFixed(2)}, pnl=${pnl.toFixed(2)}, journal entry created (id=${partialRecord.id})`);
 }
 
 export async function moveStopLoss(positionId: string, newStopLoss: number): Promise<void> {
@@ -827,14 +896,55 @@ export async function monitorOpenPositions(livePrices: Record<string, number>): 
         return;
       }
       const unrealized = calculatePnL({ entryPrice: position.entryPrice, exitPrice: cur, qty: position.qty, direction: position.direction });
-      position.maxUnrealizedProfit = Math.max(position.maxUnrealizedProfit, unrealized);
+
+      // FIX (Audit items #2, #3, #4): ALL peak/excursion metrics must update on EVERY tick.
+      // Previously only maxUnrealizedProfit and maxUnrealizedDrawdown were updated; peakProfit
+      // and maxProfitWithdrawn did not exist at all. These are now initialized at open (see
+      // attemptOpenPosition above) and updated here on every price update without exception.
+      //
+      //   maxUnrealizedProfit = MFE = highest favorable unrealized P&L ever seen (>= 0 clamp)
+      //   maxUnrealizedDrawdown = MAE = most adverse unrealized P&L ever seen (<= 0)
+      //   peakProfit           = max(peakProfit, unrealized) — tracks the running peak
+      //                          (same as maxUnrealizedProfit when positive, but continues
+      //                           tracking even if unrealized dips into negative territory
+      //                           then bounces — maxUnrealizedProfit would have already
+      //                           clamped at the prior peak in that scenario)
+      //   maxProfitWithdrawn   = max(maxProfitWithdrawn, peakProfit - unrealized)
+      //                          — the largest "profit given back" from peak ever seen
+      //
+      // Formula (per-tick, must NEVER be skipped):
+      //   peak = max(peak, currentUnrealizedPnL)
+      //   profitWithdrawn = peak - currentUnrealizedPnL
+      //   maxProfitWithdrawn = max(maxProfitWithdrawn, profitWithdrawn)
+
+      position.maxUnrealizedProfit  = Math.max(position.maxUnrealizedProfit,  unrealized);
       position.maxUnrealizedDrawdown = Math.min(position.maxUnrealizedDrawdown, unrealized);
+
+      // peakProfit and maxProfitWithdrawn — always present after v6.9.3 (initialized to 0 at open).
+      // Guard with ?? 0 for backward-compat with any serialized position that predates these fields.
+      const prevPeak           = position.peakProfit         ?? 0;
+      const prevMaxWithdrawn   = position.maxProfitWithdrawn ?? 0;
+      const newPeak            = Math.max(prevPeak, unrealized);
+      const profitWithdrawn    = Math.max(0, newPeak - unrealized); // never negative
+      position.peakProfit         = newPeak;
+      position.maxProfitWithdrawn = Math.max(prevMaxWithdrawn, profitWithdrawn);
 
       // Trade management: break-even, trailing, partial TP, time/regime exit
       if (position.mgmt) {
         const ec  = position.entrySnapshot.recentCandles;
         const lc  = ec[ec.length - 1];
-        const atrEst = lc ? Math.abs(lc.high - lc.low) * 1.5 : 1;
+        // FIX: single-candle ATR estimate was wildly wrong for tight-range candles
+        // (e.g. 9:15 AM open with 0.20-wide candle → atrEst=0.30 → trail stop placed
+        // 0.30 away from current price → triggered on next tick).
+        // Use rolling average of last 10 candles' true range for a stable estimate,
+        // with a floor of initialRisk * 0.5 so the trail is never closer than
+        // half the original risk distance.
+        const atrWindow = ec.slice(-10);
+        const rawAtr = atrWindow.length > 0
+          ? atrWindow.reduce((sum, c) => sum + Math.abs(c.high - c.low), 0) / atrWindow.length
+          : (lc ? Math.abs(lc.high - lc.low) : 1);
+        const initialRiskFloor = (position.mgmt.initialRisk ?? 0) * 0.5;
+        const atrEst = Math.max(rawAtr * 1.5, initialRiskFloor);
         // Fix 3: build real structural levels from stored recentCandles.
         // O(k) where k ≤ 30 — no full engine recompute.
         const structSnap = buildStructuralTrailingSnap(ec, cur, position.direction, atrEst);
@@ -845,8 +955,7 @@ export async function monitorOpenPositions(livePrices: Record<string, number>): 
           structureTrailLevel: structSnap.structureTrailLevel,
           regimeLabel: position.mgmt.entryRegime,
           regimeBull: 0, regimeBear: 0, regimeVol: 0, mtfOverall: 0,
-          barIndex: position.mgmt.barsHeld,
-        };
+          barIndex: position.mgmt.barsHeld};
         const dec = evaluateTradeManagement(
           position.direction, position.entryPrice, position.stopLoss,
           position.mgmt, snap, DEFAULT_MGMT_CONFIG,
@@ -872,7 +981,25 @@ export async function monitorOpenPositions(livePrices: Record<string, number>): 
         tickCandle, position.mgmt?.barsHeld ?? 0, DEFAULT_EXECUTION_CONFIG,
       );
       if (fill.triggered && !closedThisPass.has(position.id)) {
-        const reason: CloseReason = fill.fillType === 'STOP' ? 'STOP_LOSS' : 'TAKE_PROFIT';
+        // Determine the precise stop exit reason from stopHistory.
+        // The last stopHistory entry tells us why the stop was where it was:
+        //   'initial'     → original stop, never moved → pure STOP_LOSS
+        //   'break_even'  → stop moved to entry price → BREAK_EVEN_STOP
+        //   'trail_*'     → stop trailed above entry → TRAILING_STOP
+        // For TP hits, always use TAKE_PROFIT regardless.
+        let reason: CloseReason;
+        if (fill.fillType === 'TP') {
+          reason = 'TAKE_PROFIT';
+        } else {
+          const lastStopMove = position.mgmt?.stopHistory?.at(-1)?.reason ?? 'initial';
+          if (lastStopMove === 'break_even') {
+            reason = 'BREAK_EVEN_STOP';
+          } else if (lastStopMove.startsWith('trail_')) {
+            reason = 'TRAILING_STOP';
+          } else {
+            reason = 'STOP_LOSS';
+          }
+        }
         toClose.push({ id: position.id, price: fill.actualFill, reason, fill });
         closedThisPass.add(position.id);
       }

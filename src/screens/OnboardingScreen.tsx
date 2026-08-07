@@ -22,18 +22,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useRef, useCallback } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, Animated,
-  Dimensions, AccessibilityInfo,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Animated, Dimensions} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
-import {
-  markOnboardingComplete, saveExperience,
-  OnboardingExperience, TOOLTIP_IDS,
-} from '../utils/onboarding';
-import { RADIUS, SPACING, TYPE } from '../theme/colors';
+import { markOnboardingComplete, saveExperience, OnboardingExperience} from '../utils/onboarding';
+import { RADIUS, SPACING } from '../theme/colors';
 
 const { width: W } = Dimensions.get('window');
 
@@ -63,8 +57,7 @@ function ProgressBar({ step, total, T }: { step: number; total: number; T: any }
       <View style={{ height: 4, backgroundColor: T.bg3, borderRadius: 2 }}>
         <Animated.View style={{
           height: 4, borderRadius: 2, backgroundColor: T.accent,
-          width: `${(step / total) * 100}%`,
-        }} />
+          width: `${(step / total) * 100}%`}} />
       </View>
     </View>
   );

@@ -95,8 +95,7 @@ export function detectBreakout(
       breakoutStrength: strength,
       isCloseBreakout:  true,
       volumeAtBreakout: volRatio,
-      falseBreakout,
-    };
+      falseBreakout};
   }
 
   return {
@@ -106,8 +105,7 @@ export function detectBreakout(
     breakoutStrength: 0,
     isCloseBreakout:  false,
     volumeAtBreakout: null,
-    falseBreakout:    false,
-  };
+    falseBreakout:    false};
 }
 
 // ── Detect retest state ───────────────────────────────────────────────────────
@@ -140,8 +138,7 @@ export function detectRetest(
     if (closedThrough) {
       return {
         hasRetest: true, retestBar: i, retestPrice: c.close,
-        retestSuccess: false, retestFailed: true,
-      };
+        retestSuccess: false, retestFailed: true};
     }
 
     // Bounced from the level (close still on breakout side) → successful retest
@@ -153,15 +150,13 @@ export function detectRetest(
     if (bouncedFromLevel) {
       return {
         hasRetest: true, retestBar: i, retestPrice: c.close,
-        retestSuccess: true, retestFailed: false,
-      };
+        retestSuccess: true, retestFailed: false};
     }
   }
 
   return {
     hasRetest: false, retestBar: null, retestPrice: null,
-    retestSuccess: false, retestFailed: false,
-  };
+    retestSuccess: false, retestFailed: false};
 }
 
 // ── Check whether a pattern has expired ──────────────────────────────────────

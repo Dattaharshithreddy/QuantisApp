@@ -144,8 +144,7 @@ export function computeConfidence(
       return {
         patternConfidence,
         patternDirection:  best.direction as 'bullish' | 'bearish' | 'neutral' | null,
-        patternStatus:     best.status,
-      };
+        patternStatus:     best.status};
     })(),
 
     // Regime
@@ -154,8 +153,7 @@ export function computeConfidence(
     regimeBearScore:    regimeSnap?.bearScore       ?? 0,
     regimeVolatility:   regimeSnap?.volatilityScore ?? 0,
     regimeBreakout:     regimeSnap?.breakoutScore   ?? 0,
-    regimeMeanRev:      regimeSnap?.meanRevScore     ?? 0,
-  };
+    regimeMeanRev:      regimeSnap?.meanRevScore     ?? 0};
 
   const result = scoreConfidence(inp);
   return { ...result, scoringVersion: CONFIDENCE_SCORING_VERSION };

@@ -72,8 +72,7 @@ export const BinanceFuturesExecutor: ExecutionProvider = {
     orders:    { market: true, limit: true, stopLoss: false, bracket: false },
     position:  { overnight: true, lotBased: false, partialClose: true, maxLotsPerOrder: 0 },
     risk:      { marginRequired: true, leverage: true, preFlight: true },
-    display:   { currency: '$', exchangeLabel: 'Binance USDM Perps', priceDecimals: 4, qtyLabel: 'contracts' },
-  },
+    display:   { currency: '$', exchangeLabel: 'Binance USDM Perps', priceDecimals: 4, qtyLabel: 'contracts' }},
 
   async execute(req: ExecutionOrderRequest, ctx: ExecutionContext): Promise<ExecutionFill> {
     if (!ctx.binanceApiKey || !ctx.binanceSecret) {
@@ -100,8 +99,7 @@ export const BinanceFuturesExecutor: ExecutionProvider = {
       orderType:    req.orderType,
       marginNeeded: margin,
       apiKey:       ctx.binanceApiKey,
-      secret:       ctx.binanceSecret,
-    });
+      secret:       ctx.binanceSecret});
 
     if (!preFlight.ok) {
       throw new Error(preFlight.reason);
@@ -157,8 +155,7 @@ export const BinanceFuturesExecutor: ExecutionProvider = {
       // Futures-specific
       marginBlocked: margin,
       lots:          undefined,   // Binance perps don't use lots — qty is in contracts
-      lotSize:       undefined,
-    };
+      lotSize:       undefined};
   },
 
   async cancel(orderId: string, symbol: string, ctx: ExecutionContext): Promise<void> {

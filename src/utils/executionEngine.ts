@@ -122,11 +122,25 @@ export function evaluateIntracandleFill(
       gapSize:       Math.abs(open - takeProfit),
       wasGapFill:    true,
       ambiguousCandle: false,
-      slippagePaid:  0,
-    };
+      slippagePaid:  0};
   }
 
   // ── 2. Intracandle reach: did High/Low touch SL or TP? ──────────────────────
+  // Special case: synthetic 1-tick candle (open=high=low=close = current price).
+  // A single price point cannot be in two places at once — no ambiguity is possible.
+  // Evaluate directly without applying candle-based "both touched" logic.
+  if (high === low) {
+    const price = high; // all four OHLC values are identical
+    if (direction === 'LONG') {
+      if (price >= takeProfit) return { triggered: true, fillType: 'TP',   expectedPrice: takeProfit, actualFill: takeProfit, gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0 };
+      if (price <= stopLoss)   return { triggered: true, fillType: 'STOP', expectedPrice: stopLoss,   actualFill: stopLoss,   gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0 };
+    } else {
+      if (price <= takeProfit) return { triggered: true, fillType: 'TP',   expectedPrice: takeProfit, actualFill: takeProfit, gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0 };
+      if (price >= stopLoss)   return { triggered: true, fillType: 'STOP', expectedPrice: stopLoss,   actualFill: stopLoss,   gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0 };
+    }
+    return { ...NO_FILL };
+  }
+
   const stopReached = direction === 'LONG'
     ? low  <= stopLoss          // wick reached the long stop
     : high >= stopLoss;         // wick reached the short stop
@@ -139,13 +153,13 @@ export function evaluateIntracandleFill(
 
   // ── 3. Ambiguity: both SL and TP touched in the same candle ─────────────────
   // We cannot know from OHLC alone which was hit first inside the candle.
-  // The three modes represent different assumptions about candle structure:
-  //   CONSERVATIVE — assume the adverse move (stop) came first.
-  //                  Appropriate for risk-managed simulations. Default.
-  //   OPTIMISTIC   — assume the favorable move (TP) came first.
-  //                  Upper bound on performance; useful for sensitivity analysis.
-  //   RANDOM       — deterministic coin flip seeded by (randomSeed ^ barIndex).
-  //                  Unbiased in aggregate across many candles; reproducible.
+  // EXCEPTION: when high === low (1-tick synthetic candle from live price feed),
+  // the candle represents a single price point. If that price appears to touch
+  // both SL and TP simultaneously, one of the checks must be wrong — a single
+  // price cannot be both ≤ stopLoss and ≥ takeProfit unless SL > TP (corrupted
+  // levels). In that edge case, resolve by which level the price is closer to.
+  // This prevents the CONSERVATIVE mode from always declaring STOP_LOSS on
+  // live ticks where the execution engine synthesises a 1-point candle.
   const ambiguous = stopReached && tpReached;
 
   if (ambiguous) {
@@ -164,8 +178,7 @@ export function evaluateIntracandleFill(
       gapSize:       0,
       wasGapFill:    false,
       ambiguousCandle: true,
-      slippagePaid:  0,
-    };
+      slippagePaid:  0};
   }
 
   // ── 4. Unambiguous fill ──────────────────────────────────────────────────────
@@ -173,16 +186,14 @@ export function evaluateIntracandleFill(
     return {
       triggered: true, fillType: 'STOP',
       expectedPrice: stopLoss, actualFill: stopLoss,
-      gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0,
-    };
+      gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0};
   }
 
   // tpReached
   return {
     triggered: true, fillType: 'TP',
     expectedPrice: takeProfit, actualFill: takeProfit,
-    gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0,
-  };
+    gapSize: 0, wasGapFill: false, ambiguousCandle: false, slippagePaid: 0};
 }
 
 // ── Execution statistics accumulator ─────────────────────────────────────────
@@ -219,6 +230,5 @@ export function accumulateExecutionStats(
     avgSlippagePct: stats.avgSlippagePct + (slipPct - stats.avgSlippagePct) / n,
     avgGapLossPct:  fill.wasGapFill && prevGapN + 1 > 0
       ? stats.avgGapLossPct + (gapPct - stats.avgGapLossPct) / (prevGapN + 1)
-      : stats.avgGapLossPct,
-  };
+      : stats.avgGapLossPct};
 }

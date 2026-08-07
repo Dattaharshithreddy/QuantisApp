@@ -57,8 +57,7 @@ function levelsToDetected(
       type,
       touches:  entry.count,
       swept:    sw?.swept    ?? false,
-      sweepBar: sw?.bar      ?? null,
-    });
+      sweepBar: sw?.bar      ?? null});
   }
   return result;
 }

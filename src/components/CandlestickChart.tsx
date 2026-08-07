@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import { View, TouchableOpacity, Text, Modal, useWindowDimensions, ActivityIndicator, Animated } from 'react-native';
+import { View, TouchableOpacity, Pressable, Text, Modal, useWindowDimensions, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -1100,8 +1100,7 @@ function GestureChart({ data, theme: T, showMA, showVP, width, height, onRequest
       // AI Prediction (if available) — never fabricated for historical
       // candles, only ever shown for the current/last one, since this app
       // never generates retroactive predictions for arbitrary past bars.
-      prediction: isLastCandle ? livePrediction : null,
-    };
+      prediction: isLastCandle ? livePrediction : null};
   }, [selectedCandle, selectedIndex, displayVisible, livePrediction]);
 
   return (
@@ -1121,30 +1120,29 @@ function GestureChart({ data, theme: T, showMA, showVP, width, height, onRequest
 
       {/* CoinDCX: controls fade in on touch, auto-hide after 2.5s inactivity */}
       <Animated.View style={{ position: 'absolute', bottom: 48, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, opacity: ctrlsOpacity }} pointerEvents='box-none'>
-        <TouchableOpacity onPress={() => { win.zoomOut(); showControls(); }} style={ctrlBtn} hitSlop={{ top:10,bottom:10,left:10,right:10 }}>
+        <Pressable onPress={() => { win.zoomOut(); showControls(); }} style={ctrlBtn} hitSlop={10} android_ripple={{color:'rgba(255,255,255,0.2)'}}>
           <Text style={ctrlTxt}>−</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { win.zoomIn(); showControls(); }} style={ctrlBtn} hitSlop={{ top:10,bottom:10,left:10,right:10 }}>
+        </Pressable>
+        <Pressable onPress={() => { win.zoomIn(); showControls(); }} style={ctrlBtn} hitSlop={10} android_ripple={{color:'rgba(255,255,255,0.2)'}}>
           <Text style={ctrlTxt}>+</Text>
-        </TouchableOpacity>
+        </Pressable>
         {win.isModified && (
-          <TouchableOpacity onPress={() => { win.resetToLive(); showControls(); }} style={[ctrlBtn, { paddingHorizontal: 10 }]} hitSlop={{ top:10,bottom:10,left:10,right:10 }}>
+          <Pressable onPress={() => { win.resetToLive(); showControls(); }} style={[ctrlBtn, { paddingHorizontal: 10 }]} hitSlop={10} android_ripple={{color:'rgba(255,255,255,0.2)'}}>
             <Text style={[ctrlTxt, { fontSize: 11 }]}>↺</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
       </Animated.View>
 
       {/* Bottom-right: >> Jump to Live — only when viewing history */}
       {viewingHistory && (
-        <TouchableOpacity onPress={win.resetToLive} style={{
+        <Pressable onPress={win.resetToLive} hitSlop={8} android_ripple={{color:'rgba(255,255,255,0.15)'}} style={{
           position: 'absolute', bottom: 48, right: 62,
           backgroundColor: T.bg2 + 'ee', borderRadius: 8,
           paddingHorizontal: 10, paddingVertical: 8,
           borderWidth: 1, borderColor: T.border,
-          flexDirection: 'row', alignItems: 'center', gap: 4,
-        }}>
+          flexDirection: 'row', alignItems: 'center', gap: 4}}>
           <Text style={{ color: T.text, fontSize: 11, fontWeight: '700' }}>{'»'}</Text>
-        </TouchableOpacity>
+        </Pressable>
       )}
 
       {/* OHLC info bar — CoinDCX style: compact top strip, only during crosshair,
@@ -1155,8 +1153,7 @@ function GestureChart({ data, theme: T, showMA, showVP, width, height, onRequest
           backgroundColor: T.bg1 + 'f5',
           paddingHorizontal: 10, paddingVertical: 6,
           borderBottomWidth: 1, borderBottomColor: T.border,
-          flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8,
-        }}>
+          flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8}}>
           <Text style={{ color: T.textDim, fontSize: 9, minWidth: 80 }}>
             {new Date(selectedCandle.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
@@ -1176,7 +1173,7 @@ function GestureChart({ data, theme: T, showMA, showVP, width, height, onRequest
   );
 }
 
-export default function CandlestickChart({
+export default React.memo(function CandlestickChart({
   data, theme: T, showMA = true, showVP = false, height = 320, expandable = true,
   onRequestOlderData, loadingOlder = false, noDataMessage, timeframe, tradeLevels, markers, livePrediction, overlays, pricePrecision, livePrice, geoPatterns = null,
 }: Props) {
@@ -1229,17 +1226,17 @@ export default function CandlestickChart({
 
       {/* CoinDCX-style expand button — bottom-right corner */}
       {expandable && (
-        <TouchableOpacity
+        <Pressable
           onPress={() => setFullscreen(true)}
-          hitSlop={{ top:12, bottom:12, left:12, right:12 }}
+          hitSlop={12}
+          android_ripple={{color:'rgba(255,255,255,0.2)'}}
           style={{
             position: 'absolute', bottom: 48, right: 10,
             backgroundColor: T.bg2 + 'ee', borderRadius: 8,
             width: 36, height: 36, justifyContent: 'center', alignItems: 'center',
-            borderWidth: 1, borderColor: T.border,
-          }}>
+            borderWidth: 1, borderColor: T.border}}>
           <Text style={{ fontSize: 14, color: T.text }}>↗</Text>
-        </TouchableOpacity>
+        </Pressable>
       )}
 
       {/* Fullscreen modal — same GestureChart, more space */}
@@ -1248,12 +1245,13 @@ export default function CandlestickChart({
         <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }}>
           {/* Minimal header */}
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 12, paddingTop: 6, paddingBottom: 4 }}>
-            <TouchableOpacity
+            <Pressable
               onPress={() => setFullscreen(false)}
-              hitSlop={{ top:10, bottom:10, left:10, right:10 }}
+              hitSlop={10}
+              android_ripple={{color:'rgba(255,255,255,0.2)'}}
               style={{ backgroundColor: T.bg2, borderRadius: 8, width: 34, height: 34, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: T.border }}>
               <Text style={{ color: T.text, fontSize: 16, fontWeight: '700' }}>✕</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
           {/* Full-height chart — same component, same gestures */}
           <View style={{ flex: 1 }}>
@@ -1264,4 +1262,4 @@ export default function CandlestickChart({
       </Modal>
     </View>
   );
-}
+});

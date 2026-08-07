@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { Card, SectionLabel, PrimaryButton, Pill } from '../components/Common';
 import { Candle } from '../utils/indicators';
+import { fetchCdxCandles } from '../api/coindcx';
 import { fetchBnKlines } from '../api/binance';
 import { fetchAVKlines } from '../api/alphaVantage';
 import { aoCandles } from '../api/angelOne';
@@ -41,11 +42,12 @@ export default function CorrelationScreen() {
           const bnSym = asset.bnSym;
           candleMap[sym] = await fetchCandlesWithCache(sym, '1h',
             async () => fetchBnKlines(bnSym, '1h'), { skipApiIfFresh: true });
-        } else if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
+        } else if ((asset.src === 'ao' || asset.src === 'ao_futures') && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
           const { aoToken, aoEx } = asset; const sess = aoSession;
           candleMap[sym] = await fetchCandlesWithCache(sym, '1h',
             async () => aoCandles(aoToken, aoEx, '1h', sess), { skipApiIfFresh: true });
         }
+        else if (asset.src === 'coindcx' && (asset as any).cdxSym) candleMap[sym] = await fetchCdxCandles((asset as any).cdxSym, '1h');
         else if (asset.src === 'av' && asset.avSym && avKey) candleMap[sym] = await fetchAVKlines(asset.avSym, '1h', avKey);
         else { skipped.push(sym); continue; }
       } catch (_) {

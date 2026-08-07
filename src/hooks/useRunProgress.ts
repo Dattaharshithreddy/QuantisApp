@@ -54,6 +54,5 @@ export function useRunProgress() {
     total, completed, remaining, currentLabel, running,
     elapsedLabel: formatDuration(elapsedMs),
     etaLabel,
-    start, setCurrent, advance, finish,
-  };
+    start, setCurrent, advance, finish};
 }

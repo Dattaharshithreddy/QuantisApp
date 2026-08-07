@@ -20,16 +20,14 @@ export async function fetchAVKlines(sym: string, tf: string, key: string): Promi
       time: new Date(t).getTime(),
       open: parseFloat(v['1. open']), high: parseFloat(v['2. high']),
       low: parseFloat(v['3. low']), close: parseFloat(v['4. close']),
-      volume: parseFloat(v['5. volume'] || '0'),
-    }));
+      volume: parseFloat(v['5. volume'] || '0')}));
   }, {
     tag: 'alphavantage-klines', retries: 2,
     // Deliberately do NOT retry rate-limit errors — AV's free tier allows
     // only 25 requests/day total, so retrying a rate-limited call just burns
     // through that budget faster instead of helping. Only genuine transient
     // errors (network blips, unexpected HTTP errors) get retried.
-    shouldRetry: (e: any) => !String(e.message).includes('rate limit'),
-  });
+    shouldRetry: (e: any) => !String(e.message).includes('rate limit')});
 }
 
 export async function fetchAVQuote(sym: string, key: string): Promise<{ price: number; chg: number }> {

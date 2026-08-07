@@ -3,11 +3,8 @@ import { View, Text, TextInput, ScrollView, TouchableOpacity } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { Card, SectionLabel, MetricBox } from '../components/Common';
-import { RADIUS, SPACING } from '../theme/colors';
-import {
-  RiskSettings, getRiskSettings, saveRiskSettings, calcPositionSize, calcKelly,
-  getTodayPnL, isDailyLossLimitHit, DailyPnL, getPaperMode, setPaperMode,
-} from '../utils/riskManager';
+import { RADIUS } from '../theme/colors';
+import { RiskSettings, getRiskSettings, saveRiskSettings, calcPositionSize, calcKelly, getTodayPnL, isDailyLossLimitHit, DailyPnL, getPaperMode, setPaperMode} from '../utils/riskManager';
 import { getTrades, computeStats } from '../utils/journal';
 import { getPaperRiskExtras, savePaperRiskExtras, PaperRiskExtras } from '../utils/paperRiskControls';
 
@@ -29,8 +26,7 @@ function ToggleRow({ label, sub, value, onToggle, T }: { label: string; sub?: st
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         backgroundColor: value ? T.accent + '12' : T.bg3,
         borderWidth: 1, borderColor: value ? T.accent + '40' : T.cardBorder,
-        borderRadius: RADIUS.sm, padding: 12, minHeight: 48,
-      }}>
+        borderRadius: RADIUS.sm, padding: 12, minHeight: 48}}>
       <View style={{ flex: 1, marginRight: 10 }}>
         <Text style={{ color: T.text, fontWeight: '700', fontSize: 13 }}>{label}</Text>
         {sub && <Text style={{ color: T.textDim, fontSize: 10, marginTop: 2, lineHeight: 14 }}>{sub}</Text>}
@@ -44,8 +40,7 @@ export default function RiskManagerScreen() {
   const { theme: T } = useTheme();
   const [settings, setSettings] = useState<RiskSettings>({
     accountSize: 100000, riskPerTradePct: 1, maxDailyLossPct: 3,
-    maxFuturesLots: 5, defaultFuturesLeverage: 10,
-  });
+    maxFuturesLots: 5, defaultFuturesLeverage: 10});
   const [entry, setEntry] = useState('');
   const [stopLoss, setStopLoss] = useState('');
   const [todayPnL, setTodayPnL] = useState<DailyPnL>({ date: '', realizedPnL: 0, tradesCount: 0 });
@@ -54,7 +49,25 @@ export default function RiskManagerScreen() {
   const [paperMode, setPaperModeState] = useState(false);
   const [riskExtras, setRiskExtras] = useState<PaperRiskExtras | null>(null);
 
-  useEffect(() => { getPaperRiskExtras().then(setRiskExtras); }, []);
+  useEffect(() => {
+    getPaperRiskExtras().then(extras => {
+      // Migration: if values were corrupted to 1 by the old || 1 bug,
+      // reset them to sensible defaults. A user who genuinely wants 1
+      // can set it manually — but 1% max exposure per asset class is
+      // so restrictive it would block almost every trade, confirming corruption.
+      const needsMigration =
+        extras.maxExposurePerSymbolPct === 1 &&
+        extras.maxExposurePerAssetClassPct === 1 &&
+        extras.maxOpenPositions === 1;
+      if (needsMigration) {
+        const fixed = { ...extras, maxOpenPositions: 5, maxExposurePerSymbolPct: 30, maxExposurePerAssetClassPct: 60 };
+        savePaperRiskExtras(fixed);
+        setRiskExtras(fixed);
+      } else {
+        setRiskExtras(extras);
+      }
+    });
+  }, []);
 
   function updateRiskExtras(patch: Partial<PaperRiskExtras>) {
     if (!riskExtras) return;
@@ -82,8 +95,19 @@ export default function RiskManagerScreen() {
   }, []);
 
   function update(field: keyof RiskSettings, val: string) {
-    const num = parseFloat(val) || 0;
-    const next = { ...settings, [field]: num };
+    // Allow empty string or partial input while typing (e.g. "1.")
+    // Only store when value is a valid, sensible number.
+    const raw = parseFloat(val);
+    const num = isNaN(raw) ? 0 : raw;
+    // Clamp to sensible ranges per field
+    const clamped =
+      field === 'riskPerTradePct'     ? Math.min(Math.max(num, 0), 100)  :
+      field === 'maxDailyLossPct'     ? Math.min(Math.max(num, 0), 100)  :
+      field === 'accountSize'         ? Math.min(Math.max(num, 0), 1e9)  :
+      field === 'maxFuturesLots'      ? Math.min(Math.max(num, 1), 1000) :
+      field === 'defaultFuturesLeverage' ? Math.min(Math.max(num, 1), 125) :
+      num;
+    const next = { ...settings, [field]: clamped };
     setSettings(next);
     saveRiskSettings(next);
   }
@@ -143,19 +167,31 @@ export default function RiskManagerScreen() {
             <Text style={labelStyle}>ACCOUNT SIZE (₹)</Text>
             <TextInput value={String(settings.accountSize)} onChangeText={v => update('accountSize', v)} keyboardType="numeric" style={inputStyle(T)} />
           </View>
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-            <View style={{ flex: 1 }}>
+          {/* Risk % inputs — two equal columns, hint below */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 4 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={labelStyle}>RISK PER TRADE (%)</Text>
-              <TextInput value={String(settings.riskPerTradePct)} onChangeText={v => update('riskPerTradePct', v)} keyboardType="numeric" style={inputStyle(T)} />
+              <TextInput
+                value={String(settings.riskPerTradePct)}
+                onChangeText={v => update('riskPerTradePct', v)}
+                keyboardType="numeric"
+                style={inputStyle(T)}
+              />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={labelStyle}>MAX DAILY LOSS (%)</Text>
-              <TextInput value={String(settings.maxDailyLossPct)} onChangeText={v => update('maxDailyLossPct', v)} keyboardType="numeric" style={inputStyle(T)} />
+              <TextInput
+                value={String(settings.maxDailyLossPct)}
+                onChangeText={v => update('maxDailyLossPct', v)}
+                keyboardType="numeric"
+                style={inputStyle(T)}
+              />
             </View>
-            <Text style={{ color: T.textDim, fontSize: 10, marginTop: 4 }}>
-              Daily loss limit: ₹{lossLimit.toFixed(0)} — trading pauses for the day if hit
-            </Text>
           </View>
+          {/* Hint line sits below, full width — never competes for flex space */}
+          <Text style={{ color: T.textDim, fontSize: 10, marginBottom: 10 }}>
+            Daily loss limit: ₹{isFinite(lossLimit) && lossLimit >= 0 ? lossLimit.toFixed(0) : '—'} — trading pauses for the day if hit
+          </Text>
 
           {/* Futures settings */}
           <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.border }}>
@@ -228,7 +264,8 @@ export default function RiskManagerScreen() {
                 <Text style={labelStyle}>CONSECUTIVE LOSS LIMIT</Text>
                 <TextInput
                   value={String(riskExtras.cooldownAfterLosses)}
-                  onChangeText={v => updateRiskExtras({ cooldownAfterLosses: Math.max(1, parseInt(v, 10) || 1) })}
+                  onChangeText={v => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 1 && n <= 20) updateRiskExtras({ cooldownAfterLosses: n }); }}
+                  onBlur={() => { if (!riskExtras.cooldownAfterLosses || riskExtras.cooldownAfterLosses < 1) updateRiskExtras({ cooldownAfterLosses: 3 }); }}
                   keyboardType="numeric" style={inputStyle(T)}
                 />
               </View>
@@ -244,24 +281,27 @@ export default function RiskManagerScreen() {
               <Text style={labelStyle}>MAX OPEN POSITIONS</Text>
               <TextInput
                 value={String(riskExtras.maxOpenPositions)}
-                onChangeText={v => updateRiskExtras({ maxOpenPositions: Math.max(1, parseInt(v, 10) || 1) })}
+                onChangeText={v => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 1 && n <= 50) updateRiskExtras({ maxOpenPositions: n }); }}
+                onBlur={() => { if (!riskExtras.maxOpenPositions || riskExtras.maxOpenPositions < 1) updateRiskExtras({ maxOpenPositions: 5 }); }}
                 keyboardType="numeric" style={inputStyle(T)}
               />
             </View>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={labelStyle}>MAX EXPOSURE / SYMBOL (%)</Text>
                 <TextInput
                   value={String(riskExtras.maxExposurePerSymbolPct)}
-                  onChangeText={v => updateRiskExtras({ maxExposurePerSymbolPct: Math.max(1, parseFloat(v) || 1) })}
+                  onChangeText={v => { const n = parseFloat(v); if (!isNaN(n) && n >= 1 && n <= 100) updateRiskExtras({ maxExposurePerSymbolPct: n }); }}
+                  onBlur={() => { if (!riskExtras.maxExposurePerSymbolPct || riskExtras.maxExposurePerSymbolPct < 1) updateRiskExtras({ maxExposurePerSymbolPct: 30 }); }}
                   keyboardType="numeric" style={inputStyle(T)}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={labelStyle}>MAX EXPOSURE / ASSET CLASS (%)</Text>
                 <TextInput
                   value={String(riskExtras.maxExposurePerAssetClassPct)}
-                  onChangeText={v => updateRiskExtras({ maxExposurePerAssetClassPct: Math.max(1, parseFloat(v) || 1) })}
+                  onChangeText={v => { const n = parseFloat(v); if (!isNaN(n) && n >= 1 && n <= 100) updateRiskExtras({ maxExposurePerAssetClassPct: n }); }}
+                  onBlur={() => { if (!riskExtras.maxExposurePerAssetClassPct || riskExtras.maxExposurePerAssetClassPct < 1) updateRiskExtras({ maxExposurePerAssetClassPct: 60 }); }}
                   keyboardType="numeric" style={inputStyle(T)}
                 />
               </View>
@@ -310,6 +350,5 @@ const labelStyle = { color: '#565c70', fontSize: 10, fontWeight: '700' as const,
 function inputStyle(T: any) {
   return {
     backgroundColor: T.bg0, borderWidth: 1, borderColor: T.border, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 11, color: T.text, fontSize: 14, minHeight: 44,
-  };
+    paddingHorizontal: 12, paddingVertical: 11, color: T.text, fontSize: 14, minHeight: 44};
 }

@@ -51,8 +51,7 @@ export function buildVolumeProfile(
     priceLow:  rangeLow + k * binSize,
     priceHigh: rangeLow + (k + 1) * binSize,
     midpoint:  rangeLow + (k + 0.5) * binSize,
-    volume:    0,
-  }));
+    volume:    0}));
 
   // Distribute volume — O(n × bins) worst case, O(n × average_span) typical
   let totalVolume = 0;
@@ -148,8 +147,7 @@ export function computeCausalVolumeProfiles(
     priceLow:  rangeLow + k * binSize,
     priceHigh: rangeLow + (k + 1) * binSize,
     midpoint:  rangeLow + (k + 0.5) * binSize,
-    volume:    0,
-  }));
+    volume:    0}));
   let totalVolume = 0;
 
   for (let i = 0; i < n; i++) {
@@ -204,8 +202,7 @@ export function computeCausalVolumeProfiles(
       val:         bins[loIdx].priceLow,
       hvnPrices:   [...hvnPrices],
       lvnPrices:   [...lvnPrices],
-      totalVolume,
-    };
+      totalVolume};
   }
   return results;
 }

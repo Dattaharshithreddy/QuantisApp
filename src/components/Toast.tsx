@@ -62,13 +62,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           pointerEvents="none"
           style={{
             position: 'absolute', left: SPACING.lg, right: SPACING.lg, bottom: insets.bottom + 70,
-            transform: [{ translateY }], opacity,
-          }}
+            transform: [{ translateY }], opacity}}
         >
           <View style={{
             backgroundColor: T.bg2, borderRadius: RADIUS.md, borderWidth: 1, borderColor: T.cardBorder,
-            paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8, ...T.elev2,
-          }}>
+            paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8, ...T.elev2}}>
             {current.kind !== 'default' && (
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: kindColor }} />
             )}

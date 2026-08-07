@@ -83,8 +83,7 @@ export function SessionExpiredBanner() {
       backgroundColor: bgColor,
       borderRadius: RADIUS.md,
       borderWidth: 1, borderColor: bdColor,
-      padding: 12,
-    }}>
+      padding: 12}}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
           <Text style={{ color: txColor, fontWeight: '700', fontSize: 13 }}>{title}</Text>

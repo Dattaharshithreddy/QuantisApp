@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { Card, SectionLabel, Pill, MetricBox, Skeleton } from '../components/Common';
@@ -11,22 +11,22 @@ import { getPortfolio } from '../utils/paperPortfolio';
 import { computeAllFamilyStats } from '../utils/patternValidation/patternOutcomeStore';
 import type { PatternFamilyStats } from '../utils/patternValidation/patternValidationTypes';
 import { getPaperTrades } from '../utils/paperTradeJournal';
+// Export moved to PaperJournalScreen (unified report). journalExport stubs remain for backward compat.
 import { RADIUS, SPACING } from '../theme/colors';
 
 export default function PaperAnalyticsScreen() {
   const { theme: T } = useTheme();
   const [stats, setStats] = useState<PaperPortfolioStats | null>(null);
+  const [trades, setTrades] = useState<any[]>([]);
   const [realizedPnL, setRealizedPnL] = useState<number | null>(null);
   const [bestPerformers, setBestPerformers] = useState<{ bestSymbol: string | null; bestTimeframe: string | null; bestHorizon: number | null } | null>(null);
   const [tradedPairs, setTradedPairs] = useState<{ symbol: string; timeframe: string }[]>([]);
   const [selectedPair, setSelectedPair] = useState<{ symbol: string; timeframe: string } | null>(null);
   const [health, setHealth] = useState<AIPerformanceSummary | null>(null);
-  // UI polish — groups the existing 12 cards into 3 tabs to reduce
-  // continuous scrolling, exactly the same pattern already used below for
-  // the AI Health symbol/timeframe picker. Pure conditional rendering of
-  // the same existing cards; no data or logic changes.
   const [activeTab, setActiveTab] = useState<'overview' | 'breakdowns' | 'ai' | 'patterns'>('overview');
   const [patternStats, setPatternStats] = useState<PatternFamilyStats[]>([]);
+
+  // Export is available from the Paper Journal screen (unified report).
 
   useEffect(() => {
     if (!selectedPair) { setHealth(null); return; }
@@ -40,6 +40,7 @@ export default function PaperAnalyticsScreen() {
       setStats(await computePaperPortfolioStats(p.startingCapital));
       setBestPerformers(await getBestPerformers());
       const trades = await getPaperTrades();
+      setTrades(trades);
       const seen = new Set<string>();
       const pairs: { symbol: string; timeframe: string }[] = [];
       trades.forEach(t => {
@@ -140,6 +141,31 @@ export default function PaperAnalyticsScreen() {
         </Card>
 
         <Card theme={T} style={{ marginBottom: 14 }}>
+          <SectionLabel theme={T}>EXCURSION & PEAK METRICS</SectionLabel>
+          {/* FIX (Audit item #3): All values read from frozen PaperTradeRecord fields — never recomputed. */}
+          {stats.avgMFE != null
+            ? <Row label="Avg MFE (Peak Profit)" value={pFmt(stats.avgMFE)} color={T.green} T={T} />
+            : <Row label="Avg MFE (Peak Profit)" value="n/a (needs v6.9.3+ trades)" T={T} />}
+          {stats.avgMAE != null
+            ? <Row label="Avg MAE (Max Adverse)" value={pFmt(stats.avgMAE)} color={T.red} T={T} />
+            : <Row label="Avg MAE (Max Adverse)" value="n/a (needs v6.9.3+ trades)" T={T} />}
+          {stats.avgPeakProfit != null
+            ? <Row label="Avg Peak Unrealized" value={pFmt(stats.avgPeakProfit)} color={T.green} T={T} />
+            : <Row label="Avg Peak Unrealized" value="n/a" T={T} />}
+          {stats.avgMaxProfitWithdrawn != null
+            ? <Row label="Avg Max Profit Given Back" value={pFmt(stats.avgMaxProfitWithdrawn)} color={T.amber} T={T} />
+            : <Row label="Avg Max Profit Given Back" value="n/a (needs v6.9.3+ trades)" T={T} />}
+          {stats.partialCloseCount > 0 && (
+            <Row label="Partial Close Entries" value={String(stats.partialCloseCount)} T={T} />
+          )}
+          <Text style={{ color: T.textDim, fontSize: 9, marginTop: 4, lineHeight: 13 }}>
+            MFE = Maximum Favorable Excursion (peak unrealized profit). MAE = Maximum Adverse Excursion (worst unrealized loss).
+            "Max Profit Given Back" = largest retrace from peak seen while the trade was open.
+            All values are frozen at trade close — never recomputed.
+          </Text>
+        </Card>
+
+        <Card theme={T} style={{ marginBottom: 14 }}>
           <SectionLabel theme={T}>MOST PROFITABLE / MOST ACCURATE</SectionLabel>
           <Row label="Most Profitable Symbol" value={stats.mostProfitableSymbol || 'n/a'} T={T} />
           <Row label="Most Accurate Symbol" value={stats.mostAccurateSymbol || 'n/a (needs 3+ trades)'} T={T} />
@@ -165,7 +191,7 @@ export default function PaperAnalyticsScreen() {
               <Row label="Trades with negative expected edge" value={`${te.negativeEdgeCount} of ${te.tradesWithData}`} color={te.negativeEdgeCount > 0 ? T.amber : T.textSub} T={T} />
               <Row label="Win rate — negative-edge trades" value={te.negativeEdgeWinRate != null ? `${te.negativeEdgeWinRate.toFixed(1)}%` : 'n/a'} T={T} />
               <Row label="Win rate — positive-edge trades" value={te.positiveEdgeWinRate != null ? `${te.positiveEdgeWinRate.toFixed(1)}%` : 'n/a'} T={T} />
-              <Text style={{ color: T.textDim, fontSize: 9, fontWeight: '700', marginTop: 10, marginBottom: 4, letterSpacing: 1 }}>AVG P&amp;L BY EXPECTED-EDGE BUCKET</Text>
+              <Text style={{ color: T.textDim, fontSize: 9, fontWeight: '700', marginTop: 10, marginBottom: 4, letterSpacing: 1 }}>AVG P&L BY EXPECTED-EDGE BUCKET</Text>
               {te.avgPnlByEdgeBucket.map(b => (
                 <Row key={b.bucket} label={`${b.bucket} (${b.trades} trades)`} value={b.trades ? `${b.avgPnl >= 0 ? '+' : ''}${pFmt(b.avgPnl)}` : 'n/a'} color={b.avgPnl >= 0 ? T.green : T.red} T={T} />
               ))}
@@ -331,6 +357,8 @@ export default function PaperAnalyticsScreen() {
             })}
           </Card>
         </>)}
+
+
       </ScrollView>
     </SafeAreaView>
   );

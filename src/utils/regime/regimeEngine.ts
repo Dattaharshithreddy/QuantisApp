@@ -77,8 +77,7 @@ export function precomputeRegime(
       histVolMean,
       trendStrength: trendStr,
       mtfOverall:   mtfScore,
-      patternBias:  patternBias,
-    };
+      patternBias:  patternBias};
 
     const result = scoreRegime(inp, cfg);
     regimeArr[i] = result;
@@ -88,8 +87,7 @@ export function precomputeRegime(
   return {
     regimeArr,
     scoresArr,
-    latestRegime: regimeArr[n - 1],
-  };
+    latestRegime: regimeArr[n - 1]};
 }
 
 export function getRegimeFeaturesAt(regime: PrecomputedRegime, i: number): number[] {

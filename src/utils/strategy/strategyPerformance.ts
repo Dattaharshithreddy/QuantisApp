@@ -76,8 +76,7 @@ export function computeStrategyStats(
       avgHoldingHours: group.length > 0 ? group.reduce((s,t) => s + t.holdingMs, 0) / group.length / 3_600_000 : 0,
       avgEntryConf:    group.length > 0 ? group.reduce((s,t) => s + t.entryConfidence, 0) / group.length : 0,
       maxDrawdownPct:  losses.length > 0 ? Math.max(...losses.map(t => Math.abs(t.pnlPct))) : 0,
-      totalPnl:        group.reduce((s,t) => s + t.pnl, 0),
-    });
+      totalPnl:        group.reduce((s,t) => s + t.pnl, 0)});
   }
 
   return result;
@@ -182,8 +181,7 @@ export function computeStrategyRegimeMatrix(
         winRate:      (wins.length / group.length) * 100,
         profitFactor: grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0,
         avgPnlPct:    group.reduce((s,t) => s + t.pnlPct, 0) / group.length,
-        confidence:   cellConfidence(group.length),
-      });
+        confidence:   cellConfidence(group.length)});
     }
 
     matrix.set(regime, cellMap);
@@ -254,8 +252,7 @@ export function recommendStrategy(
     profitFactor: best.profitFactor,
     tradeCount:   best.tradeCount,
     confidence:   best.confidence,
-    reason,
-  };
+    reason};
 }
 
 // ── Global fallback recommendation (Fix #10) ─────────────────────────────────
@@ -295,8 +292,7 @@ export function recommendStrategyGlobal(
       winRate:      (wins.length / group.length) * 100,
       profitFactor: grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0,
       avgPnlPct:    group.reduce((s, t) => s + t.pnlPct, 0) / group.length,
-      confidence:   cellConfidence(group.length),
-    });
+      confidence:   cellConfidence(group.length)});
   }
 
   if (!cells.length) return null;
@@ -316,8 +312,7 @@ export function recommendStrategyGlobal(
     isGlobalFallback: true,
     reason: `Based on ${best.tradeCount} paper trades across all regimes, ` +
       `${best.strategyId} leads with ${best.winRate.toFixed(0)}% win rate. ` +
-      `Not enough data for a regime-specific recommendation yet.`,
-  };
+      `Not enough data for a regime-specific recommendation yet.`};
 }
 
 // ── Formatting helpers (for UI display) ──────────────────────────────────────

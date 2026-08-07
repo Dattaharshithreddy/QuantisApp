@@ -151,9 +151,7 @@ async function signedRequest(
     method,
     headers: {
       'X-MBX-APIKEY': apiKey,
-      'Content-Type': 'application/json',
-    },
-  });
+      'Content-Type': 'application/json'}});
 
   const json = await r.json();
   if (!r.ok) throw new Error(`Binance ${method} ${path} ${r.status}: ${json.msg ?? JSON.stringify(json)}`);
@@ -173,8 +171,7 @@ export async function bnPlaceOrder(
     symbol:   params.symbol,
     side:     params.side,
     type:     params.type,
-    quantity: params.quantity,
-  };
+    quantity: params.quantity};
   if (params.price)             reqParams.price             = params.price.toFixed(8);
   if (params.stopPrice)         reqParams.stopPrice         = params.stopPrice.toFixed(8);
   if (params.timeInForce)       reqParams.timeInForce       = params.timeInForce;
@@ -190,8 +187,7 @@ export async function bnPlaceOrder(
     status:              json.status,
     executedQty:         Number(json.executedQty ?? 0),
     cummulativeQuoteQty: Number(json.cummulativeQuoteQty ?? 0),
-    fills:               json.fills,
-  };
+    fills:               json.fills};
 }
 
 // ── Cancel order ──────────────────────────────────────────────────────────────
@@ -223,8 +219,7 @@ export async function bnGetOrderStatus(
     executedQty:  Number(json.executedQty ?? 0),
     avgFillPrice: Number(json.price ?? 0),
     side:         json.side,
-    type:         json.type,
-  };
+    type:         json.type};
 }
 
 // ── Poll until filled ─────────────────────────────────────────────────────────

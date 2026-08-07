@@ -1,6 +1,5 @@
-import { FittedEnsemble } from './backtest';
+import { FittedEnsemble, computeMetrics } from './backtest';
 import { simulateSignalStrategy, ExecConfig } from './strategyExecutor';
-import { computeMetrics } from './backtest';
 
 // Tests how performance changes as individual risk parameters vary — using
 // the SAME already-trained model (no retraining per variant, since SL/TP/

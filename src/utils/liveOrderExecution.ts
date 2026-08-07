@@ -14,6 +14,7 @@
 //   'ao'          → Angel One NSE/BSE equity (INTRADAY)
 //   'ao_futures'  → Angel One NFO futures (CARRYFORWARD, lots)
 //   'binance'     → Binance spot USDT pairs
+//   'coindcx'     → CoinDCX spot USDT pairs
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getLiveTradingCredential }    from './secureCredentials';
@@ -27,6 +28,7 @@ import { AngelOneEquityExecutor }      from './execution/AngelOneEquityExecutor'
 import { AngelOneFuturesExecutor }     from './execution/AngelOneFuturesExecutor';
 import { BinanceSpotExecutor }         from './execution/BinanceSpotExecutor';
 import { BinanceFuturesExecutor }      from './execution/BinanceFuturesExecutor';
+import { CoinDCXExecutor }             from './execution/CoinDCXExecutor';
 
 // ── Types (re-exported so callers don't need to import ExecutionProvider) ──────
 
@@ -34,7 +36,7 @@ export type { ExecutionFill as LiveOrderFill };
 export type LiveOrderType = 'MARKET' | 'LIMIT';
 
 export type LiveOrderRequest = {
-  assetSrc:      'ao' | 'ao_futures' | 'binance' | 'binance_futures';
+  assetSrc:      'ao' | 'ao_futures' | 'binance' | 'binance_futures' | 'coindcx';
   symbol:        string;
   direction:     'LONG' | 'SHORT';
   qty:           number;
@@ -62,6 +64,7 @@ const EXECUTOR_MAP = {
   ao_futures:       AngelOneFuturesExecutor,
   binance:          BinanceSpotExecutor,
   binance_futures:  BinanceFuturesExecutor,
+  coindcx:          CoinDCXExecutor,
 } as const;
 
 type SupportedAssetSrc = keyof typeof EXECUTOR_MAP;
@@ -92,7 +95,9 @@ export async function placeLiveOrder(
 
   // Lifecycle record — created before broker contact for auditability
   const orderRecord = createOrderRecord({
-    broker:         req.assetSrc === 'ao' ? 'ANGEL_ONE' : req.assetSrc === 'ao_futures' ? 'ANGEL_ONE_FUTURES' : 'BINANCE',
+    broker:         req.assetSrc === 'ao' ? 'ANGEL_ONE' :
+                    req.assetSrc === 'ao_futures' ? 'ANGEL_ONE_FUTURES' :
+                    req.assetSrc === 'coindcx' ? 'COINDCX' : 'BINANCE',
     symbol:         req.symbol,
     direction:      req.direction,
     assetSrc:       req.assetSrc,
@@ -100,8 +105,7 @@ export async function placeLiveOrder(
     requestedPrice: req.limitPrice ?? 0,
     orderType:      req.orderType,
     stopLoss:       req.stopLoss ?? 0,
-    takeProfit:     req.takeProfit ?? 0,
-  });
+    takeProfit:     req.takeProfit ?? 0});
   await appendOrder(orderRecord);
   await updateOrderState(orderRecord.localId, 'SUBMITTED', {}, 'Sending to broker');
 
@@ -111,14 +115,18 @@ export async function placeLiveOrder(
 
   try {
     // Build execution context — fetch credentials lazily
-    const binanceApiKey = req.assetSrc === 'binance'
+    const binanceApiKey = (req.assetSrc === 'binance' || req.assetSrc === 'binance_futures')
       ? (await getLiveTradingCredential('binanceApiKey') ?? undefined) : undefined;
-    const binanceSecret = req.assetSrc === 'binance'
+    const binanceSecret = (req.assetSrc === 'binance' || req.assetSrc === 'binance_futures')
       ? (await getLiveTradingCredential('binanceApiSecret') ?? undefined) : undefined;
+    const cdxApiKey = req.assetSrc === 'coindcx'
+      ? (await getLiveTradingCredential('cdxApiKey') ?? undefined) : undefined;
+    const cdxApiSecret = req.assetSrc === 'coindcx'
+      ? (await getLiveTradingCredential('cdxApiSecret') ?? undefined) : undefined;
 
     const fill = await executor.execute(
       { ...req, clientOrderId: orderRecord.localId },
-      { aoSession, binanceApiKey, binanceSecret },
+      { aoSession, binanceApiKey, binanceSecret, cdxApiKey, cdxApiSecret },
     );
 
     await updateOrderState(orderRecord.localId, 'ACKNOWLEDGED', { brokerOrderId: fill.orderId }, 'Broker acknowledged');
@@ -128,8 +136,7 @@ export async function placeLiveOrder(
       filledQty:   fill.filledQty,
       filledPrice: fill.filledPrice,
       fees:        fill.fees,
-      filledAt:    fill.filledAt,
-    }, 'Order fully filled');
+      filledAt:    fill.filledAt}, 'Order fully filled');
     await endMetric('fill_time', orderRecord.localId).catch(() => {});
 
     // Push notification — fires even when the confirmation screen is dismissed
@@ -137,7 +144,8 @@ export async function placeLiveOrder(
     const currency = (fill.broker === 'ANGEL_ONE' || fill.broker === 'ANGEL_ONE_FUTURES') ? '₹' : '$';
     const brokerLabel = fill.broker === 'ANGEL_ONE' ? 'Angel One' :
                         fill.broker === 'ANGEL_ONE_FUTURES' ? 'Angel One NFO' :
-                        fill.broker === 'BINANCE_FUTURES' ? 'Binance Perps' : 'Binance';
+                        fill.broker === 'BINANCE_FUTURES' ? 'Binance Perps' :
+                        fill.broker === 'COINDCX' ? 'CoinDCX' : 'Binance';
     notifyLiveOrderFilled(
       fill.symbol, fill.direction, fill.filledQty, fill.filledPrice,
       currency, brokerLabel, fill.lots, fill.lotSize,
@@ -155,7 +163,7 @@ export async function placeLiveOrder(
 }
 
 export async function cancelLiveOrder(
-  broker: 'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE' | 'BINANCE_FUTURES',
+  broker: 'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE' | 'BINANCE_FUTURES' | 'COINDCX',
   orderId: string,
   symbol: string,
   aoSession?: AOSession | null,
@@ -164,30 +172,40 @@ export async function cancelLiveOrder(
   const assetSrc: SupportedAssetSrc =
     broker === 'ANGEL_ONE'         ? 'ao' :
     broker === 'ANGEL_ONE_FUTURES'  ? 'ao_futures' :
-    broker === 'BINANCE_FUTURES'    ? 'binance_futures' : 'binance';
+    broker === 'BINANCE_FUTURES'    ? 'binance_futures' :
+    broker === 'COINDCX'            ? 'coindcx' : 'binance';
   const executor = EXECUTOR_MAP[assetSrc];
   const binanceApiKey = (broker === 'BINANCE' || broker === 'BINANCE_FUTURES')
     ? (await getLiveTradingCredential('binanceApiKey') ?? undefined) : undefined;
   const binanceSecret = (broker === 'BINANCE' || broker === 'BINANCE_FUTURES')
     ? (await getLiveTradingCredential('binanceApiSecret') ?? undefined) : undefined;
-  await executor.cancel(orderId, symbol, { aoSession, binanceApiKey, binanceSecret });
+  const cdxApiKey    = broker === 'COINDCX'
+    ? (await getLiveTradingCredential('cdxApiKey') ?? undefined) : undefined;
+  const cdxApiSecret = broker === 'COINDCX'
+    ? (await getLiveTradingCredential('cdxApiSecret') ?? undefined) : undefined;
+  await executor.cancel(orderId, symbol, { aoSession, binanceApiKey, binanceSecret, cdxApiKey, cdxApiSecret });
 }
 
 export async function emergencyCancelAll(
   symbol: string,
-  broker: 'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE' | 'BINANCE_FUTURES',
+  broker: 'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE' | 'BINANCE_FUTURES' | 'COINDCX',
   aoSession?: AOSession | null,
 ): Promise<{ cancelled: number; errors: string[] }> {
   const assetSrc: SupportedAssetSrc =
     broker === 'ANGEL_ONE'         ? 'ao' :
     broker === 'ANGEL_ONE_FUTURES'  ? 'ao_futures' :
-    broker === 'BINANCE_FUTURES'    ? 'binance_futures' : 'binance';
+    broker === 'BINANCE_FUTURES'    ? 'binance_futures' :
+    broker === 'COINDCX'            ? 'coindcx' : 'binance';
   const executor = EXECUTOR_MAP[assetSrc];
   const binanceApiKey = (broker === 'BINANCE' || broker === 'BINANCE_FUTURES')
     ? (await getLiveTradingCredential('binanceApiKey') ?? undefined) : undefined;
   const binanceSecret = (broker === 'BINANCE' || broker === 'BINANCE_FUTURES')
     ? (await getLiveTradingCredential('binanceApiSecret') ?? undefined) : undefined;
-  return executor.cancelAll(symbol, { aoSession, binanceApiKey, binanceSecret });
+  const cdxApiKey    = broker === 'COINDCX'
+    ? (await getLiveTradingCredential('cdxApiKey') ?? undefined) : undefined;
+  const cdxApiSecret = broker === 'COINDCX'
+    ? (await getLiveTradingCredential('cdxApiSecret') ?? undefined) : undefined;
+  return executor.cancelAll(symbol, { aoSession, binanceApiKey, binanceSecret, cdxApiKey, cdxApiSecret });
 }
 
 // Re-export capabilities so UI can query without importing executor files directly

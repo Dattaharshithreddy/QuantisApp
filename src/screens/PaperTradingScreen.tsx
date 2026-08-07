@@ -243,7 +243,15 @@ export default function PaperTradingScreen({ navigation, route }: any) {
                     <Text style={{ color: T.textDim, fontSize: 9 }}>Grade {p.tradeQuality.grade} · Entry conf {p.aiConfidence.toFixed(0)}</Text>
                   </View>
                 )}
-                <Text style={{ color: T.textDim, fontSize: 9, marginTop: 6 }}>Max profit seen: <Text style={{ color: T.green, fontWeight: '700' }}>{pFmt(p.maxUnrealizedProfit)}</Text> · Max drawdown: <Text style={{ color: T.red, fontWeight: '700' }}>{pFmt(p.maxUnrealizedDrawdown)}</Text></Text>
+                {/* FIX (Audit items #2/#3): display all peak metrics from live position fields.
+                    These update on every tick via monitorOpenPositions — no stale values. */}
+                <Text style={{ color: T.textDim, fontSize: 9, marginTop: 6 }}>
+                  Peak profit: <Text style={{ color: T.green, fontWeight: '700' }}>{pFmt(p.maxUnrealizedProfit)}</Text>
+                  {'  '}Max drawdown: <Text style={{ color: T.red, fontWeight: '700' }}>{pFmt(p.maxUnrealizedDrawdown)}</Text>
+                  {(p as any).maxProfitWithdrawn != null && (p as any).maxProfitWithdrawn > 0
+                    ? <Text style={{ color: T.amber }}>{'  '}Max given back: <Text style={{ fontWeight: '700' }}>{pFmt((p as any).maxProfitWithdrawn)}</Text></Text>
+                    : null}
+                </Text>
 
                 <View style={{ marginTop: 12, backgroundColor: T.accent + '12', borderRadius: RADIUS.sm, paddingVertical: 11, alignItems: 'center', minHeight: 40, justifyContent: 'center' }}>
                   <Text style={{ color: T.accent, fontSize: 12, fontWeight: '700' }}>Manage Position</Text>

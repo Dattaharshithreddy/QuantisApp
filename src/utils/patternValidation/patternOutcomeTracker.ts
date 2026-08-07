@@ -27,11 +27,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Candle } from '../indicators';
-import {
-  PatternOutcome, OutcomeStatus, CompletionReason, ComponentScores,
-} from './patternValidationTypes';
+import { CompletionReason, ComponentScores, OutcomeStatus, PatternOutcome, ValidatedPattern } from './patternValidationTypes';
 import { CONFIDENCE_SCORING_VERSION } from '../confidence/confidenceTypes';
-import { ValidatedPattern } from './patternValidationTypes';
 
 // ── Price touch logic ─────────────────────────────────────────────────────────
 // "Hit" = candle low/high/close touched the target, not just a wick.
@@ -102,8 +99,7 @@ export function createOutcome(
     realizedPnLPct: null,
     barsToFirstTarget: null,
     barsToClose:  null,
-    validationDuration: pattern.metadata.validationDuration,
-  };
+    validationDuration: pattern.metadata.validationDuration};
 }
 
 // ── Update an ACTIVE outcome with the latest candle ──────────────────────────
@@ -198,8 +194,7 @@ export function closeOutcome(
     closeBar:         currentBar,
     closedPrice:      closePrice,
     barsToClose:      currentBar - outcome.confirmedAtBar,
-    realizedPnLPct:   computePnLPct(outcome.entry, closePrice, outcome.direction),
-  };
+    realizedPnLPct:   computePnLPct(outcome.entry, closePrice, outcome.direction)};
 }
 
 // ── P&L percentage ────────────────────────────────────────────────────────────

@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { loadShadowTrades, dedupExistingShadowTrades, clearAllShadowTrades, ShadowTrade, GateType } from '../utils/shadowTradeJournal';
 import { MarketContextCard } from '../components/MarketContextCard';
+import { exportShadowJournal, ExportFormat } from '../utils/journalExport';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const GATE_LABELS: Record<GateType, string> = {
@@ -445,6 +447,7 @@ function Chip({label, active, color, onPress, count, T}: {label:string;active:bo
 export default function ShadowJournalScreen({navigation}: any) {
   const {theme:T} = useTheme();
   const {prices} = useData();
+  const isFocused = useIsFocused();
   const [trades, setTrades] = useState<ShadowTrade[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -466,6 +469,23 @@ export default function ShadowJournalScreen({navigation}: any) {
   },[]);
   useEffect(()=>{load();},[load]);
 
+  const [exporting, setExporting]         = useState(false);
+  const [showExportPanel, setShowExportPanel] = useState(false);
+
+  // FIX (root cause of "No trades for current filters" bug):
+  // handleExport previously used useCallback with `visible` in its deps array.
+  // `visible` was declared AFTER handleExport in the component body. Due to
+  // JavaScript const TDZ behavior in Hermes (returns undefined instead of throwing),
+  // `visible` was undefined in the deps array → useCallback never detected a change
+  // → the callback permanently captured visible=[] from the first render (before
+  // trades loaded). Every export attempt saw visible.length===0.
+  //
+  // Fix: store `visible` in a ref so the callback always reads the current value
+  // without depending on the ordering of const declarations in the function body.
+  // This is the canonical React pattern for callbacks needing fresh values without
+  // being recreated on every render.
+  const visibleRef = React.useRef<ShadowTrade[]>([]);
+
   const clearJournal = useCallback(() => {
     Alert.alert(
       'Clear Shadow Journal',
@@ -479,7 +499,14 @@ export default function ShadowJournalScreen({navigation}: any) {
       ]
     );
   }, []);
-  const onRefresh = useCallback(async()=>{setRefreshing(true);await load();setRefreshing(false);},[load]);
+  const onRefresh = useCallback(async () => {
+    // Guard: don't fire during back-navigation slide. iOS ScrollView overscroll
+    // during the slide-out animation is misread as a pull-to-refresh gesture.
+    if (!isFocused) return;
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load, isFocused]);
 
   // Unique values for filter chips
   const symbols    = useMemo(()=>['ALL',...[...new Set(trades.map(t=>t.symbol))].sort()]     ,[trades]);
@@ -512,6 +539,37 @@ export default function ShadowJournalScreen({navigation}: any) {
     }
   },[filtered,sortKey]);
 
+  // Update ref on every render so handleExport always has fresh visible list
+  visibleRef.current = visible;
+
+  // handleExport placed AFTER visible to avoid stale-closure issues.
+  // Uses visibleRef to guarantee it always reads the current filtered+sorted list.
+  const handleExport = useCallback(async (format: ExportFormat) => {
+    const currentVisible = visibleRef.current;
+    if (currentVisible.length === 0) {
+      Alert.alert('Nothing to export', 'No shadow trades match the current filters.');
+      return;
+    }
+    setExporting(true);
+    setShowExportPanel(false);
+    try {
+      const filters = {
+        symbol:    fSymbol  !== 'ALL' ? fSymbol  : undefined,
+        gate:      fGate    !== 'ALL' ? fGate    : undefined,
+        outcome:   fOutcome !== 'ALL' ? fOutcome : undefined,
+        direction: fDir     !== 'ALL' ? fDir     : undefined,
+        tf:        fTF      !== 'ALL' ? fTF      : undefined,
+      };
+      // Uses the shared export engine (expo-print → real PDF, expo-sharing → native share sheet)
+      // Identical pipeline to Paper Journal export — no duplicate implementation.
+      await exportShadowJournal(currentVisible, format, filters);
+    } catch (e: any) {
+      Alert.alert('Export failed', e.message ?? 'Unknown error');
+    } finally {
+      setExporting(false);
+    }
+  }, [fSymbol, fGate, fOutcome, fDir, fTF]); // visible accessed via ref, not deps
+
   const cycleSort = () => {
     const next=(sortIdx+1)%SORT_OPTIONS.length;
     setSortIdx(next); setSortKey(SORT_OPTIONS[next].key);
@@ -534,6 +592,36 @@ export default function ShadowJournalScreen({navigation}: any) {
         <Text style={{color:T.textDim,fontSize:11,marginBottom:12,lineHeight:16}}>
           Opportunities the AI blocked — tracked to see if the decision was right
         </Text>
+
+        {/* ── Export panel ──────────────────────────────────────────────── */}
+        <View style={{ marginBottom: 14 }}>
+          <TouchableOpacity onPress={() => setShowExportPanel(e => !e)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 10, borderRadius: 10, backgroundColor: T.bg1, borderWidth: 1, borderColor: T.border }}>
+            <Text style={{ color: T.text, fontSize: 12, fontWeight: '700' }}>
+              {exporting ? '⏳ Exporting…' : '⬆️ Export Shadow Journal'}
+            </Text>
+            <Text style={{ color: T.textDim, fontSize: 10 }}>
+              ({visible.length} trade{visible.length !== 1 ? 's' : ''}{hasActiveFilter ? ', filtered' : ''})
+            </Text>
+          </TouchableOpacity>
+
+          {showExportPanel && !exporting && (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              <TouchableOpacity onPress={() => handleExport('CSV')}
+                style={{ flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', backgroundColor: T.green + '18', borderWidth: 1, borderColor: T.green + '50' }}>
+                <Text style={{ fontSize: 20, marginBottom: 4 }}>📄</Text>
+                <Text style={{ color: T.green, fontWeight: '800', fontSize: 12 }}>📊 CSV</Text>
+                <Text style={{ color: T.textDim, fontSize: 9, marginTop: 2, textAlign: 'center' }}>Spreadsheet-ready{'\n'}Excel / Google Sheets</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleExport('PDF')}
+                style={{ flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', backgroundColor: T.accent + '18', borderWidth: 1, borderColor: T.accent + '50' }}>
+                <Text style={{ fontSize: 20, marginBottom: 4 }}>📄</Text>
+                <Text style={{ color: T.accent, fontWeight: '800', fontSize: 12 }}>PDF</Text>
+                <Text style={{ color: T.textDim, fontSize: 9, marginTop: 2, textAlign: 'center' }}>Real PDF · Native{'\n'}share sheet</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         {/* ── What is Shadow Journal? help card ─────────────────────────── */}
         <View style={{backgroundColor:T.bg3,borderRadius:10,padding:12,marginBottom:14,

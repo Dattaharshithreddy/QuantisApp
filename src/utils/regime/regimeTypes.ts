@@ -77,7 +77,7 @@ export const REGIME_FEATURE_NAMES = [
   'Regime breakout',      // 113
   'Regime mean revert',   // 114
   'Regime volatility',    // 115
-  'Regime confidence',    // 116
+  'Regime confidence',    // 115
 ] as const;
 
 export type RegimeConfig = {

@@ -146,8 +146,7 @@ export function initManagementState(
     peakR:              0,
     lockedProfit:       0,
     barsHeld:           0,
-    entryRegime:        regimeLabel,
-  };
+    entryRegime:        regimeLabel};
 }
 
 // ── Main per-candle evaluation — O(1) ────────────────────────────────────────
@@ -167,8 +166,7 @@ export function evaluateTradeManagement(
   const updates: Partial<TradeManagementState> = {
     currentR,
     peakR,
-    barsHeld: mgmt.barsHeld + 1,
-  };
+    barsHeld: mgmt.barsHeld + 1};
 
   // ── 1. Time exit ──────────────────────────────────────────────────────────
   if (cfg.maxBarsHeld > 0 && mgmt.barsHeld + 1 >= cfg.maxBarsHeld) {
@@ -349,6 +347,5 @@ export function buildTradeSnapshot(
     currentPrice, atr,
     swingTrailLevel, obTrailLevel, structureTrailLevel,
     regimeLabel, regimeBull, regimeBear, regimeVol, mtfOverall,
-    barIndex: i,
-  };
+    barIndex: i};
 }

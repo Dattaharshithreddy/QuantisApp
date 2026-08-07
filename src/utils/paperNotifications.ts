@@ -33,8 +33,7 @@ async function send(
   if (!(await shouldSend(key))) return;
   await Notifications.scheduleNotificationAsync({
     content: { title, body, sound, data },
-    trigger: null,
-  });
+    trigger: null});
 }
 
 // ── Paper trading ─────────────────────────────────────────────────────────────
@@ -61,19 +60,35 @@ export async function notifyTradeClosed(record: PaperTradeRecord): Promise<void>
 }
 
 export async function notifyStopLossHit(symbol: string, pnl: number): Promise<void> {
-  await send(
-    `sl_${symbol}_${Math.round(pnl)}`,
-    `🛑 Stop Loss hit: ${symbol}`,
-    `Closed at a loss of ${pnl.toFixed(2)}. Tap to review.`,
-    { screen: 'PaperJournal' },
-  );
+  if (pnl > 0) {
+    await send(
+      `trail_${symbol}_${Math.round(pnl)}`,
+      `📈 Trailing Stop: ${symbol} closed in profit`,
+      `Position locked in ₹${pnl.toFixed(2)} profit via trailing stop. Tap to review.`,
+      { screen: 'PaperJournal' },
+    );
+  } else if (Math.abs(pnl) < 1) {
+    await send(
+      `be_${symbol}_${Math.round(pnl)}`,
+      `⚖️ Break-Even Stop: ${symbol}`,
+      `Position closed near break-even (₹${pnl.toFixed(2)}). Tap to review.`,
+      { screen: 'PaperJournal' },
+    );
+  } else {
+    await send(
+      `sl_${symbol}_${Math.round(pnl)}`,
+      `🛑 Stop Loss hit: ${symbol}`,
+      `Closed at a loss of ₹${Math.abs(pnl).toFixed(2)}. Tap to review.`,
+      { screen: 'PaperJournal' },
+    );
+  }
 }
 
 export async function notifyTakeProfitHit(symbol: string, pnl: number): Promise<void> {
   await send(
     `tp_${symbol}_${Math.round(pnl)}`,
     `🎯 Take Profit hit: ${symbol}`,
-    `Closed at a profit of +${pnl.toFixed(2)}. Tap to review.`,
+    `Closed at a profit of +₹${pnl.toFixed(2)}. Tap to review.`,
     { screen: 'PaperJournal' },
   );
 }
@@ -249,10 +264,8 @@ export async function scheduleMarketOpenReminders(): Promise<void> {
         title: '📈 NSE Market Open',
         body:  'Market is open. Check your watchlist and open positions.',
         sound: false,
-        data:  { type: 'market_open', screen: 'Chart' },
-      },
-      trigger: { type: 'date', timestamp: d.getTime() },
-    });
+        data:  { type: 'market_open', screen: 'Chart' }},
+      trigger: { type: 'date', timestamp: d.getTime() }});
   }
 }
 
@@ -277,10 +290,8 @@ export async function scheduleFundingRateReminder(symbol: string): Promise<void>
       title: `⚡ Funding rate: ${symbol}`,
       body:  'Funding payment applied to your perpetual futures position.',
       sound: false,
-      data:  { type: 'funding_rate', screen: 'LivePositions', symbol },
-    },
-    trigger: { type: 'date', timestamp: d.getTime() },
-  });
+      data:  { type: 'funding_rate', screen: 'LivePositions', symbol }},
+    trigger: { type: 'date', timestamp: d.getTime() }});
 }
 
 

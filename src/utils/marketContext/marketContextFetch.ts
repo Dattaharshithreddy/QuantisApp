@@ -26,6 +26,14 @@ import {
   MarketContext, VIXData, BreadthData, FIIDIIData, PCRData, SectorData,
 } from './marketContextTypes';
 
+// FIX (Audit item #9): Hard per-request timeout matching cryptoMarketContextFetch.ts
+const _FETCH_TIMEOUT_MS = 5_000;
+function _fetchWithTimeout(url: string): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), _FETCH_TIMEOUT_MS);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
 // ── Cache TTLs ────────────────────────────────────────────────────────────────
 const TTL = {
   VIX:     15 * 60_000,   // 15 minutes — VIX updates intraday
@@ -208,8 +216,7 @@ async function fetchPCR(): Promise<PCRData | null> {
       current, sma5, trend, sentiment,
       isContrarianBull: current > 1.3,
       isContrarianBear: current < 0.7,
-      fetchedAt: Date.now(),
-    };
+      fetchedAt: Date.now()};
     await writeCtxCache('PCR', data);
     logger.info('marketContext', `PCR: ${current.toFixed(2)} (${sentiment})`);
     return data;
@@ -297,8 +304,7 @@ export async function fetchMarketContext(): Promise<MarketContext> {
     pcr:     pcrData,
     sectors: sectorsData,
     available,
-    fetchedAt: Date.now(),
-  };
+    fetchedAt: Date.now()};
 }
 
 // Fetch only specific sources (for performance-sensitive paths)
@@ -307,8 +313,7 @@ export async function fetchMarketContextPartial(
 ): Promise<MarketContext> {
   const fetchers: Record<string, () => Promise<any>> = {
     VIX: fetchVIX, BREADTH: fetchBreadth,
-    FII_DII: fetchFIIDII, PCR: fetchPCR, SECTORS: fetchSectors,
-  };
+    FII_DII: fetchFIIDII, PCR: fetchPCR, SECTORS: fetchSectors};
   const results = await Promise.allSettled(sources.map(s => fetchers[s]()));
   const ctx: MarketContext = { available: [], fetchedAt: Date.now() };
   sources.forEach((src, i) => {

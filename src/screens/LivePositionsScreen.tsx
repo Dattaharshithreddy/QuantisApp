@@ -8,7 +8,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { getLivePortfolio, removeLivePosition, LivePosition } from '../utils/livePortfolio';
-import { cancelLiveOrder } from '../utils/liveOrderExecution';
 import { SPACING, RADIUS } from '../theme/colors';
 
 function PnLBadge({ pnl, pct, T }: { pnl: number; pct: number; T: any }) {
@@ -124,8 +123,7 @@ export default function LivePositionsScreen({ navigation }: any) {
                          pos.broker === 'BINANCE_FUTURES' ? 'binance_futures' : 'binance',
               direction: pos.direction === 'LONG' ? 'SHORT' : 'LONG',
               qty:       pos.qty,
-              orderType: 'MARKET',
-            }, aoSession);
+              orderType: 'MARKET'}, aoSession);
 
             const pnl = (fill.filledPrice - pos.filledPrice) * pos.qty * (pos.direction === 'LONG' ? 1 : -1);
             await removeLivePosition(pos.id, pnl);

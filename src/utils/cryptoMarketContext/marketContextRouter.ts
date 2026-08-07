@@ -27,7 +27,7 @@ export function detectAssetKind(
   assetType?: string,
 ): 'CRYPTO' | 'INDIAN' | 'NONE' {
   if (src === 'binance' || assetType === 'CRYPTO')           return 'CRYPTO';
-  if (src === 'ao'      || assetType === 'STOCK' || assetType === 'INDEX') return 'INDIAN';
+  if (src === 'ao' || src === 'ao_futures' || assetType === 'STOCK' || assetType === 'INDEX') return 'INDIAN';
   return 'NONE';
 }
 

@@ -43,8 +43,7 @@ export function computeAlignment(
       trendAlignment: 0, structureAlignment: 0, bosAlignment: 0,
       chochAlignment: 0, smcAlignment: 0, fvgAlignment: 0,
       vwapAlignment: 0,  volumeAlignment: 0,
-      overallScore: 0,   htfBias: 0,
-    };
+      overallScore: 0,   htfBias: 0};
   }
 
   // Weights: higher index in TF_ORDER = higher TF = more weight
@@ -89,8 +88,7 @@ export function computeAlignment(
     vwapAlignment:      Math.max(-1, Math.min(1, vwapAlignment)),
     volumeAlignment:    Math.max(-1, Math.min(1, volumeAlignment)),
     overallScore:       Math.max(-1, Math.min(1, overallScore)),
-    htfBias:            htfBias,
-  };
+    htfBias:            htfBias};
 }
 
 export function toMTFScores(a: MTFAlignment): MTFScores {
@@ -104,6 +102,5 @@ export function toMTFScores(a: MTFAlignment): MTFScores {
     vwapAlignment:      a.vwapAlignment,
     volumeAlignment:    a.volumeAlignment,
     overallMTFScore:    a.overallScore,
-    htfBias:            a.htfBias,
-  };
+    htfBias:            a.htfBias};
 }

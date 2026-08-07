@@ -38,8 +38,7 @@ export async function runStressTestCombo(candles: Candle[], symbol: string, time
     accuracy: prediction.walkForwardAccuracy, precision, recall, f1,
     winRate: backtestResult.metrics.winRate, profitFactor: backtestResult.metrics.profitFactor,
     sharpeRatio: backtestResult.metrics.sharpeRatio, maxDrawdownPct: backtestResult.metrics.maxDrawdownPct,
-    avgConfidence: prediction.confidence, numTrades: backtestResult.metrics.numTrades,
-  };
+    avgConfidence: prediction.confidence, numTrades: backtestResult.metrics.numTrades};
 }
 
 export type StressTestSummary = {
@@ -85,6 +84,5 @@ export function summarizeStressTest(entries: StressTestEntry[]): StressTestSumma
     avgWinRate: avg('winRate'), avgProfitFactor: avg('profitFactor'), avgSharpe: avg('sharpeRatio'),
     avgMaxDrawdown: avg('maxDrawdownPct'), avgConfidence: avg('avgConfidence'),
     bestSymbol: symbolResult.best, worstSymbol: symbolResult.worst,
-    bestTimeframe: tfResult.best, worstTimeframe: tfResult.worst,
-  };
+    bestTimeframe: tfResult.best, worstTimeframe: tfResult.worst};
 }

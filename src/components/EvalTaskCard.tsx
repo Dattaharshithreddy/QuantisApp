@@ -50,8 +50,7 @@ function TaskRow({ task, onCancel, onNavigate }: {
         borderColor: T.accent + '40',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-      }}
+        gap: 10}}
     >
       {/* Pulsing accent dot */}
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: T.accent }} />
@@ -87,8 +86,7 @@ export function EvalTaskFloatingCard({ onNavigateToEval }: { onNavigateToEval: (
 
   return (
     <View style={{
-      position: 'absolute', bottom: 90, left: 16, right: 16, zIndex: 999,
-    }}>
+      position: 'absolute', bottom: 90, left: 16, right: 16, zIndex: 999}}>
       {runningTasks.map(task => (
         <TaskRow
           key={task.id}

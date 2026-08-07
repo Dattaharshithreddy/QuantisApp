@@ -1,5 +1,4 @@
-import { ExecTrade } from './strategyExecutor';
-import { BarDecision, SkipReason } from './strategyExecutor';
+import { BarDecision, ExecTrade, SkipReason } from './strategyExecutor';
 
 // Derives all the requested trade-level analytics from data that already
 // exists (trades + the per-bar decision stream) — no new simulation, just
@@ -53,8 +52,7 @@ function groupByPeriod(trades: ExecTrade[], keyFn: (date: Date) => string): Peri
   return Object.entries(groups)
     .map(([period, ts]) => ({
       period, trades: ts.length, netPnl: ts.reduce((s, t) => s + t.pnl, 0),
-      winRate: (ts.filter(t => t.pnl > 0).length / ts.length) * 100,
-    }))
+      winRate: (ts.filter(t => t.pnl > 0).length / ts.length) * 100}))
     .sort((a, b) => a.period.localeCompare(b.period));
 }
 

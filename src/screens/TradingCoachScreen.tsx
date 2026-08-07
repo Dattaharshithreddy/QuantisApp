@@ -44,8 +44,7 @@ function categoryLabel(c: string): string {
     REGIME: 'Market Regime', STRATEGY: 'Strategy Profile',
     DIRECTION: 'Direction Bias', TIMING: 'Exit Timing',
     SIGNAL_TYPE: 'Signal Type', MODEL_VERSION: 'Model Version',
-    EXITS: 'Exit Patterns', GENERAL: 'Overall',
-  };
+    EXITS: 'Exit Patterns', GENERAL: 'Overall'};
   return map[c] ?? c;
 }
 

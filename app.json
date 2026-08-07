@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.quantis.trading",
-      "versionCode": 192,
+      "versionCode": 194,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d0f17"

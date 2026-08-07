@@ -22,8 +22,7 @@ export const AngelOneEquityExecutor: ExecutionProvider = {
     orders:    { market: true, limit: true, stopLoss: true, bracket: false },
     position:  { overnight: false, lotBased: false, partialClose: false, maxLotsPerOrder: 0 },
     risk:      { marginRequired: false, leverage: false, preFlight: false },
-    display:   { currency: '₹', exchangeLabel: 'NSE / BSE', priceDecimals: 2, qtyLabel: 'shares' },
-  },
+    display:   { currency: '₹', exchangeLabel: 'NSE / BSE', priceDecimals: 2, qtyLabel: 'shares' }},
   async execute(req: ExecutionOrderRequest, ctx: ExecutionContext): Promise<ExecutionFill> {
     if (!ctx.aoSession?.jwtToken) {
       throw new Error('Angel One session not connected. Please reconnect in Settings.');
@@ -45,8 +44,7 @@ export const AngelOneEquityExecutor: ExecutionProvider = {
       squareoff:       0,
       stoploss:        0,
       quantity:        req.qty,
-      uniqueorderid:   req.clientOrderId,
-    };
+      uniqueorderid:   req.clientOrderId};
 
     logger.info('AngelOneEquityExecutor', `Placing ${transactiontype} ${req.qty}×${req.symbol} NSE/BSE`);
     const placed = await aoPlaceOrder(params, ctx.aoSession);
@@ -60,8 +58,7 @@ export const AngelOneEquityExecutor: ExecutionProvider = {
       filledQty:   filled.filledQty,
       filledPrice: filled.avgFillPrice,
       filledAt:    Date.now(),
-      fees:        estimateAOFees(filled.avgFillPrice * filled.filledQty),
-    };
+      fees:        estimateAOFees(filled.avgFillPrice * filled.filledQty)};
   },
 
   async cancel(orderId: string, _symbol: string, ctx: ExecutionContext): Promise<void> {

@@ -9,13 +9,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
-import { useData }  from '../context/DataContext';
-import {
-  FuturesUnderlying, ContractMonth, LOT_SIZES, daysToExpiry, formatLotDisplay,
-} from '../utils/futures/futuresTypes';
-import { getContractsWithTokens }   from '../utils/futures/futuresContracts';
-import { estimateMarginBreakdown, maxAffordableLots, riskBasedLots }
-  from '../utils/futures/futuresMarginCalculator';
+import { useData } from '../context/DataContext';
+import { FuturesUnderlying, ContractMonth, LOT_SIZES, daysToExpiry, formatLotDisplay} from '../utils/futures/futuresTypes';
+import { getContractsWithTokens } from '../utils/futures/futuresContracts';
+import { estimateMarginBreakdown, maxAffordableLots } from '../utils/futures/futuresMarginCalculator';
 import { getFuturesPortfolio, openFuturesPosition } from '../utils/futures/futuresPortfolio';
 import { SPACING, RADIUS } from '../theme/colors';
 
@@ -108,8 +105,7 @@ export default function FuturesContractScreen({ navigation }: any) {
       stopLoss:     sl,
       takeProfit:   tp,
       expiry:       contract.expiry,
-      expiryLabel:  contract.expiryLabel,
-    });
+      expiryLabel:  contract.expiryLabel});
     setOpening(false);
 
     if (result.opened) {

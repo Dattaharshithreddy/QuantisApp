@@ -29,7 +29,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { Candle } from '../indicators';
 import { computeSwings } from './swingEngine';
-import { snapshotToScores, scoresToArray, STRUCTURE_FEATURE_NAMES } from './structureScore';
+import { scoresToArray, STRUCTURE_FEATURE_NAMES } from './structureScore';
 import { computeStructureAt } from './structureAnalyzer';
 import { StructureSnapshot, StructureScores, StructureLabel, StructureBreak, Swing } from './structureTypes';
 
@@ -269,8 +269,7 @@ export function precomputeStructure(
       acceleration,
       confidence:   Math.min(1, extQuality * 0.6 + persistence * 0.4),
       age:          trendAge,
-      quality:      extQuality,
-    };
+      quality:      extQuality};
 
     // ── BOS / CHoCH (O(1) — reads last high/low within BOS window) ────────────
     // lastHigh = majorHighs[mhEnd-1] (already confirmed, within i-5)
@@ -364,8 +363,7 @@ export function precomputeStructure(
       structureQuality,
       internalTrend,
       externalTrend:     (trendDir.includes('BULL') ? 1 : trendDir.includes('BEAR') ? -1 : 0) * Math.abs(extScore),
-      structureAge:      Math.min(1, trendAge / 200),
-    };
+      structureAge:      Math.min(1, trendAge / 200)};
   }
 
   return { majorHighs, majorLows, minorHighs, minorLows, scoresArr };

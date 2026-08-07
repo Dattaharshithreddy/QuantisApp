@@ -13,6 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { Card, SectionLabel } from '../components/Common';
 import { getLiveTradingCredential, setLiveTradingCredential, deleteLiveTradingCredential } from '../utils/secureCredentials';
+import { testCdxCredentials } from '../utils/execution/CoinDCXExecutor';
 import { SPACING, RADIUS } from '../theme/colors';
 
 function StatusBadge({ connected, T }: { connected: boolean; T: any }) {
@@ -51,9 +52,18 @@ export default function BrokerConnectionScreen() {
   const [bnConnected, setBnConnected] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // ── CoinDCX state ─────────────────────────────────────────────────────────
+  const [cdxKey,       setCdxKey]       = useState('');
+  const [cdxSecret,    setCdxSecret]    = useState('');
+  const [cdxConnected, setCdxConnected] = useState(false);
+  const [cdxTesting,   setCdxTesting]   = useState(false);
+
   useEffect(() => {
     getLiveTradingCredential('binanceApiKey').then(k => {
       if (k) { setBnKey(k); setBnConnected(true); }
+    });
+    getLiveTradingCredential('cdxApiKey').then(k => {
+      if (k) { setCdxKey(k); setCdxConnected(true); }
     });
   }, []);
 
@@ -78,6 +88,45 @@ export default function BrokerConnectionScreen() {
         await deleteLiveTradingCredential('binanceApiKey');
         await deleteLiveTradingCredential('binanceApiSecret');
         setBnKey(''); setBnSecret(''); setBnConnected(false);
+      }},
+    ]);
+  }, []);
+
+  // ── CoinDCX actions ────────────────────────────────────────────────────────
+  const saveCoinDCX = useCallback(async () => {
+    if (!cdxKey.trim() || !cdxSecret.trim()) {
+      Alert.alert('Missing Fields', 'Both API Key and API Secret are required.');
+      return;
+    }
+    setSaving(true);
+    try {
+      // Test credentials before saving — prevents storing wrong keys
+      setCdxTesting(true);
+      const err = await testCdxCredentials(cdxKey.trim(), cdxSecret.trim());
+      setCdxTesting(false);
+      if (err) {
+        Alert.alert('Connection Failed', `Could not connect to CoinDCX:\n${err}\n\nCheck your API key and secret.`);
+        return;
+      }
+      await setLiveTradingCredential('cdxApiKey',    cdxKey.trim());
+      await setLiveTradingCredential('cdxApiSecret', cdxSecret.trim());
+      setCdxConnected(true);
+      Alert.alert('CoinDCX Connected', 'Trading API keys saved and verified.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSaving(false);
+      setCdxTesting(false);
+    }
+  }, [cdxKey, cdxSecret]);
+
+  const disconnectCoinDCX = useCallback(async () => {
+    Alert.alert('Disconnect CoinDCX', 'Remove CoinDCX trading API keys?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        await deleteLiveTradingCredential('cdxApiKey');
+        await deleteLiveTradingCredential('cdxApiSecret');
+        setCdxKey(''); setCdxSecret(''); setCdxConnected(false);
       }},
     ]);
   }, []);
@@ -187,6 +236,50 @@ export default function BrokerConnectionScreen() {
           QUANTIS never transmits your keys to external servers.{'\n'}
           Keys are used only to place orders on your behalf.
         </Text>
+        {/* ── CoinDCX ─────────────────────────────────────────────────────── */}
+        <Card theme={T} style={{ marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <View>
+              <Text style={{ color: T.text, fontWeight: '700', fontSize: 15 }}>CoinDCX</Text>
+              <Text style={{ color: T.textDim, fontSize: 10, marginTop: 2 }}>Spot trading · INR/USDT pairs</Text>
+            </View>
+            <StatusBadge connected={cdxConnected} T={T} />
+          </View>
+
+          {!cdxConnected ? (
+            <>
+              <Text style={{ color: T.textDim, fontSize: 11, marginBottom: 4, lineHeight: 16 }}>
+                Create an API key at CoinDCX → Settings → API & Security.
+              </Text>
+              <Text style={{ color: T.textDim, fontSize: 11, marginBottom: 12, lineHeight: 16 }}>
+                Enable: Read Info, Trade Orders. Do NOT enable Withdrawal.
+              </Text>
+              <SecureInput label="API KEY" value={cdxKey} onChange={setCdxKey}
+                placeholder="Enter CoinDCX API key" T={T} />
+              <SecureInput label="API SECRET" value={cdxSecret} onChange={setCdxSecret}
+                placeholder="Enter CoinDCX API secret" T={T} />
+              <TouchableOpacity
+                onPress={saveCoinDCX}
+                disabled={saving || cdxTesting || !cdxKey.trim() || !cdxSecret.trim()}
+                style={{ backgroundColor: T.accent, borderRadius: RADIUS.sm, padding: 12,
+                  alignItems: 'center', opacity: (saving || cdxTesting) ? 0.6 : 1 }}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>
+                  {cdxTesting ? 'Testing connection…' : saving ? 'Saving…' : 'Connect CoinDCX'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: T.textDim, fontSize: 12 }}>API keys saved securely on device</Text>
+              <TouchableOpacity onPress={disconnectCoinDCX}
+                style={{ backgroundColor: T.red + '20', borderRadius: RADIUS.sm,
+                  paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Text style={{ color: T.red, fontWeight: '700', fontSize: 12 }}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </Card>
+
       </ScrollView>
     </SafeAreaView>
   );

@@ -33,8 +33,13 @@ export type PaperTradeRecord = {
   holdingMs: number;
   pnl: number;
   pnlPct: number;
-  maxDrawdownDuringTrade: number;
-  maxUnrealizedProfit: number;
+  maxDrawdownDuringTrade: number;  // MAE: most adverse unrealized P&L seen (always <= 0)
+  maxUnrealizedProfit: number;     // MFE: most favorable unrealized P&L seen (alias: maxProfitSeen)
+  // Peak-profit withdrawal — frozen at trade close from position tracking fields.
+  // peakProfit = highest unrealized P&L seen (same as maxUnrealizedProfit when > 0, else 0)
+  // maxProfitWithdrawn = largest peak-to-trough unrealized P&L retracement seen during the trade
+  peakProfit: number;
+  maxProfitWithdrawn: number;
   aiConfidence: number;
   riskScoreAtEntry: number;
   tradeQuality: { score: number; grade: string; stars: string; riskBadge: 'Low' | 'Medium' | 'High' } | null;
@@ -161,6 +166,7 @@ export function buildTradeRecord(
     qty: position.qty, grossPnl, fees, totalFees: fees + position.entryFee, slippageCost, holdingMs: exitTime - position.entryTime,
     pnl, pnlPct,
     maxDrawdownDuringTrade: position.maxUnrealizedDrawdown, maxUnrealizedProfit: position.maxUnrealizedProfit,
+    peakProfit: position.peakProfit ?? Math.max(0, position.maxUnrealizedProfit), maxProfitWithdrawn: position.maxProfitWithdrawn ?? 0,
     aiConfidence: position.aiConfidence, riskScoreAtEntry: position.riskScoreAtEntry, tradeQuality: position.tradeQuality, modelVersion: position.modelVersion, predictionHorizon: position.predictionHorizon,
     topFeatures: position.entrySnapshot.topFeatures, marketRegime: position.entrySnapshot.marketRegime,
     orderBookSnapshot: position.entrySnapshot.orderBookSnapshot,
@@ -174,8 +180,7 @@ export function buildTradeRecord(
       gapSize:         fill.gapSize,
       wasGapFill:      fill.wasGapFill,
       ambiguousCandle: fill.ambiguousCandle,
-      slippagePaid:    fill.slippagePaid,
-    } : null,
+      slippagePaid:    fill.slippagePaid} : null,
 
     // Market context — propagated from entrySnapshot, frozen at open, never recomputed.
     marketContext: (position.entrySnapshot as any).marketContext ?? null,
@@ -196,7 +201,5 @@ export function buildTradeRecord(
     // v6.9.2: static review levels — frozen snapshot of SL/TP at open
     reviewLevels: {
       stopLoss:   position.stopLoss,
-      takeProfit: position.takeProfit,
-    },
-  };
+      takeProfit: position.takeProfit}};
 }

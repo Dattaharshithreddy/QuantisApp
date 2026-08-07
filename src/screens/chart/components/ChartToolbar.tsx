@@ -1,10 +1,9 @@
 // ── ChartToolbar — timeframe tabs + overlay toggle pills ──────────────────────
 import React from 'react';
-import { View, ScrollView, TouchableOpacity, Text } from 'react-native';
+import { View, ScrollView, Pressable, Text } from 'react-native';
 import { Pill } from '../../../components/Common';
 import { RADIUS } from '../../../theme/colors';
-
-const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
+import { TIMEFRAMES } from '../hooks/useChartData';
 type OverlayKey = 'bollinger' | 'donchian' | 'keltner' | 'fib' | 'pivots';
 
 type Props = {
@@ -19,20 +18,21 @@ type Props = {
   T: any;
 };
 
-export function ChartToolbar({ tf, setTf, showMA, setShowMA, showVP, setShowVP, overlayToggles, toggleOverlay, T }: Props) {
+export const ChartToolbar = React.memo(function ChartToolbar({ tf, setTf, showMA, setShowMA, showVP, setShowVP, overlayToggles, toggleOverlay, T }: Props) {
   return (
     <>
       {/* Timeframe row */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ paddingRight: 20 }}>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {TIMEFRAMES.map(t => (
-            <TouchableOpacity key={t} onPress={() => setTf(t)} activeOpacity={0.75} style={{
+            <Pressable key={t} onPress={() => setTf(t)} hitSlop={6}
+              android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
+              style={({ pressed }) => ({
               paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.sm,
               backgroundColor: tf === t ? T.accent : T.bg3,
-              borderWidth: 1, borderColor: tf === t ? T.accent : T.border,
-            }}>
+              borderWidth: 1, borderColor: tf === t ? T.accent : T.border, opacity: pressed ? 0.75 : 1})}>
               <Text style={{ color: tf === t ? '#fff' : T.textSub, fontSize: 11, fontWeight: '700' }}>{t}</Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       </ScrollView>
@@ -51,4 +51,4 @@ export function ChartToolbar({ tf, setTf, showMA, setShowMA, showVP, setShowVP, 
       </ScrollView>
     </>
   );
-}
+});

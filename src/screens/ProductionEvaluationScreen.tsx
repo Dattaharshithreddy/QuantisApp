@@ -1,19 +1,19 @@
 import { FEATURE_COUNT } from '../utils/modelConstants';
 import React, { useState, useMemo, useCallback, useRef, memo, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, InteractionManager } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, InteractionManager, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { useEvalTasks, EvalTask, ComboSpec, notifyRunningInBackground } from '../context/EvalTaskContext';
 import { Card, SectionLabel, Pill } from '../components/Common';
 import { MultiSymbolSelector } from '../components/MultiSymbolSelector';
 import { generateRecommendations } from '../utils/productionEvaluation';
+import { exportProductionEvalPDF } from '../utils/journalExport';
 import { RADIUS } from '../theme/colors';
 import type { StrategyEvalResult, StrategyEvalEntry } from '../utils/strategyEvaluation';
 import { STRATEGY_ORDER } from '../utils/strategy/strategyProfiles';
 import type { RegimeEvalResult, RegimeBreakdown } from '../utils/regimeEvaluation';
-import { REGIME_DISPLAY_NAMES, REGIME_EMOJI } from '../utils/regimeEvaluation';
 
 const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h', '1D'];
 function formatMs(ms: number): string { if (ms < 1000) return '0s'; const s = Math.round(ms / 1000); const m = Math.floor(s / 60); return m > 0 ? `${m}m ${s % 60}s` : `${s}s`; }
@@ -720,13 +720,49 @@ export default function ProductionEvaluationScreen() {
   const runningRef = useRef({ eval: false, optim: false });
   runningRef.current = { eval: evalRunning, optim: optimRunning };
 
-  useFocusEffect(useCallback(() => {
-    return () => {
+  const navigation = useNavigation();
+
+  // ── Background notification — event-based, not time-based ─────────────────
+  //
+  // Two separate cases both require a notification:
+  //   CASE A: User navigates to another tab/screen while evaluation is running
+  //   CASE B: User presses Home (app backgrounded) while evaluation is running
+  //
+  // The previous debounce approach was a timing hack. The correct solution uses
+  // two independent lifecycle signals:
+  //
+  //   navigation 'blur' event  — fires when React Navigation actually removes
+  //     this screen from focus (tab switch, back press, push to new screen).
+  //     Crucially, it does NOT fire for transient UI events like button press
+  //     ripples, keyboard appearance, or scroll momentum — which was the root
+  //     cause of the spurious immediate notification on Run tap.
+  //
+  //   AppState 'change' event  — fires when the app moves to background/inactive.
+  //     This covers the Home button case independently of navigation state.
+  //
+  // Together these cover every genuine "user left while evaluation is running"
+  // scenario without any timing assumptions.
+  useEffect(() => {
+    // CASE A: within-app navigation away from this screen
+    const unsubscribeBlur = navigation.addListener('blur', () => {
       if (runningRef.current.eval) notifyRunningInBackground('evaluation');
       else if (runningRef.current.optim) notifyRunningInBackground('optimization');
+    });
+
+    // CASE B: app goes to OS background while this screen is focused
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        if (runningRef.current.eval) notifyRunningInBackground('evaluation');
+        else if (runningRef.current.optim) notifyRunningInBackground('optimization');
+      }
+    });
+
+    return () => {
+      unsubscribeBlur();
+      appStateSub.remove();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []));
+  // navigation is stable (never changes after mount) — safe in dep array
+  }, [navigation]);
 
   // Recommendations: only generated when evaluation is fully complete.
   // If computed from partial results (while still running), it would show
@@ -877,7 +913,388 @@ export default function ProductionEvaluationScreen() {
             <FeaturesToRemove features={recommendations.featuresToConsiderRemoving} />
           </Card>
         )}
+
+        {/* ── Export button — only when evaluation is complete with results ── */}
+        {evalTask?.status === 'completed' && (evalTask.evalResults ?? []).length > 0 && (
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                const html = generateEvalHTML(evalTask.evalResults, recommendations);
+                // exportProductionEvalPDF uses expo-print (Print.printToFileAsync → real .pdf)
+                // + expo-sharing (Sharing.shareAsync → native share sheet).
+                // No browser. No HTML preview. Same engine as Paper Journal and Shadow Journal.
+                await exportProductionEvalPDF(html, evalTask.evalResults.length);
+              } catch (e: any) {
+                Alert.alert('Export failed', e?.message ?? 'Unknown error. Check that the app has storage permissions.');
+              }
+            }}
+            style={{
+              marginTop: 14, marginBottom: 8,
+              backgroundColor: T.accent + '18',
+              borderRadius: RADIUS.md, padding: 14,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+              gap: 8, borderWidth: 1, borderColor: T.accent + '50'}}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 18 }}>📄</Text>
+            <View>
+              <Text style={{ color: T.accent, fontWeight: '800', fontSize: 13 }}>📄 Export as PDF</Text>
+              <Text style={{ color: T.textDim, fontSize: 10, marginTop: 1 }}>
+                Real PDF · Native share sheet
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+// ── HTML Report Generator ──────────────────────────────────────────────────────
+// Produces a self-contained dark-themed HTML report matching the app's UI layout.
+// Shared via React Native's Share API — user can save as PDF from the browser.
+
+function generateEvalHTML(results: any[], recommendations: any): string {
+  const now = new Date().toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false});
+
+  const fmt = (n: number | null | undefined, d = 2) =>
+    n == null || isNaN(n) ? '—' : n.toFixed(d);
+  const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+  const pnl = (v: number) => v >= 0 ? '#16a34a' : '#dc2626';
+  const pfColor = (pf: number) => pf > 1.5 ? '#16a34a' : pf >= 1 ? '#374151' : '#dc2626';
+  const wrColor = (wr: number) => wr >= 55 ? '#16a34a' : wr >= 45 ? '#374151' : '#dc2626';
+
+  // ── Per-result cards ───────────────────────────────────────────────────────
+  const resultCards = results.map(r => {
+    const m = r.primaryMetrics;
+
+    // STEP 1 — extended metrics
+    const step1 = `
+      <div class="section-label">STEP 1 · CURRENT CONFIG (HORIZON=3, LONG + SHORT)</div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">TOTAL RETURN</div>
+          <div class="metric-val" style="color:${pnl(m.totalReturnPct)}">${pct(m.totalReturnPct)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">WIN RATE</div>
+          <div class="metric-val" style="color:${wrColor(m.winRate)}">${fmt(m.winRate,1)}%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">PROFIT FACTOR</div>
+          <div class="metric-val" style="color:${pfColor(m.profitFactor ?? 0)}">${m.profitFactor === Infinity ? '∞' : fmt(m.profitFactor)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">SHARPE RATIO</div>
+          <div class="metric-val">${fmt(m.sharpeRatio)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">MAX DRAWDOWN</div>
+          <div class="metric-val" style="color:#dc2626">${fmt(m.maxDrawdownPct,1)}%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">TRADES</div>
+          <div class="metric-val">${m.numTrades}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">EXPECTANCY</div>
+          <div class="metric-val">${m.expectancy >= 0 ? '+' : ''}${fmt(m.expectancy)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">AVG HOLD</div>
+          <div class="metric-val">${fmt(m.avgHoldingBars,1)} bars</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">AVG RETURN/TRADE</div>
+          <div class="metric-val">${m.avgTrade >= 0 ? '+' : ''}${fmt(m.avgTrade)}</div>
+        </div>
+      </div>`;
+
+    // STEP 2 — horizon comparison
+    const horizonRows = (r.horizons ?? []).map((h: any) => {
+      const isBest = r.bestHorizon?.horizon === h.horizon;
+      return `<tr style="${isBest ? 'background:#f0fdf4;' : ''}">
+        <td style="font-weight:${isBest ? '800' : '500'};color:${isBest ? '#16a34a' : '#111827'}">${h.horizon}b${isBest ? ' ★' : ''}</td>
+        <td style="color:${pnl(h.metrics.totalReturnPct)};font-weight:700">${pct(h.metrics.totalReturnPct)}</td>
+        <td style="color:${wrColor(h.metrics.winRate)}">${fmt(h.metrics.winRate,1)}%</td>
+        <td style="color:${pfColor(h.metrics.profitFactor ?? 0)}">${h.metrics.profitFactor === Infinity ? '∞' : fmt(h.metrics.profitFactor)}</td>
+        <td>${h.metrics.numTrades}</td>
+        <td>${fmt(h.metrics.sharpeRatio)}</td>
+        <td>${fmt(h.metrics.maxDrawdownPct,1)}%</td>
+        <td>${fmt(h.trainSampleCount ?? h.metrics.trainSampleCount)}</td>
+      </tr>`;
+    }).join('');
+
+    const step2 = horizonRows ? `
+      <div class="section-label" style="margin-top:16px">STEP 2 · HORIZON COMPARISON</div>
+      <table>
+        <thead><tr><th>Horizon</th><th>Return</th><th>Win Rate</th><th>Profit Factor</th><th>Trades</th><th>Sharpe</th><th>Max DD</th><th>Samples</th></tr></thead>
+        <tbody>${horizonRows}</tbody>
+      </table>` : '';
+
+    // STEP 3 — strategy comparison
+    const strategyRows = (r.strategyEval?.entries ?? []).map((e: any) => `<tr>
+      <td style="font-weight:600">${e.strategyIcon ?? ''} ${e.strategyName}</td>
+      <td style="color:${pnl(e.metrics.totalReturnPct)};font-weight:700">${pct(e.metrics.totalReturnPct)}</td>
+      <td style="color:${wrColor(e.metrics.winRate)}">${fmt(e.metrics.winRate,1)}%</td>
+      <td style="color:${pfColor(e.metrics.profitFactor ?? 0)}">${e.metrics.profitFactor === Infinity ? '∞' : fmt(e.metrics.profitFactor)}</td>
+      <td>${e.metrics.numTrades}</td>
+      <td>${fmt(e.metrics.sharpeRatio)}</td>
+      <td style="color:#dc2626">${fmt(e.metrics.maxDrawdownPct,1)}%</td>
+      <td>${fmt(e.metrics.expectancy)}</td>
+      <td>${fmt(e.metrics.avgHoldingBars,1)}b</td>
+      <td style="font-weight:700;color:#6366f1">${e.bestHorizon?.horizon != null ? `H${e.bestHorizon.horizon}` : '—'}</td>
+    </tr>`).join('');
+
+    const step3 = strategyRows ? `
+      <div class="section-label" style="margin-top:16px">STEP 3 · STRATEGY COMPARISON</div>
+      <table>
+        <thead><tr><th>Strategy</th><th>Return</th><th>Win Rate</th><th>Profit Factor</th><th>Trades</th><th>Sharpe</th><th>Max DD</th><th>Expectancy</th><th>Avg Hold</th><th>Best H</th></tr></thead>
+        <tbody>${strategyRows}</tbody>
+      </table>` : '';
+
+    // Model comparison (MLP vs LR vs Ensemble)
+    const modelRows = (r.modelComparison ?? []).map((mc: any) => `<tr>
+      <td style="font-weight:600">${mc.modelName}</td>
+      <td style="color:${pnl(mc.metrics.totalReturnPct)};font-weight:700">${pct(mc.metrics.totalReturnPct)}</td>
+      <td style="color:${pfColor(mc.metrics.profitFactor ?? 0)}">${mc.metrics.profitFactor === Infinity ? '∞' : fmt(mc.metrics.profitFactor)}</td>
+      <td style="color:${wrColor(mc.metrics.winRate)}">${fmt(mc.metrics.winRate,1)}%</td>
+      <td>${mc.metrics.numTrades}</td>
+    </tr>`).join('');
+
+    const ensembleNote = r.ensembleHelps
+      ? `<p style="margin-top:6px;font-size:10px;color:${r.ensembleHelps.helps ? '#16a34a' : '#b45309'};font-style:italic">${r.ensembleHelps.reasoning}</p>`
+      : '';
+
+    const modelSection = modelRows ? `
+      <div class="section-label" style="margin-top:16px">MODEL COMPARISON (MLP vs LR vs ENSEMBLE)</div>
+      <table>
+        <thead><tr><th>Model</th><th>Return</th><th>Profit Factor</th><th>Win Rate</th><th>Trades</th></tr></thead>
+        <tbody>${modelRows}</tbody>
+      </table>${ensembleNote}` : '';
+
+    // Baselines
+    const baselineCards = (r.baselines ?? []).map((b: any) => {
+      const beats = m.totalReturnPct > b.metrics.totalReturnPct;
+      return `<div class="baseline-card" style="border-left-color:${beats ? '#16a34a' : '#dc2626'}">
+        <div style="font-size:9px;color:#6b7280;margin-bottom:2px">${b.name}</div>
+        <div style="font-size:13px;font-weight:700;color:${pnl(b.metrics.totalReturnPct)}">${pct(b.metrics.totalReturnPct)}</div>
+        <div style="font-size:9px;color:#6b7280">${b.metrics.numTrades}tr · ${fmt(b.metrics.winRate,0)}%wr</div>
+        <div style="font-size:9px;margin-top:2px;color:${beats ? '#16a34a' : '#dc2626'};font-weight:700">${beats ? '✓ AI wins' : '✗ AI loses'}</div>
+      </div>`;
+    }).join('');
+
+    const baselineSection = baselineCards ? `
+      <div class="section-label" style="margin-top:16px">BASELINE COMPARISON</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${baselineCards}</div>` : '';
+
+    // Regime evaluation
+    const regimeBreakdowns = (r.regimeEval?.breakdowns ?? []).map((bd: any) => {
+      const bm = bd.overall;
+      const byModelRows = (bd.byModel ?? []).filter((x: any) => x.metrics.numTrades > 0).map((mc: any) => `<tr>
+        <td>${mc.modelName}</td>
+        <td style="color:${pnl(mc.metrics.totalReturnPct)}">${pct(mc.metrics.totalReturnPct)}</td>
+        <td style="color:${pfColor(mc.metrics.profitFactor)}">${mc.metrics.profitFactor === Infinity ? '∞' : fmt(mc.metrics.profitFactor)}</td>
+        <td>${fmt(mc.metrics.winRate,1)}%</td>
+        <td>${mc.metrics.numTrades}</td>
+      </tr>`).join('');
+      const byHorizonRows = (bd.byHorizon ?? []).filter((x: any) => x.metrics.numTrades > 0).map((hh: any) => `<tr>
+        <td>H${hh.horizon}</td>
+        <td style="color:${pnl(hh.metrics.totalReturnPct)}">${pct(hh.metrics.totalReturnPct)}</td>
+        <td style="color:${pfColor(hh.metrics.profitFactor)}">${hh.metrics.profitFactor === Infinity ? '∞' : fmt(hh.metrics.profitFactor)}</td>
+        <td>${fmt(hh.metrics.winRate,1)}%</td>
+        <td>${hh.metrics.numTrades}</td>
+      </tr>`).join('');
+      const byStrategyRows = (bd.byStrategy ?? []).filter((x: any) => x.metrics.numTrades > 0).map((s: any) => `<tr>
+        <td>${s.strategyIcon ?? ''} ${s.strategyName}</td>
+        <td style="color:${pnl(s.metrics.totalReturnPct)}">${pct(s.metrics.totalReturnPct)}</td>
+        <td style="color:${pfColor(s.metrics.profitFactor)}">${s.metrics.profitFactor === Infinity ? '∞' : fmt(s.metrics.profitFactor)}</td>
+        <td>${fmt(s.metrics.winRate,1)}%</td>
+        <td>${s.metrics.numTrades}</td>
+      </tr>`).join('');
+      if (!bm) return '';
+      return `<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <div style="background:#f3f4f6;padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:800;color:#111827">${bd.label ?? bd.regime}</span>
+          <span style="font-size:10px;color:#6b7280">${bm.numTrades} trades · ${fmt(bm.winRate,1)}%wr · PF ${bm.profitFactor === Infinity ? '∞' : fmt(bm.profitFactor)} · ${pct(bm.totalReturnPct)}</span>
+        </div>
+        ${byModelRows ? `<div style="padding:8px 12px">
+          <div style="font-size:9px;font-weight:700;color:#6b7280;margin-bottom:4px;text-transform:uppercase">By Model</div>
+          <table><thead><tr><th>Model</th><th>Return</th><th>PF</th><th>WR</th><th>Trades</th></tr></thead><tbody>${byModelRows}</tbody></table>
+        </div>` : ''}
+        ${byHorizonRows ? `<div style="padding:8px 12px;border-top:1px solid #f3f4f6">
+          <div style="font-size:9px;font-weight:700;color:#6b7280;margin-bottom:4px;text-transform:uppercase">By Horizon</div>
+          <table><thead><tr><th>Horizon</th><th>Return</th><th>PF</th><th>WR</th><th>Trades</th></tr></thead><tbody>${byHorizonRows}</tbody></table>
+        </div>` : ''}
+        ${byStrategyRows ? `<div style="padding:8px 12px;border-top:1px solid #f3f4f6">
+          <div style="font-size:9px;font-weight:700;color:#6b7280;margin-bottom:4px;text-transform:uppercase">By Strategy</div>
+          <table><thead><tr><th>Strategy</th><th>Return</th><th>PF</th><th>WR</th><th>Trades</th></tr></thead><tbody>${byStrategyRows}</tbody></table>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+
+    const regimeSection = regimeBreakdowns ? `
+      <div class="section-label" style="margin-top:16px">REGIME EVALUATION</div>
+      <div style="margin-top:8px">${regimeBreakdowns}</div>` : '';
+
+    // Feature importance — all features
+    const allFeatures = (r.featureContribution?.entries ?? []);
+    const maxDrop = Math.max(...allFeatures.map((e: any) => Math.abs(e.baselineAccDrop)), 0.001);
+    const top8Features = allFeatures.slice(0, 8);
+    const featureRows = top8Features.map((e: any) => {
+      const barPct = Math.min(100, Math.max(0, (Math.abs(e.baselineAccDrop) / maxDrop) * 100));
+      return `<tr>
+        <td style="font-size:10px;color:#374151">${e.name}</td>
+        <td style="width:180px;padding-right:4px">
+          <div style="background:#e5e7eb;border-radius:3px;height:7px">
+            <div style="width:${barPct}%;background:#16a34a;height:7px;border-radius:3px"></div>
+          </div>
+        </td>
+        <td style="font-size:10px;color:#16a34a;font-weight:700;text-align:right">${fmt(e.baselineAccDrop,2)}</td>
+      </tr>`;
+    }).join('');
+
+    const zeroContribCount = allFeatures.filter((e: any) => Math.abs(e.baselineAccDrop) < 0.01).length;
+
+    const featureSection = featureRows ? `
+      <div class="section-label" style="margin-top:16px">FEATURE IMPORTANCE (TOP 8)</div>
+      <table style="margin-top:8px">
+        <tbody>${featureRows}</tbody>
+      </table>
+      ${zeroContribCount > 0 ? `<p style="font-size:10px;color:#6b7280;margin-top:6px">⚠ ${zeroContribCount} feature(s) showed near-zero contribution (permutation importance).</p>` : ''}` : '';
+
+    // Features to remove
+    const featuresToRemove = recommendations?.featuresToConsiderRemoving ?? [];
+    const removeSection = featuresToRemove.length > 0 ? `
+      <div class="section-label" style="margin-top:16px">FEATURES TO CONSIDER REMOVING (${featuresToRemove.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+        ${featuresToRemove.map((f: string) => `<span style="background:#fef3c7;border-radius:4px;padding:2px 7px;font-size:9px;color:#92400e;border:1px solid #fcd34d">${f}</span>`).join('')}
+      </div>` : '';
+
+    return `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="symbol">${r.symbol} · ${r.timeframe}</div>
+          <div style="color:#6b7280;font-size:11px;margin-top:2px">${r.candleCount} bars evaluated</div>
+        </div>
+        <div class="badge ${r.beatsAllBaselines ? 'badge-green' : 'badge-red'}">
+          ${r.beatsAllBaselines ? '✓ Beats all baselines' : '✗ Below baselines'}
+        </div>
+      </div>
+      ${step1}
+      ${step2}
+      ${step3}
+      ${modelSection}
+      ${baselineSection}
+      ${regimeSection}
+      ${featureSection}
+      ${removeSection}
+    </div>`;
+  }).join('');
+
+  // ── Recommendations ──────────────────────────────────────────────────────
+  const recoSection = recommendations ? `
+    <div class="card" style="border-left:4px solid ${recommendations.readyForPaperTrading ? '#16a34a' : '#f59e0b'}">
+      <div class="section-label">RECOMMENDATIONS</div>
+      <div class="metrics-grid" style="margin:10px 0 14px">
+        <div class="metric-card">
+          <div class="metric-label">RECOMMENDED HORIZON</div>
+          <div class="metric-val" style="color:#6366f1">${recommendations.recommendedHorizon ?? '—'}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">RECOMMENDED THRESHOLD</div>
+          <div class="metric-val" style="color:#6366f1">${recommendations.recommendedThreshold ?? '—'}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">READY FOR PAPER TRADING?</div>
+          <div class="metric-val" style="color:${recommendations.readyForPaperTrading ? '#16a34a' : '#dc2626'}">
+            ${recommendations.readyForPaperTrading ? '✅ Yes' : '❌ Not yet'}
+          </div>
+        </div>
+        <div class="metric-card" style="grid-column:span 3">
+          <div class="metric-label">NEEDS MORE DATA?</div>
+          <div style="font-size:13px;font-weight:700;color:${recommendations.needsMoreData ? '#dc2626' : '#16a34a'};margin-top:4px">
+            ${recommendations.needsMoreData ? '⚠ Yes — insufficient combinations' : '✓ No'}
+          </div>
+        </div>
+      </div>
+      ${recommendations.reasoning.map((line: string) => `<p style="color:#374151;font-size:11px;margin:5px 0;line-height:1.7;padding-left:8px;border-left:2px solid #e5e7eb">• ${line}</p>`).join('')}
+    </div>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QUANTIS Production Evaluation Report</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;
+         background:#ffffff; color:#111827; padding:20px; font-size:12px; line-height:1.4; }
+  .logo { display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+  .logo-mark { width:40px; height:40px; background:#6366f1;
+               border-radius:10px; display:flex; align-items:center; justify-content:center;
+               font-size:20px; font-weight:900; color:#fff; }
+  .logo-name { font-size:22px; font-weight:900; color:#111827; letter-spacing:-0.5px; }
+  .logo-tag  { font-size:9px; color:#6b7280; letter-spacing:1px; text-transform:uppercase; }
+  .subtitle  { color:#6b7280; font-size:11px; margin-bottom:20px; }
+  .card { background:#ffffff; border:1px solid #e5e7eb; border-radius:10px;
+          padding:16px; margin-bottom:14px; }
+  .card-header { display:flex; justify-content:space-between; align-items:flex-start;
+                 margin-bottom:14px; }
+  .symbol { font-size:18px; font-weight:800; color:#111827; }
+  .badge { padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; }
+  .badge-green { background:#dcfce7; color:#16a34a; border:1px solid #86efac; }
+  .badge-red   { background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; }
+  .section-label { font-size:9px; font-weight:700; letter-spacing:0.8px;
+                   color:#6b7280; text-transform:uppercase; margin-bottom:8px; }
+  .metrics-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+  .metric-card  { background:#f9fafb; border-radius:8px; padding:10px;
+                  border:1px solid #e5e7eb; }
+  .metric-label { font-size:8px; color:#6b7280; font-weight:700; text-transform:uppercase;
+                  letter-spacing:0.5px; margin-bottom:4px; }
+  .metric-val   { font-size:16px; font-weight:800; color:#111827; }
+  table { width:100%; border-collapse:collapse; font-size:10px; margin-top:4px; }
+  th    { background:#f3f4f6; color:#374151; font-weight:700; font-size:8.5px;
+          text-transform:uppercase; letter-spacing:0.5px; padding:6px 8px;
+          text-align:left; border-bottom:2px solid #e5e7eb; }
+  td    { padding:6px 8px; border-bottom:1px solid #f3f4f6; color:#111827; }
+  tr:last-child td { border-bottom:none; }
+  .baseline-card { background:#f9fafb; border-radius:8px; padding:10px; min-width:100px;
+                   flex:1; border-left:3px solid #e5e7eb; border:1px solid #e5e7eb; }
+  .footer { margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb;
+            color:#9ca3af; font-size:9px; text-align:center; line-height:1.6; }
+  @media print {
+    body { padding:12px; }
+    .card { break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="logo">
+  <div class="logo-mark">Q</div>
+  <div>
+    <div class="logo-name">QUANTIS</div>
+    <div class="logo-tag">Algorithmic Trading Research</div>
+  </div>
+</div>
+<div class="subtitle">
+  Production Model Evaluation Report · Exported ${now} · ${results.length} symbol${results.length !== 1 ? 's' : ''} evaluated
+</div>
+
+${resultCards}
+${recoSection}
+
+<div class="footer">
+  QUANTIS Algorithmic Trading Research Platform · ${FEATURE_COUNT}-feature ML ensemble<br>
+  For educational and research purposes only. Not financial advice. Trade at your own risk.
+</div>
+
+</body>
+</html>`;
 }

@@ -15,8 +15,7 @@ function Step({ icon, label, detail, T, last, accent }: { icon: string; label: s
       <View style={{ alignItems: 'center' }}>
         <View style={{
           width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
-          backgroundColor: (accent ?? T.purple) + '18', borderWidth: 1, borderColor: (accent ?? T.purple) + '40',
-        }}>
+          backgroundColor: (accent ?? T.purple) + '18', borderWidth: 1, borderColor: (accent ?? T.purple) + '40'}}>
           <Text style={{ fontSize: 12 }}>{icon}</Text>
         </View>
         {!last && <View style={{ width: 2, flex: 1, backgroundColor: T.border, marginTop: 2, minHeight: 16 }} />}

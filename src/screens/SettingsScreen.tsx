@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
-import { Card, PrimaryButton, Skeleton } from '../components/Common';
+import { Card, PrimaryButton } from '../components/Common';
 import { resetOnboarding } from '../utils/onboarding';
 import { LinearGradient } from 'expo-linear-gradient';
 import { QuantisLogo, QUANTIS_TAGLINE } from '../components/QuantisLogo';
@@ -123,8 +123,7 @@ export default function SettingsScreen() {
               backgroundColor: activeStrategy === null ? T.blue + '18' : T.bg3,
               borderRadius: RADIUS.sm, marginBottom: 8,
               borderWidth: 1,
-              borderColor: activeStrategy === null ? T.blue + '60' : T.textDim + '20',
-            }}
+              borderColor: activeStrategy === null ? T.blue + '60' : T.textDim + '20'}}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Text style={{ fontSize: 16 }}>⚙️</Text>
@@ -157,8 +156,7 @@ export default function SettingsScreen() {
                   backgroundColor: isActive ? T.accent + '18' : T.bg3,
                   borderRadius: RADIUS.sm, marginBottom: 8,
                   borderWidth: 1,
-                  borderColor: isActive ? T.accent + '60' : T.textDim + '20',
-                }}
+                  borderColor: isActive ? T.accent + '60' : T.textDim + '20'}}
               >
                 {/* Left: icon + name + description — flex:1 constrains description width */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
@@ -247,6 +245,9 @@ export default function SettingsScreen() {
           <TextInput value={aoPass} onChangeText={setAoPass} secureTextEntry style={inputStyle(T)} placeholder="4-digit PIN" placeholderTextColor={T.textDim} />
           <FieldLabel label="TOTP (fresh code)" T={T} />
           <TextInput value={aoTotp} onChangeText={setAoTotp} keyboardType="numeric" maxLength={6} style={inputStyle(T)} placeholder="6-digit TOTP" placeholderTextColor={T.textDim} />
+          <Text style={{ color: T.textDim, fontSize: 10, marginTop: 5, lineHeight: 14 }}>
+            💡 TOTP is a 6-digit one-time code from an authenticator app (e.g. Google Authenticator or mTOTP). It changes every 30 seconds — enter it just before tapping Connect.
+          </Text>
           {aoErr && <Text style={{ color: T.red, fontSize: 11, marginTop: 10 }}>⚠ {aoErr}</Text>}
           <View style={{ marginTop: 14 }}>
             {aoLoading
@@ -311,7 +312,6 @@ export default function SettingsScreen() {
     </SafeAreaView>
   );
 }
-
 
 function inputStyle(T: any) {
   return { backgroundColor: T.bg0, borderWidth: 1, borderColor: T.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, color: T.text, fontSize: 13, minHeight: 44 };

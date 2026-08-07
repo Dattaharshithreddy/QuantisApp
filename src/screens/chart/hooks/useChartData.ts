@@ -11,12 +11,15 @@
 //   standard React pattern for side-effect injection — identical to how
 //   useEffect cleanup functions work.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Candle } from '../../../utils/indicators';
 import { useData } from '../../../context/DataContext';
-import { fetchBnKlines, subscribeToBnKline } from '../../../api/binance';
+import { resolveVariant, findAssetByLegacySymbol } from '../../../utils/assetResolver';
+import type { LogicalAsset, ExchangeVariant } from '../../../api/assets';
+import { fetchBnKlines, subscribeToBnKline, openBinanceAggTradeStream } from '../../../api/binance';
+import { fetchCdxCandles, subscribeToCdxKline } from '../../../api/coindcx';
 import { fetchAVKlines } from '../../../api/alphaVantage';
-import { aoCandles, aoCandlesBefore } from '../../../api/angelOne';
+import { aoCandles, aoCandlesBefore, openAOMarketFeed } from '../../../api/angelOne';
 import { getCachedCandles, setCachedCandles, mergeCandles } from '../../../utils/candleCache';
 import { recordSampleCount } from '../../../utils/sampleHistory';
 import { detectGaps, repairGaps } from '../../../utils/gapDetection';
@@ -35,17 +38,65 @@ type UseChartDataCallbacks = {
    *  Use this to reset screen-level state (e.g. AI copilot result)
    *  before new candle data arrives. */
   onBeforeLoad?: () => void;
+  /** Called whenever a candle closes (kline isClosed = true).
+   *  Used to trigger background precomputeSeries so the cache is warm
+   *  before the user taps Predict. Receives the updated candles array. */
+  onCandleClose?: (candles: Candle[]) => void;
 };
 
 export function useChartData(
-  initialSymbol: string,
+  initialAssetId: string,
+  initialExchange?: string,
   callbacks: UseChartDataCallbacks = {},
 ) {
-  const { prices, aoSession, avKey, allAssets } = useData();
-  const { onBeforeLoad } = callbacks;
+  const { prices, aoSession, avKey, allAssets, nftTokenVersion, nftTokenError, updateSpotPrice } = useData();
+  const { onBeforeLoad, onCandleClose } = callbacks;
+  const onCandleCloseRef = useRef(onCandleClose);
+  onCandleCloseRef.current = onCandleClose;
 
-  const [symbol, setSymbol] = useState(initialSymbol);
+  // ── Resolve assetId + exchange to variant ──────────────────────────────────
+  // Backward compat: if initialAssetId looks like a legacy symbol (e.g. 'BTCUSD'),
+  // resolve it to (assetId, exchange) so old navigation params still work.
+  const resolveInitial = () => {
+    // Try as legacy symbol first
+    const legacy = findAssetByLegacySymbol(initialAssetId);
+    if (legacy) return { assetId: legacy.assetId, exchange: legacy.exchange };
+    // Otherwise treat as assetId directly
+    return { assetId: initialAssetId, exchange: initialExchange ?? '' };
+  };
+  const initial = resolveInitial();
+
+  const [assetId,  setAssetId]  = useState(initial.assetId);
+  const [exchange, setExchange] = useState(initial.exchange);
   const [tf, setTf] = useState('15m');
+
+  // Derive the active variant — O(1) lookup, recomputes only on assetId/exchange change
+  // FIX REGRESSION: variant was computed inline as a new object on every render.
+  // Because it was in loadCandles' dep array, loadCandles rebuilt every render →
+  // useEffect fired → candle reload → setCandles → render → new variant → loop.
+  // Memoized by [assetId, exchange] so it only changes when the user actually
+  // switches asset or exchange.
+  const variant: ExchangeVariant | undefined = useMemo(() => {
+    const built = resolveVariant(assetId, exchange);
+    if (built) return built;
+    // Fallback for custom assets not in built-in ASSETS
+    const customFlat = allAssets.find((a: any) =>
+      (a.assetId ?? a.symbol) === assetId && (!exchange || a.src === exchange)
+    ) ?? allAssets.find((a: any) => (a.assetId ?? a.symbol) === assetId);
+    if (!customFlat) return undefined;
+    return {
+      src: customFlat.src, symbol: customFlat.symbol, base: customFlat.base, vol: customFlat.vol,
+      bnSym: customFlat.bnSym, cdxSym: (customFlat as any).cdxSym, cdxMkt: (customFlat as any).cdxMkt,
+      aoToken: customFlat.aoToken, aoEx: customFlat.aoEx, avSym: customFlat.avSym,
+      fxKey: customFlat.fxKey, fxInv: customFlat.fxInv,
+    } as ExchangeVariant;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetId, exchange]); // allAssets intentionally omitted — built-ins are stable
+
+  // symbol = variant.symbol — the internal ML/cache/price key
+  // This is what gets passed to trainAndPredict, candleCache, etc.
+  // It is IDENTICAL to the old asset.symbol — no downstream changes.
+  const symbol = variant?.symbol ?? assetId; // fallback for unknown custom assets
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState('');
@@ -53,7 +104,8 @@ export function useChartData(
   const [dataSrc, setDataSrc] = useState<'live' | 'none'>('none');
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [pricePrecision, setPricePrecision] = useState(2);
-  const [nowTick, setNowTick] = useState(Date.now());
+  // FIX H-2: nowTick removed from this hook — moved into LiveCandleCountdown component
+  // to prevent the 1s setInterval from causing full ChartScreen re-renders every second.
   const loadRequestRef  = useRef(0);
   // Fix 1: throttle kline → setCandles to 500ms so the expensive
   // useChartIndicators useMemo runs at most 2×/sec instead of every message.
@@ -64,12 +116,18 @@ export function useChartData(
   // duplicate render without touching DataContext or miniTicker itself.
   const klineActiveRef  = useRef(false);
 
-  const asset = allAssets.find(a => a.symbol === symbol) || allAssets[0];
+  // asset: the flat Asset entry for the current (assetId, exchange) pair.
+  // The compatibility shim in DataContext adds `assetId` to each flat Asset entry,
+  // so we can find the correct variant (e.g. Binance BTC vs CoinDCX BTC).
+  // Falls back to first asset if not found (e.g. during initial render).
+  const asset = allAssets.find((a: any) =>
+    a.assetId === assetId && a.src === (exchange || '')
+  ) ?? allAssets.find((a: any) => a.assetId === assetId) ?? allAssets[0];
   const cp = prices[symbol];
 
   // ── Price precision ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!asset) return;
+    if (!variant) return;
     let cancelled = false;
     setPricePrecision(getPricePrecisionSync(asset));
     getPricePrecision(asset)
@@ -84,12 +142,6 @@ export function useChartData(
       invalidateCorrelationCache(prevSymbol);
     };
   }, [symbol, asset]);
-
-  // ── 1-second tick for live candle countdown ──────────────────────────────────
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   // ── Live candle price update (tick-level close/high/low update) ──────────────
   useEffect(() => {
@@ -120,8 +172,7 @@ export function useChartData(
           high:   cp.price,
           low:    cp.price,
           close:  cp.price,
-          volume: (cp as any).volume ?? 0,
-        }];
+          volume: (cp as any).volume ?? 0}];
       });
       return;
     }
@@ -139,8 +190,7 @@ export function useChartData(
         ...updated[i],
         high:  Math.max(updated[i].high, cp.price),
         low:   Math.min(updated[i].low,  cp.price),
-        close: cp.price,
-      };
+        close: cp.price};
       return updated;
     });
   }, [cp?.price]);
@@ -149,6 +199,9 @@ export function useChartData(
   //    and ChartScreen). Race-guarded with loadRequestRef. ─────────────────────
   const loadCandles = useCallback(async () => {
     const myRequestId = ++loadRequestRef.current;
+    // ── PERF PROBE ───────────────────────────────────────────────────────────
+    const _lc0 = Date.now();
+    // ────────────────────────────────────────────────────────────────────────
 
     // Notify caller before any state changes (used to reset AI state)
     onBeforeLoad?.();
@@ -180,21 +233,64 @@ export function useChartData(
     try {
       let data: Candle[] = [];
 
-      if (asset.src === 'binance' && asset.bnSym) {
-        data = await fetchBnKlines(asset.bnSym, tf, 500);
+      if (variant?.src === 'binance' && variant?.bnSym) {
+        const _nw = Date.now();
+        data = await fetchBnKlines(variant!.bnSym!, tf, 500);
         setDataSrc('live');
-      } else if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
-        data = await aoCandles(asset.aoToken, asset.aoEx, tf, aoSession);
+      } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
+        // CoinDCX spot — public candle API, no auth required.
+        // fetchCdxCandles returns candles in ascending order (oldest first),
+        // same as Binance, so no additional sorting is needed here.
+        const _nw = Date.now();
+        data = await fetchCdxCandles(variant!.cdxSym!, tf, 500);
         setDataSrc('live');
-      } else if (asset.src === 'av' && asset.avSym && avKey) {
-        data = await fetchAVKlines(asset.avSym, tf, avKey);
+      } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
+        // ao_futures uses the same Angel One API as ao — only the exchange (NFO) differs,
+        // which is already encoded in asset.aoEx on futures assets.
+        console.log(
+          `[NFO Pipeline] Fetching candles` +
+          ` | symbol=${symbol}` +
+          ` | token=${asset.aoToken}` +
+          ` | exchange=${asset.aoEx}` +
+          ` | tf=${tf}` +
+          ` | src=${asset.src}`
+        );
+        data = await aoCandles(variant!.aoToken!, variant!.aoEx!, tf, aoSession);
+        console.log(`[NFO Pipeline] Response candles=${data.length} | symbol=${symbol} | token=${asset.aoToken}`);
+        setDataSrc('live');
+      } else if (variant?.src === 'av' && variant?.avSym && avKey) {
+        data = await fetchAVKlines(variant!.avSym!, tf, avKey);
         setDataSrc('live');
       } else {
         // No usable source — surface a clear reason, never fabricate data
         if (!cached?.candles?.length) setDataSrc('none');
-        if (asset.src === 'ao') {
-          setErrMsg('Angel One not connected — connect it in Settings to see this chart.');
-        } else if (asset.src === 'av') {
+        if (variant?.src === 'ao' || variant?.src === 'ao_futures') {
+          const hasSession = !!aoSession?.jwtToken;
+          const hasToken   = !!variant?.aoToken;
+          const hasEx      = !!variant?.aoEx;
+          console.log(
+            `[NFO Pipeline] Cannot fetch candles` +
+            ` | symbol=${symbol}` +
+            ` | hasSession=${hasSession}` +
+            ` | token=${asset.aoToken || '(empty)'}` +
+            ` | exchange=${asset.aoEx || '(empty)'}` +
+            ` | src=${asset.src}` +
+            ` | nftTokenError=${nftTokenError ?? 'none'}`
+          );
+          // Three distinct states — each with actionable feedback:
+          // Show error only after resolution has been attempted (nftTokenVersion > 0).
+          // While nftTokenVersion === 0, the scrip master fetch is still in progress —
+          // showing an error at this point is premature (the fetch may succeed in 5-15s).
+          const resolutionAttempted = nftTokenVersion > 0;
+          const msg = !hasSession
+            ? 'Angel One not connected — connect it in Settings to see this chart.'
+            : nftTokenError && resolutionAttempted
+            ? `Instrument token fetch failed: ${nftTokenError}. Check your connection and re-login to Angel One.`
+            : !hasToken
+            ? 'Loading instrument data from Angel One — chart will load automatically in a few seconds.'
+            : 'Angel One exchange not configured for this asset.';
+          setErrMsg(msg);
+        } else if (variant?.src === 'av') {
           setErrMsg('Alpha Vantage key not set — add one in Settings to see this chart.');
         } else {
           setErrMsg('No live data source available for this asset.');
@@ -212,12 +308,16 @@ export function useChartData(
       const gaps = detectGaps(data, tf);
       if (gaps.length) {
         data = await repairGaps(data, gaps, async (fromTime, toTime) => {
-          if (asset.src === 'binance' && asset.bnSym) {
+          if (variant?.src === 'binance' && variant?.bnSym) {
             const filler = await fetchBnKlines(asset.bnSym, tf, 150, toTime);
             return filler.filter(c => c.time >= fromTime && c.time <= toTime);
           }
-          if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
-            const filler = await aoCandlesBefore(asset.aoToken, asset.aoEx, tf, toTime + 60000, aoSession);
+          if (variant?.src === 'coindcx' && variant?.cdxSym) {
+            const filler = await fetchCdxCandles(variant!.cdxSym!, tf, 150, toTime);
+            return filler.filter(c => c.time >= fromTime && c.time <= toTime);
+          }
+          if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
+            const filler = await aoCandlesBefore(variant!.aoToken!, variant!.aoEx!, tf, toTime + 60000, aoSession);
             return filler.filter(c => c.time >= fromTime && c.time <= toTime);
           }
           return []; // av has no clean range-query for gap-filling
@@ -241,7 +341,7 @@ export function useChartData(
     } finally {
       if (myRequestId === loadRequestRef.current) setLoading(false);
     }
-  }, [symbol, tf, asset, aoSession, avKey, onBeforeLoad]);
+  }, [symbol, tf, variant, aoSession, avKey, onBeforeLoad, nftTokenVersion, nftTokenError]);
 
   // Auto-reload when symbol/TF changes
   useEffect(() => { loadCandles(); }, [loadCandles]);
@@ -250,9 +350,9 @@ export function useChartData(
   // Provides live cumulative volume for the forming candle and a proper isClosed
   // flag — replacing the synthetic candle approach and fixing the stale volume label.
   useEffect(() => {
-    if (!asset?.bnSym || !TF_MS[tf]) return;
+    if (!variant?.bnSym || !TF_MS[tf]) return;
     const unsub = subscribeToBnKline(
-      asset.bnSym, tf,
+      variant!.bnSym!, tf,
       (k) => {
         klineActiveRef.current = true;
         if (k.isClosed) {
@@ -267,18 +367,22 @@ export function useChartData(
             closed[ci] = { ...closed[ci], high: Math.max(closed[ci].high, k.high),
               low: Math.min(closed[ci].low, k.low), close: k.close, volume: k.volume };
             // If the new candle time differs, append it
-            if (tail.time < k.time) {
-              return [...closed, { time: k.time, open: k.open, high: k.high,
-                low: k.low, close: k.close, volume: k.volume }];
-            }
-            return closed;
+            const next = tail.time < k.time
+              ? [...closed, { time: k.time, open: k.open, high: k.high,
+                  low: k.low, close: k.close, volume: k.volume }]
+              : closed;
+            // Fire onCandleClose with the settled candles array so the
+            // prediction engine can warm the precomputeSeries cache before
+            // the user taps Predict.
+            setTimeout(() => onCandleCloseRef.current?.(next), 0);
+            return next;
           });
           return;
         }
-        // Intra-candle update: throttle to 500ms so useChartIndicators
-        // runs at most 2×/sec (was running on every kline message ~1/sec+).
+        // Intra-candle update: throttle to 1000ms so useChartIndicators
+        // runs at most 1×/sec (was 500ms = 2×/sec, causing continuous recomputation).
         const now = Date.now();
-        if (now - lastKlinePaintMs.current < 500) return;
+        if (now - lastKlinePaintMs.current < 1000) return;
         lastKlinePaintMs.current = now;
         setCandles(prev => {
           if (!prev.length) return prev;
@@ -298,7 +402,157 @@ export function useChartData(
       klineActiveRef.current = false;
       unsub();
     };
-  }, [asset?.bnSym, tf]);
+  }, [variant?.bnSym, tf]);
+
+  // ── Binance aggTrade stream: per-trade price for the chart screen ──────────
+  // miniTicker in DataContext updates prices at 1s. For the chart screen header
+  // price display we want trade-level frequency (~50-200ms on liquid pairs).
+  // This stream updates DataContext's price for the current symbol only,
+  // running alongside the kline stream. It's lightweight (text only, ~40 bytes
+  // per message) and is closed when the symbol changes or component unmounts.
+  // The chg% comes from the last miniTicker value — we only override the price.
+  const aggTradeRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!variant?.bnSym) return;
+    aggTradeRef.current?.();
+    aggTradeRef.current = openBinanceAggTradeStream(
+      variant!.bnSym!,
+      (tradePrice) => {
+        // 1. Update the forming candle's close/high/low for chart rendering
+        setCandles(prev => {
+          if (!prev.length) return prev;
+          const now = Date.now();
+          if (now - lastKlinePaintMs.current < 1000) return prev;
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          updated[updated.length - 1] = {
+            ...last,
+            close: tradePrice,
+            high: Math.max(last.high, tradePrice),
+            low: Math.min(last.low, tradePrice),
+          };
+          return updated;
+        });
+        // 2. Update DataContext prices so cp.price (header + livePrice prop) refreshes
+        //    at trade frequency — not just miniTicker 1s cadence.
+        if (asset?.symbol) updateSpotPrice(asset.symbol, tradePrice);
+      },
+    );
+    return () => {
+      aggTradeRef.current?.();
+      aggTradeRef.current = null;
+    };
+  }, [variant?.bnSym]);
+
+  // ── Angel One SmartAPI WebSocket: tick-by-tick LTP for chart screen ───────
+  // For AO/AO_futures assets, subscribe to the active symbol's token in
+  // QUOTE_MODE (2) which gives LTP + OHLCV per tick. This replaces the 5s poll
+  // latency with near-real-time updates (~100-500ms on liquid NSE stocks).
+  // DataContext's existing poll still runs for depth — this stream only updates
+  // price and updates the forming candle's close/high/low.
+  const aoWSChartRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    aoWSChartRef.current?.();
+    aoWSChartRef.current = null;
+    const isAO = variant?.src === 'ao' || variant?.src === 'ao_futures';
+    if (!isAO || !aoSession?.feedToken || !variant?.aoToken || !variant?.aoEx) return;
+
+    aoWSChartRef.current = openAOMarketFeed(
+      [{ symbol: symbol, token: variant!.aoToken!, aoEx: variant!.aoEx! }],
+      aoSession,
+      (sym, ltp, ohlcv) => {
+        // Update forming candle
+        setCandles(prev => {
+          if (!prev.length) return prev;
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          updated[updated.length - 1] = {
+            ...last,
+            close: ltp,
+            high: Math.max(last.high, ltp),
+            low: Math.min(last.low, ltp),
+            ...(ohlcv ? { volume: ohlcv.volume } : {}),
+          };
+          return updated;
+        });
+        // Update DataContext price so header refreshes
+        updateSpotPrice(sym, ltp);
+      },
+      () => {}, // Status handled by DataContext's WS
+      2,        // QUOTE_MODE: LTP + OHLCV — gives us volume for forming candle
+    );
+    return () => {
+      aoWSChartRef.current?.();
+      aoWSChartRef.current = null;
+    };
+
+  // ── CoinDCX kline poll: real-time candle + candle-close detection ────────────
+  // Uses subscribeToCdxKline which polls the latest candle every 3s (REST-based,
+  // no socket.io dependency). On candle close, fires onCandleClose to warm the
+  // precompute cache — identical behaviour to the Binance kline stream.
+  const cdxKlineRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    cdxKlineRef.current?.();
+    cdxKlineRef.current = null;
+    if (!variant?.cdxSym || !TF_MS[tf]) return;
+
+    cdxKlineRef.current = subscribeToCdxKline(
+      variant!.cdxSym!, tf,
+      (k) => {
+        klineActiveRef.current = true;
+        if (k.isClosed) {
+          lastKlinePaintMs.current = 0;
+          setCandles(prev => {
+            if (!prev.length) return prev;
+            const closed = [...prev];
+            const ci = closed.length - 1;
+            closed[ci] = {
+              ...closed[ci],
+              high:   Math.max(closed[ci].high, k.high),
+              low:    Math.min(closed[ci].low,  k.low),
+              close:  k.close,
+              volume: k.volume,
+            };
+            // Append new candle if time differs
+            const tail = prev[prev.length - 1];
+            const next = tail.time < k.time
+              ? [...closed, { time: k.time, open: k.open, high: k.high,
+                  low: k.low, close: k.close, volume: k.volume }]
+              : closed;
+            setTimeout(() => onCandleCloseRef.current?.(next), 0);
+            return next;
+          });
+          return;
+        }
+        // Intra-candle update: throttle to 3s (poll interval)
+        const now = Date.now();
+        if (now - lastKlinePaintMs.current < 3000) return;
+        lastKlinePaintMs.current = now;
+        setCandles(prev => {
+          if (!prev.length) return prev;
+          const tail = prev[prev.length - 1];
+          if (tail.time !== k.time) return prev;
+          const updated = [...prev];
+          const i = updated.length - 1;
+          updated[i] = {
+            ...updated[i],
+            high:   Math.max(updated[i].high, k.high),
+            low:    Math.min(updated[i].low,  k.low),
+            close:  k.close,
+            volume: k.volume,
+          };
+          return updated;
+        });
+      },
+      () => {},
+    );
+
+    return () => {
+      cdxKlineRef.current?.();
+      cdxKlineRef.current = null;
+    };
+  }, [variant?.cdxSym, tf]);
+  }, [variant?.aoToken, variant?.aoEx, aoSession?.feedToken]);
 
   // ── Load older history (scroll-back) ─────────────────────────────────────────
   const loadMoreHistory = useCallback(async () => {
@@ -307,11 +561,14 @@ export function useChartData(
     try {
       const oldest = candles[0].time;
       let older: Candle[] = [];
-      if (asset.src === 'binance' && asset.bnSym) {
+      if (variant?.src === 'binance' && variant?.bnSym) {
         // Binance: fetch 500 candles ending just before the oldest candle we have.
         // endTime is exclusive in Binance API so subtract 1ms.
         older = await fetchBnKlines(asset.bnSym, tf, 500, oldest - 1);
-      } else if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
+      } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
+        // CoinDCX: same pattern — fetch ending just before oldest.
+        older = await fetchCdxCandles(asset.cdxSym, tf, 500, oldest - 1);
+      } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
         older = await aoCandlesBefore(asset.aoToken, asset.aoEx, tf, oldest, aoSession);
       }
       if (older.length) setCandles(prev => mergeCandles(older, prev));
@@ -320,30 +577,30 @@ export function useChartData(
     } finally {
       setLoadingOlder(false);
     }
-  }, [candles, symbol, tf, asset, aoSession, loadingOlder]);
-
-  // ── Live candle countdown info (derived, not stored) ──────────────────────────
-  const liveCandleInfo = (() => {
-    if (!candles.length) return null;
-    const intervalMs = TF_MS[tf];
-    if (!intervalMs) return null;
-    const last = candles[candles.length - 1];
-    const remainingMs = Math.max(0, last.time + intervalMs - nowTick);
-    if (remainingMs <= 0) return null;
-    const mins = Math.floor(remainingMs / 60000);
-    const secs = Math.floor((remainingMs % 60000) / 1000);
-    const changePct = ((last.close - last.open) / last.open) * 100;
-    return {
-      candle:         last,
-      countdownLabel: mins > 0 ? `${mins}m ${secs}s` : `${secs}s`,
-      changePct,
-    };
-  })();
+  }, [candles, symbol, tf, variant, aoSession, loadingOlder]);
 
   return {
-    // Identity
-    symbol, setSymbol,
-    tf,     setTf,
+    // Identity — new production API
+    assetId,  setAssetId,
+    exchange, setExchange,
+    variant,
+    // symbol: internal ML/cache/price key — derived from variant.symbol
+    // Still exposed for consumers that read it directly (ML hooks, price display)
+    symbol,
+    // Legacy setSymbol — resolves a legacy symbol string back to (assetId, exchange)
+    // Keeps SymbolSearch and other consumers working without changes
+    setSymbol: (legacySymbol: string) => {
+      const resolved = findAssetByLegacySymbol(legacySymbol);
+      if (resolved) {
+        setAssetId(resolved.assetId);
+        setExchange(resolved.exchange);
+      } else {
+        // Unknown symbol (custom asset) — treat assetId = symbol, use default exchange
+        setAssetId(legacySymbol);
+        setExchange('');
+      }
+    },
+    tf, setTf,
     // Candles
     candles,
     loading,
@@ -357,9 +614,8 @@ export function useChartData(
     // Derived
     pricePrecision,
     cp,
-    asset,
+    asset,       // LogicalAsset (for type, name, available exchanges)
     assetType: asset?.type ?? 'crypto',
-    liveCandleInfo,
-    TIMEFRAMES,
-  };
+    // liveCandleInfo removed — use LiveCandleCountdown component directly (FIX H-2)
+    TIMEFRAMES};
 }

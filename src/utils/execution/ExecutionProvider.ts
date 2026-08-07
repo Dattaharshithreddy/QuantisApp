@@ -55,7 +55,7 @@ export type ExecutionOrderRequest = {
 
 export type ExecutionFill = {
   orderId:       string;
-  broker:        'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE';
+  broker:        'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE' | 'BINANCE_FUTURES' | 'COINDCX';
   symbol:        string;
   direction:     'LONG' | 'SHORT';
   filledQty:     number;
@@ -75,9 +75,11 @@ export type ExecutionFill = {
 // ── Context passed to every executor — broker credentials and sessions ────────
 
 export type ExecutionContext = {
-  aoSession?:     AOSession | null;
-  binanceApiKey?: string;
-  binanceSecret?: string;
+  aoSession?:      AOSession | null;
+  binanceApiKey?:  string;
+  binanceSecret?:  string;
+  cdxApiKey?:      string;   // CoinDCX API key for order placement
+  cdxApiSecret?:   string;   // CoinDCX API secret for HMAC signing
 };
 
 // ── The contract every executor must implement ────────────────────────────────

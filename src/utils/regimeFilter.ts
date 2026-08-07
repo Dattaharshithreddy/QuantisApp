@@ -26,7 +26,7 @@ export async function setRegimeFilterMode(mode: RegimeFilterMode): Promise<void>
 
 export type RegimeCheckResult = { allowed: boolean; currentRegime: string; skipMessage?: string };
 
-export function checkRegimeFilter(candles: Candle[], mode: RegimeFilterMode): RegimeCheckResult {
+export async function checkRegimeFilter(candles: Candle[], mode: RegimeFilterMode): Promise<RegimeCheckResult> {
   // FIX (found while building Phase 1 — multi-timeframe regime display):
   // this used to short-circuit to currentRegime:'UNKNOWN' whenever mode was
   // DISABLED, which seemed reasonable for the execution-gating use case
@@ -37,7 +37,7 @@ export function checkRegimeFilter(candles: Candle[], mode: RegimeFilterMode): Re
   // decision should depend on whether a filter mode is actually active.
   if (candles.length < 60) return { allowed: true, currentRegime: 'UNKNOWN' };
 
-  const S = precomputeSeries(candles);
+  const S = await precomputeSeries(candles);
   const i = candles.length - 1;
   const trend = detectTrendDirection(candles, S.ema20, S.ema50);
   const volSamples = S.histVol.filter((v): v is number => v != null);
@@ -52,8 +52,7 @@ export function checkRegimeFilter(candles: Candle[], mode: RegimeFilterMode): Re
 
   const filterLabel: Record<RegimeFilterMode, string> = {
     DISABLED: '', BULL_ONLY: 'Bull filter enabled', TRENDING_ONLY: 'Trending-only filter enabled',
-    AVOID_LOW_VOL: 'Avoid-low-volatility filter enabled', AVOID_RANGING: 'Avoid-ranging filter enabled',
-  };
+    AVOID_LOW_VOL: 'Avoid-low-volatility filter enabled', AVOID_RANGING: 'Avoid-ranging filter enabled'};
 
   let allowed = true;
   if (mode === 'BULL_ONLY' && trend !== 'UPTREND') allowed = false;
@@ -63,8 +62,7 @@ export function checkRegimeFilter(candles: Candle[], mode: RegimeFilterMode): Re
 
   return {
     allowed, currentRegime,
-    skipMessage: allowed ? undefined : `Skipped because:\n${filterLabel[mode]}\nCurrent regime = ${currentRegime}`,
-  };
+    skipMessage: allowed ? undefined : `Skipped because:\n${filterLabel[mode]}\nCurrent regime = ${currentRegime}`};
 }
 
 
@@ -204,8 +202,7 @@ export function evaluateRegimeGate(
     'EXTREME Volatility': 'HIGH_VOLATILITY',
     'BREAKOUT':           'BREAKOUT',
     'MEAN_REVERSION':     'MEAN_REVERSION',
-    'SIDEWAYS':           'SIDEWAYS',
-  };
+    'SIDEWAYS':           'SIDEWAYS'};
   const normalisedLabel = LABEL_MAP[regimeLabel] ?? regimeLabel;
   const rule = REGIME_RULES[normalisedLabel] ?? REGIME_RULES['UNKNOWN'];
   const { allowedSignals, blockedSignals, minConfidence, reduceThreshold, sizeMultiplier } = rule;
@@ -215,29 +212,25 @@ export function evaluateRegimeGate(
       decision: 'BLOCK', sizeMultiplier: 0,
       minConfidenceRequired: minConfidence,
       reason: `${signalType} signal blocked in ${regimeLabel} regime. ` +
-              `Allowed signals: ${allowedSignals.join(', ')}.`,
-    };
+              `Allowed signals: ${allowedSignals.join(', ')}.`};
   }
 
   if (confidence < minConfidence) {
     return {
       decision: 'BLOCK', sizeMultiplier: 0,
       minConfidenceRequired: minConfidence,
-      reason: `Confidence ${confidence.toFixed(0)}/100 below minimum ${minConfidence} for ${regimeLabel} regime.`,
-    };
+      reason: `Confidence ${confidence.toFixed(0)}/100 below minimum ${minConfidence} for ${regimeLabel} regime.`};
   }
 
   if (confidence < reduceThreshold) {
     return {
       decision: 'REDUCE_SIZE', sizeMultiplier,
       minConfidenceRequired: minConfidence,
-      reason: `Confidence ${confidence.toFixed(0)}/100 below ${reduceThreshold} for ${regimeLabel} — size reduced ×${sizeMultiplier.toFixed(2)}.`,
-    };
+      reason: `Confidence ${confidence.toFixed(0)}/100 below ${reduceThreshold} for ${regimeLabel} — size reduced ×${sizeMultiplier.toFixed(2)}.`};
   }
 
   return {
     decision: 'ALLOW', sizeMultiplier,
     minConfidenceRequired: minConfidence,
-    reason: `${regimeLabel}: ${signalType} signal allowed with confidence ${confidence.toFixed(0)}/100.`,
-  };
+    reason: `${regimeLabel}: ${signalType} signal allowed with confidence ${confidence.toFixed(0)}/100.`};
 }

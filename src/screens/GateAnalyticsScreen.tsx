@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { loadShadowTrades, dedupExistingShadowTrades, clearAllShadowTrades, computeGateAnalytics, GateStats, GateType } from '../utils/shadowTradeJournal';
 
@@ -43,6 +44,7 @@ function BarRow({ label, value, max, color }: { label:string; value:number; max:
 
 export default function GateAnalyticsScreen() {
   const { theme: T } = useTheme();
+  const isFocused = useIsFocused();
   const [stats, setStats] = useState<GateStats[]>([]);
   const [totalTrades, setTotalTrades] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,7 +57,13 @@ export default function GateAnalyticsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-  const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
+  const onRefresh = useCallback(async () => {
+    // Guard against iOS back-navigation overscroll triggering refresh
+    if (!isFocused) return;
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load, isFocused]);
 
   const clearAnalytics = useCallback(() => {
     Alert.alert(

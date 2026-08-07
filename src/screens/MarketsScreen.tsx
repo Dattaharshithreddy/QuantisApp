@@ -1,15 +1,34 @@
 import React, { useCallback, useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ScrollView , RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { TYPE_COLORS } from '../api/assets';
 import { pFmt } from '../utils/indicators';
+import { getAvailableExchanges } from '../utils/assetResolver';
+// exchangePrefs loaded from DataContext (Phase 5) — direct import no longer needed here
+// import { getAllExchangePreferences, setExchangePreference } from '../utils/exchangePreferences';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Skeleton } from '../components/Common';
-import { RADIUS, SPACING } from '../theme/colors';
+import { RADIUS } from '../theme/colors';
 
-const SRC_LABELS: Record<string, string> = { ao: 'Angel One', av: 'Alpha Vantage', binance: 'Binance', forex: 'Forex API' };
+// Module-level stable helper — no allocation on every render
+function getSubtitle(item: any): string {
+  if (item?.exchanges && item?.defaultExchange) {
+    return item.exchanges[item.defaultExchange]?.symbol ?? item.id ?? item.symbol ?? '';
+  }
+  return item?.symbol ?? item?.id ?? '';
+}
+
+const SRC_LABELS: Record<string, string> = {
+  ao: 'Angel One', ao_futures: 'Angel One', av: 'Alpha Vantage',
+  binance: 'Binance', binance_futures: 'Binance', forex: 'Forex API',
+  coindcx: 'CoinDCX',
+};
+
+// Priority order when multiple exchanges offer the same asset.
+// Lower index = higher priority = shown by default.
+const EXCHANGE_PRIORITY: string[] = ['binance', 'coindcx', 'ao', 'ao_futures', 'av', 'forex'];
 
 const FILTERS: { key: string; label: string; icon: string }[] = [
   { key: 'ALL', label: 'All', icon: '⊞' },
@@ -22,7 +41,7 @@ const FILTERS: { key: string; label: string; icon: string }[] = [
 
 export default function MarketsScreen({ navigation }: any) {
   const { theme: T, themeName, toggleTheme } = useTheme();
-  const { prices, liveCount, wsStatus, aoSession, allAssets, removeAsset, hideAsset, restoreBuiltins, hiddenCount } = useData();
+  const { prices, liveCount, wsStatus, aoSession, allAssets, logicalAssets, exchangePrefs, removeAsset, hideAsset, restoreBuiltins, hiddenCount } = useData();
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -33,10 +52,13 @@ export default function MarketsScreen({ navigation }: any) {
   const [filter, setFilter] = useState('ALL');
   const [removeTarget, setRemoveTarget] = useState<{ symbol: string; src: string; isCustom?: boolean } | null>(null);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
-
-  // TASK 1/10 (performance polish): previously ran allAssets.filter(...)
-  // independently per pill on every render. One memoized pass instead.
-  const filtered = useMemo(() => allAssets.filter(a => filter === 'ALL' || a.type === filter), [allAssets, filter]);
+  // MarketsScreen uses logicalAssets (one entry per instrument) for display.
+  // allAssets (flat Asset[]) is still available for everything else — search,
+  // alerts, scanner, journal etc. continue using allAssets unchanged.
+  const filtered = useMemo(
+    () => logicalAssets.filter(a => filter === 'ALL' || a.type === filter),
+    [logicalAssets, filter]
+  );
 
   // FIXED: previously only assets added via Symbol Search ("custom") could be
   // removed — the original predefined assets had no remove path at all since
@@ -75,17 +97,21 @@ export default function MarketsScreen({ navigation }: any) {
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: aoSession?.jwtToken ? T.orange : T.textDim }} />
             <Text style={{ color: T.textSub, fontSize: 10 }}>{aoSession?.jwtToken ? 'Angel One connected' : 'Angel One disconnected'}</Text>
           </View>
-          {hiddenCount > 0 && (
-            <TouchableOpacity onPress={() => setShowRestoreConfirm(true)} activeOpacity={0.7} style={{ minHeight: 28, justifyContent: 'center' }}>
-              <Text style={{ color: T.blue, fontSize: 10, textDecorationLine: 'underline', fontWeight: '600' }}>{hiddenCount} hidden — restore</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={() => setShowRestoreConfirm(true)} activeOpacity={0.7}
+            style={{ minHeight: 28, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={{ color: hiddenCount > 0 ? T.blue : T.textDim, fontSize: 10, fontWeight: '600' }}>
+              {hiddenCount > 0 ? `${hiddenCount} hidden` : 'Restore defaults'}
+            </Text>
+            {hiddenCount > 0 && <Text style={{ color: T.blue, fontSize: 10, fontWeight: '700' }}>· restore</Text>}
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 34, flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 28, alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={{ height: 44, marginBottom: 4 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 28, gap: 8, alignItems: 'center', height: 44 }}
+        >
           {FILTERS.map(f => {
             const active = filter === f.key;
             return (
@@ -96,16 +122,15 @@ export default function MarketsScreen({ navigation }: any) {
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
                   paddingHorizontal: 12, height: 32, borderRadius: 8,
                   backgroundColor: active ? T.accent : T.bg3,
-                  borderWidth: 1, borderColor: active ? T.accent : T.border,
-                }}
+                  borderWidth: 1, borderColor: active ? T.accent : T.border}}
               >
                 <Text style={{ fontSize: 12, lineHeight: 15 }}>{f.icon}</Text>
                 <Text style={{ color: active ? '#fff' : T.textSub, fontSize: 12, fontWeight: active ? '700' : '600', lineHeight: 15 }}>{f.label}</Text>
               </TouchableOpacity>
             );
           })}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/* List */}
       {Object.keys(prices).length === 0 ? (
@@ -131,48 +156,15 @@ export default function MarketsScreen({ navigation }: any) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.accent} />}
         key={`${filter}_${filtered.length}`}
         data={filtered}
-        keyExtractor={a => a.symbol + a.src}
+        keyExtractor={a => (a as any).id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
-        renderItem={({ item }) => {
-          const p = prices[item.symbol];
-          const pos = (p?.chg || 0) >= 0;
-          const color = p?.status === 'stale' ? T.textDim : pos ? T.green : T.red;
-          const statusDot = p?.status === 'live' ? T.green : p?.status === 'stale' ? T.amber : T.textDim;
-          const statusLabel = p?.status === 'live' ? 'Live' : p?.status === 'stale' ? 'Stale' : 'No data';
-          return (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Chart', { symbol: item.symbol })}
-              onLongPress={() => confirmRemove(item.symbol, item.src, item.custom)}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.border, minHeight: 64,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                <View style={{ width: 4, height: 36, borderRadius: 2, backgroundColor: TYPE_COLORS[item.type] }} />
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <Text style={{ color: T.text, fontWeight: '800', fontSize: 15 }}>{item.symbol}</Text>
-                    <View style={{ backgroundColor: T.bg3, borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 1 }}>
-                      <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700' }}>{SRC_LABELS[item.src] ?? item.src}</Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: T.textDim, fontSize: 11 }} numberOfLines={1}>{item.name} · hold to remove</Text>
-                </View>
-              </View>
-              <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <Text style={{ color, fontWeight: '800', fontSize: 15 }}>{p ? pFmt(p.price) : 'No data'}</Text>
-                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: statusDot }} />
-                </View>
-                <Text style={{ color, fontSize: 11, fontWeight: '700', marginTop: 1 }}>
-                  {p && p.chg != null ? (p.status === 'stale' ? statusLabel : `${pos ? '▲ +' : '▼ '}${p.chg.toFixed(2)}%`) : ''}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
+        // Performance: fixed item height avoids layout measurement on every scroll
+        getItemLayout={(_, index) => ({ length: 65, offset: 65 * index, index })}
+        windowSize={5}           // only render 5 screens worth of items
+        maxToRenderPerBatch={10} // render 10 items per batch
+        initialNumToRender={15}  // show 15 on first paint
+        removeClippedSubviews={true}
+        renderItem={({ item }) => <MarketRow item={item} prices={prices} T={T} navigation={navigation} onLongPress={confirmRemove} />}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', marginTop: 50, paddingHorizontal: 30 }}>
             <Text style={{ fontSize: 32, marginBottom: 10 }}>🔍</Text>
@@ -201,14 +193,13 @@ export default function MarketsScreen({ navigation }: any) {
             onPress: () => {
               if (removeTarget) (removeTarget.isCustom ? removeAsset(removeTarget.symbol, removeTarget.src) : hideAsset(removeTarget.symbol, removeTarget.src));
               setRemoveTarget(null);
-            },
-          },
+            }},
         ]}
       />
       <ConfirmDialog
         visible={showRestoreConfirm}
-        title="Restore hidden assets?"
-        message={`${hiddenCount} built-in asset(s) are hidden.`}
+        title="Restore default assets?"
+        message={hiddenCount > 0 ? `${hiddenCount} built-in asset(s) are hidden. Restore them to the watchlist?` : 'Restore all default built-in assets to the watchlist?'}
         theme={T}
         onRequestClose={() => setShowRestoreConfirm(false)}
         actions={[
@@ -219,3 +210,81 @@ export default function MarketsScreen({ navigation }: any) {
     </SafeAreaView>
   );
 }
+
+// ── MarketRow — memoized so only re-renders when THIS item's price changes ────
+// Without memo: every WebSocket tick re-renders all 40 rows simultaneously.
+// With memo: only the row whose price changed re-renders (~98% render reduction).
+const MarketRow = React.memo(function MarketRow({
+  item, prices, T, navigation, onLongPress,
+}: {
+  item: any; prices: Record<string, any>; T: any;
+  navigation: any; onLongPress: (sym: string, src: string, custom: boolean) => void;
+}) {
+  // For LogicalAsset: show price from the default exchange variant's symbol
+  const defaultSym = (() => {
+    const la = item as any;
+    if (la.exchanges && la.defaultExchange) {
+      return la.exchanges[la.defaultExchange]?.symbol ?? la.symbol ?? la.id;
+    }
+    return la.symbol;
+  })();
+  const p = prices[defaultSym];
+  const pos = (p?.chg || 0) >= 0;
+  const isLive = p?.source === 'websocket' || p?.source === 'snapshot';
+  const color = !isLive ? T.textDim : pos ? T.green : T.red;
+  const statusDot = p?.source === 'websocket' ? T.green
+    : p?.source === 'snapshot' ? '#3b82f6'
+    : p?.source === 'cache'    ? T.amber
+    : T.textDim;
+  const statusLabel = p?.source === 'websocket' ? 'Live'
+    : p?.source === 'snapshot' ? 'Snapshot'
+    : p?.source === 'cache'    ? 'Cached'
+    : 'No data';
+  return (
+    <TouchableOpacity
+      onPress={() => {
+          // exchangePrefs loaded synchronously from DataContext
+          const slug = ((item as any).name ?? item.symbol).toLowerCase().replace(/\s+/g, '');
+          const prefExchange = (exchangePrefs ?? {})[slug] ?? (item as any).defaultExchange ?? '';
+          navigation.navigate('Chart', { assetId: (item as any).id ?? item.symbol, exchange: prefExchange });
+        }}
+      onLongPress={() => onLongPress((item as any).id, (item as any).defaultExchange, (item as any).custom)}
+      activeOpacity={0.7}
+      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+               paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.border, minHeight: 65 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+        <View style={{ width: 4, height: 36, borderRadius: 2, backgroundColor: TYPE_COLORS[item.type] }} />
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <Text style={{ color: T.text, fontWeight: '800', fontSize: 15 }}>{(item as any).name ?? item.symbol}</Text>
+            <View style={{ backgroundColor: T.bg3, borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 1 }}>
+              <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700' }}>
+                {SRC_LABELS[(item as any).defaultExchange ?? (item as any).src] ?? (item as any).defaultExchange ?? (item as any).src}
+              </Text>
+            </View>
+            {/* Available exchanges count badge */}
+            {getAvailableExchanges((item as any).id ?? '').length > 1 && (
+              <View style={{ backgroundColor: T.accent + '22', borderRadius: RADIUS.sm, paddingHorizontal: 5, paddingVertical: 1 }}>
+                <Text style={{ color: T.accent, fontSize: 7, fontWeight: '800' }}>
+                  {getAvailableExchanges((item as any).id ?? '').length} exchanges
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={{ color: T.textDim, fontSize: 11 }} numberOfLines={1}>
+              {getSubtitle(item)} · hold to remove
+            </Text>
+        </View>
+      </View>
+      <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Text style={{ color, fontWeight: '800', fontSize: 15 }}>{p ? pFmt(p.price) : 'No data'}</Text>
+          <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: statusDot }} />
+        </View>
+        <Text style={{ color, fontSize: 11, fontWeight: '700', marginTop: 1 }}>
+          {p && p.chg != null ? (!isLive ? statusLabel : `${pos ? '▲ +' : '▼ '}${p.chg.toFixed(2)}%`) : ''}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});

@@ -93,8 +93,7 @@ export function updateCUSUM(
     ...state,
     cusumPos, cusumNeg, n,
     lastStatus:  newStatus,
-    watchSince:  driftDetected && state.watchSince === 0 ? Date.now() : state.watchSince,
-  };
+    watchSince:  driftDetected && state.watchSince === 0 ? Date.now() : state.watchSince};
 }
 
 // ── Update Page-Hinkley on one feature observation — O(1) ────────────────────

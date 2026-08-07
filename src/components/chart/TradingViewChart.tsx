@@ -23,7 +23,7 @@ import { View, Text, TouchableOpacity, Modal, useWindowDimensions, ActivityIndic
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Candle, pFmt, calcVolumeProfile } from '../../utils/indicators';
-import { ema, sma, bollinger, keltnerChannel, donchianChannel, atr, historicalVolatility } from '../../utils/technicalIndicators';
+import { ema, bollinger, keltnerChannel, donchianChannel, atr, historicalVolatility } from '../../utils/technicalIndicators';
 import { detectTrendDirection, detectVolatilityRegime } from '../../utils/marketStructure';
 import { getMarketStructureSnapshot } from '../../utils/marketStructureSnapshot';
 import { LWC_JS } from './lwcAsset';
@@ -72,8 +72,7 @@ const BRIDGE = `
       rightPriceScale:{ borderColor:p.th.grid },
       timeScale:{ borderColor:p.th.grid, timeVisible:true, secondsVisible:false, rightOffset:2 },
       crosshair:{ mode:0 },
-      handleScroll:true, handleScale:true,
-    });
+      handleScroll:true, handleScale:true});
     cs=chart.addCandlestickSeries({ upColor:p.th.up, downColor:p.th.down,
       wickUpColor:p.th.up, wickDownColor:p.th.down, borderVisible:false,
       priceFormat:{ type:'price', precision:p.prec, minMove:Math.pow(10,-p.prec) } });
@@ -561,8 +560,7 @@ export default function TradingViewChart({
     const maxVol = Math.max(...vp.levels.map((l: any) => l.vol), 1);
     return { levels: vp.levels.map((l: any) => ({
       price: l.price, vol: l.vol,
-      isPoc: vp.poc != null && Math.abs(l.price - vp.poc.price) < 1e-9,
-    })), maxVol };
+      isPoc: vp.poc != null && Math.abs(l.price - vp.poc.price) < 1e-9})), maxVol };
   }, [showVP, visibleRange, data]);
 
   // Send VP levels to bridge; bridge calls cs.priceToCoordinate() on each level
@@ -614,9 +612,6 @@ export default function TradingViewChart({
       <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center', lineHeight: 18, maxWidth: 260 }}>{noDataMessage || 'No live data source connected for this asset.'}</Text>
     </View>
   );
-
-
-
 
   const body = (h: number, ref: any) => (
     <View style={{ height: h, backgroundColor: T.bg0, borderRadius: 8, overflow: 'hidden' }}>
@@ -710,8 +705,7 @@ export default function TradingViewChart({
           position: 'absolute', right: 56, top: lv.yCoord - 1.2,
           width: (lv.vol / (vpLevels?.maxVol ?? 1)) * 50,
           height: 2.4, borderRadius: 1,
-          backgroundColor: lv.isPoc ? '#F59E0B55' : '#3B82F622', opacity: 0.85,
-        }} />
+          backgroundColor: lv.isPoc ? '#F59E0B55' : '#3B82F622', opacity: 0.85}} />
       ))}
     </View>
   );

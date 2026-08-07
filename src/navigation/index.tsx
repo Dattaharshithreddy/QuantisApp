@@ -48,23 +48,27 @@ import FuturesContractScreen  from '../screens/FuturesContractScreen';
 import FuturesPositionsScreen from '../screens/FuturesPositionsScreen';
 import FuturesMtmLogScreen    from '../screens/FuturesMtmLogScreen';
 import BnFuturesScreen         from '../screens/BnFuturesScreen';
+import FuturesHubScreen         from '../screens/FuturesHubScreen';
 import BnFuturesPositionsScreen from '../screens/BnFuturesPositionsScreen';
 import FuturesSettingsScreen    from '../screens/FuturesSettingsScreen';
 import PortfolioRiskScreen      from '../screens/PortfolioRiskScreen';
 import FAQScreen                 from '../screens/FAQScreen';
 import DeveloperSupportScreen   from '../screens/DeveloperSupportScreen';
 
+console.log('[QUANTIS_DIAG] M-nav-A: navigation/index.tsx top-level starting — all screen imports completed');
 const Tab = createBottomTabNavigator();
 const MoreStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
+console.log('[QUANTIS_DIAG] M-nav-B: navigators created successfully');
 
 const ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
-  Markets: { active: 'stats-chart', inactive: 'stats-chart-outline' },
-  Chart: { active: 'trending-up', inactive: 'trending-up-outline' },
-  Risk: { active: 'shield-checkmark', inactive: 'shield-checkmark-outline' },
-  Journal: { active: 'book', inactive: 'book-outline' },
-  Alerts: { active: 'notifications', inactive: 'notifications-outline' },
-  MoreTab: { active: 'grid', inactive: 'grid-outline' },
+  Markets: { active: 'stats-chart',        inactive: 'stats-chart-outline' },
+  Chart:   { active: 'bar-chart',          inactive: 'bar-chart-outline' },
+  Risk:    { active: 'shield-checkmark',   inactive: 'shield-checkmark-outline' },
+  Journal: { active: 'book',              inactive: 'book-outline' },
+  Alerts:  { active: 'notifications',     inactive: 'notifications-outline' },
+  Futures: { active: 'trending-up',       inactive: 'trending-up-outline' },
+  MoreTab: { active: 'grid',             inactive: 'grid-outline' },
 };
 
 // ROOT CAUSE FIX: wrap() was called inline in JSX — component={wrap(Foo, 'Foo')}
@@ -90,12 +94,16 @@ function makeWrapped(Component: React.ComponentType<any>, label: string) {
   return Wrapped;
 }
 
+console.log('[QUANTIS_DIAG] M-nav-C: starting makeWrapped for all screens');
 const WrappedMarkets = makeWrapped(MarketsScreen, 'Markets');
+console.log('[QUANTIS_DIAG] M-nav-C1: Markets OK');
 const WrappedChart = makeWrapped(ChartScreen, 'Chart');
+console.log('[QUANTIS_DIAG] M-nav-C2: Chart OK');
 const WrappedRisk = makeWrapped(RiskManagerScreen, 'Risk');
 const WrappedJournal = makeWrapped(JournalScreen, 'Journal');
 const WrappedAlerts = makeWrapped(AlertsScreen, 'Alerts');
 const WrappedSettings = makeWrapped(SettingsScreen, 'Settings');
+const WrappedFuturesHub = makeWrapped(FuturesHubScreen, 'Futures');
 const WrappedMoreMenu = makeWrapped(MoreMenuScreen, 'More');
 const WrappedOptionsStrategy = makeWrapped(OptionsStrategyScreen, 'Options Strategy');
 const WrappedPortfolio = makeWrapped(PortfolioScreen, 'Portfolio');
@@ -106,8 +114,10 @@ const WrappedScreener = makeWrapped(ScreenerScreen, 'Strategy Screener');
 const WrappedBacktest = makeWrapped(BacktestScreen, 'Backtesting');
 const WrappedVerification = makeWrapped(VerificationScreen, 'Verification & Stress Test');
 const WrappedProductionEval = makeWrapped(ProductionEvaluationScreen, 'Production Model Evaluation');
+console.log('[QUANTIS_DIAG] M-nav-C3: ProductionEval OK');
 const WrappedPaperTrading = makeWrapped(PaperTradingScreen, 'Paper Trading');
 const WrappedPaperJournal = makeWrapped(PaperJournalScreen, 'Paper Journal');
+console.log('[QUANTIS_DIAG] M-nav-C4: PaperJournal OK');
 const WrappedPaperAnalytics = makeWrapped(PaperAnalyticsScreen, 'Paper Analytics');
 const WrappedPaperReplay = makeWrapped(PaperReplayScreen, 'Paper Replay');
 const WrappedScannerDashboard = makeWrapped(ScannerDashboardScreen, 'Scanner Dashboard');
@@ -121,8 +131,7 @@ function MoreStackNavigator() {
       headerStyle: { backgroundColor: T.bg1 },
       headerTitleStyle: { fontSize: 17, fontWeight: '800', color: T.text },
       headerTintColor: T.accent,
-      headerShadowVisible: false,
-    }}>
+      headerShadowVisible: false}}>
       <MoreStack.Screen name="MoreMenu" component={WrappedMoreMenu} options={{ title: 'More' }} />
       <MoreStack.Screen name="ShadowJournal" component={ShadowJournalScreen} options={{ title: 'Shadow Journal', headerShown: true }} />
       <MoreStack.Screen name="GateAnalytics" component={GateAnalyticsScreen} options={{ title: 'Gate Analytics', headerShown: true }} />
@@ -148,7 +157,7 @@ function MoreStackNavigator() {
       <MoreStack.Screen name="FuturesSettings"     component={FuturesSettingsScreen}     options={{ title: 'Futures Settings',           headerShown: true }} />
       <MoreStack.Screen name="PortfolioRisk"       component={PortfolioRiskScreen}       options={{ title: 'Portfolio Risk',             headerShown: true }} />
       <MoreStack.Screen name="FAQ"                  component={FAQScreen}                  options={{ title: 'Help & FAQ',                 headerShown: true }} />
-      <MoreStack.Screen name="DeveloperSupport"    component={DeveloperSupportScreen}    options={{ title: 'Developer Support',          headerShown: true }} />
+      <MoreStack.Screen name="DeveloperSupport"    component={DeveloperSupportScreen}    options={{ title: 'Support & Diagnostics',       headerShown: true }} />
       <MoreStack.Screen name="OrderConfirmation"   component={OrderConfirmationScreen}   options={{ title: 'Confirm Order', headerShown: true, presentation: 'modal' }} />
       <MoreStack.Screen name="OptionsStrategy" component={WrappedOptionsStrategy} options={{ title: 'Options Strategy' }} />
       <MoreStack.Screen name="Portfolio" component={WrappedPortfolio} options={{ title: 'Portfolio' }} />
@@ -180,6 +189,7 @@ function triggerTabHaptic() {
 // compared by reference; an inline object literal creates a new object
 // on every render, which React Navigation would re-subscribe on every tick.
 const TAB_LISTENERS = { tabPress: triggerTabHaptic };
+console.log('[QUANTIS_DIAG] M-nav-D: navigation/index.tsx module fully loaded — all makeWrapped done');
 
 function MainTabs() {
   const { theme: T } = useTheme();
@@ -193,13 +203,11 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: T.bg1, borderTopWidth: 1, borderTopColor: T.border,
           height: 62, paddingBottom: 8, paddingTop: 8,
-          ...T.elev2,
-        },
+          ...T.elev2},
         tabBarLabelStyle: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
         tabBarIcon: ({ focused, color }) => (
           <Ionicons name={focused ? ICONS[route.name].active : ICONS[route.name].inactive} size={22} color={color} />
-        ),
-      })}
+        )})}
       screenListeners={TAB_LISTENERS}
     >
       <Tab.Screen name="Markets" component={WrappedMarkets} />
@@ -207,6 +215,7 @@ function MainTabs() {
       <Tab.Screen name="Risk" component={WrappedRisk} options={{ title: 'Risk' }} />
       <Tab.Screen name="Journal" component={WrappedJournal} />
       <Tab.Screen name="Alerts" component={WrappedAlerts} />
+      <Tab.Screen name="Futures" component={WrappedFuturesHub} options={{ title: 'Futures' }} />
       <Tab.Screen name="MoreTab" component={MoreStackNavigator} options={{ title: 'More' }} />
     </Tab.Navigator>
   );

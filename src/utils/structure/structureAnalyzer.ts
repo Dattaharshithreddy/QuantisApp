@@ -23,7 +23,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { Candle } from '../indicators';
 import { Swing, StructureLabel, StructureBreak, StructureSnapshot } from './structureTypes';
-import { causalSwings } from './swingEngine';
 
 const EQUAL_TOL  = 0.001; // 0.1% — swing is "equal" if within this fraction
 const FAIL_BARS  = 5;     // a swing fails if invalidated within 5 bars of confirmation
@@ -180,8 +179,7 @@ export function computeStructureAt(
     internalHighLabel: 'NONE', internalLowLabel: 'NONE',
     swingFailure: false, swingFailureDirection: null,
     continuationScore: 0.5, reversalScore: 0.5,
-    structureQuality: 0, structureConfidence: 0, structureAge: 0,
-  };
+    structureQuality: 0, structureConfidence: 0, structureAge: 0};
   if (i < 20) return null_snap;
 
   const atr = atrArr[i] ?? (candles[i].high - candles[i].low);
@@ -277,8 +275,7 @@ export function computeStructureAt(
     acceleration: acceleration,
     confidence:  Math.min(1, extTrend.quality * 0.6 + persistence * 0.4),
     age:         trendAge,
-    quality:     extTrend.quality,
-  };
+    quality:     extTrend.quality};
 
   // ── BOS / CHoCH at bar i ──────────────────────────────────────────────────
   const { bos, choch } = detectStructureBreak(candles, extH, extL, extTrend.score, i, atrArr);
@@ -314,6 +311,5 @@ export function computeStructureAt(
     internalLowLabel:  intLowLabel,
     swingFailure, swingFailureDirection,
     continuationScore, reversalScore,
-    structureQuality, structureConfidence, structureAge,
-  };
+    structureQuality, structureConfidence, structureAge};
 }

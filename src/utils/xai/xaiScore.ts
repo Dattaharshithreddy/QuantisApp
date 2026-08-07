@@ -175,8 +175,7 @@ export function buildRiskSentence(level: RiskLevel, flags: RiskFlag[]): string {
     MEAN_REVERSION_ENV: 'mean reversion environment',
     FRESH_OB_ABSENT:    'no fresh Order Block supporting the trade',
     FVG_FILLED:         'Fair Value Gap already filled',
-    BREAKOUT_ENV:       'breakout conditions increase uncertainty',
-  };
+    BREAKOUT_ENV:       'breakout conditions increase uncertainty'};
   if (flags.length === 0) return 'Risk is low — conditions are aligned.';
   const items = flags.slice(0, 3).map(f => flagTexts[f]).join(', ');
   return `Risk is ${level.replace('_', ' ').toLowerCase()}: ${items}.`;

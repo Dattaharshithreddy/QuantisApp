@@ -52,8 +52,7 @@ export function analyzeModelStability(trades: ExecTrade[], numChunks = 5): Stabi
       tradeCount: slice.length,
       winRate: slice.length ? (wins.length / slice.length) * 100 : 0,
       profitFactor: grossLoss > 0 ? grossWin / grossLoss : (grossWin > 0 ? 999 : 0),
-      avgPnlPct: slice.length ? slice.reduce((s, t) => s + t.pnlPct, 0) / slice.length : 0,
-    });
+      avgPnlPct: slice.length ? slice.reduce((s, t) => s + t.pnlPct, 0) / slice.length : 0});
   }
 
   const winRateDriftSlope = linearRegressionSlope(chunks.map(c => c.winRate));
@@ -64,6 +63,5 @@ export function analyzeModelStability(trades: ExecTrade[], numChunks = 5): Stabi
     // A win rate dropping by more than ~2 percentage points per chunk, on
     // average, across the walk is flagged as a deteriorating trend worth
     // attention — a heuristic threshold, not a formal statistical test.
-    deteriorating: winRateDriftSlope < -2,
-  };
+    deteriorating: winRateDriftSlope < -2};
 }

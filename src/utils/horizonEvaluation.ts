@@ -1,36 +1,60 @@
-import { Candle } from './indicators';
-import { fitEnsemble, computeMetrics, BacktestMetrics } from './backtest';
-import { simulateSignalStrategy, ExecConfig } from './strategyExecutor';
+import { Candle }                                                     from './indicators';
+import { fitEnsemble, computeMetrics, BacktestMetrics,
+         PrecomputedFitCache }                                        from './backtest';
+import { simulateSignalStrategy, ExecConfig, ExecTrade }             from './strategyExecutor';
 
-// Evaluates EVERY prediction horizon independently in actual TRADING terms
-// (return, profit factor, win rate) — not just classification accuracy.
-// This requires a full retrain per horizon, since the horizon defines the
-// LABEL itself (price up in N bars), unlike SL/TP/risk/threshold which only
-// affect execution on top of an already-trained model. There's no way to
-// avoid retraining here without changing what's actually being measured.
+// Evaluates EVERY prediction horizon independently in actual TRADING terms.
+// Requires a full retrain per horizon: the horizon defines the LABEL itself
+// (price up in N bars), so it cannot be avoided without changing the measurement.
+//
+// ── Opt 2 ──────────────────────────────────────────────────────────────────────
+// evaluateAllHorizonsWithTrades() was previously a separate function that
+// called fitEnsemble() 5 additional times producing byte-identical models to
+// evaluateAllHorizons(). They are now unified: evaluateAllHorizons() always
+// returns trades alongside metrics, eliminating the 5 duplicate fits.
+// evaluateAllHorizonsWithTrades() is kept as a zero-cost alias for backward
+// compatibility with regimeEvaluation.ts.
+//
+// ── Opt 4 ──────────────────────────────────────────────────────────────────────
+// Accepts an optional PrecomputedFitCache. When provided (built once in
+// evaluateProductionModel), fitEnsemble skips precomputeSeries and feature
+// extraction for every horizon fit — those are horizon-independent and
+// identical across all 5 calls.
 
-export type HorizonEvalEntry = { horizon: number; metrics: BacktestMetrics; trainSampleCount: number };
+export type HorizonEvalEntry = {
+  horizon:          number;
+  metrics:          BacktestMetrics;
+  trainSampleCount: number;
+  trades:           ExecTrade[];   // Opt 2: always included, no extra cost
+};
+
+// Backward-compat alias — callers that use HorizonEvalEntryWithTrades still work.
+export type HorizonEvalEntryWithTrades = HorizonEvalEntry;
 
 const HORIZONS_TO_TEST = [1, 3, 5, 10, 20];
 
-// tick() — yields one event-loop turn so navigation, back-button presses,
-// and tab switches can be processed between horizon trainings.
 const tick = () => new Promise<void>(r => setTimeout(r, 0));
 
 export async function evaluateAllHorizons(
-  candles: Candle[],
+  candles:    Candle[],
   execConfig: ExecConfig & { trainSplitPct: number; buyThreshold: number; seed: number },
   onHorizonDone?: (horizon: number, idx: number, total: number, entry: HorizonEvalEntry) => void,
+  cache?:          PrecomputedFitCache | null,
+  // Opt 1: when provided, skip fitEnsemble entirely and reuse pre-fitted models.
+  // Only simulateSignalStrategy re-runs (with this call's execConfig, which may
+  // differ per strategy). Results differ only in execution output, not model weights.
+  horizonFittedMap?: Map<number, import('./backtest').FittedEnsemble>,
 ): Promise<HorizonEvalEntry[]> {
   const results: HorizonEvalEntry[] = [];
 
   for (let hi = 0; hi < HORIZONS_TO_TEST.length; hi++) {
     const horizon = HORIZONS_TO_TEST[hi];
-    // Yield BEFORE each training so the UI can process any queued interactions
-    // (back button, tab switch) before the synchronous model training starts.
     await tick();
 
-    const fitted = await fitEnsemble(candles, execConfig.trainSplitPct, execConfig.seed, horizon);
+    // Opt 1: use pre-fitted model if available — no retraining.
+    // Opt 4: otherwise pass cache to skip precomputeSeries.
+    const fitted = horizonFittedMap?.get(horizon)
+      ?? await fitEnsemble(candles, execConfig.trainSplitPct, execConfig.seed, horizon, cache);
     if (!fitted) continue;
 
     const { trades, equityCurve } = simulateSignalStrategy(
@@ -39,75 +63,38 @@ export async function evaluateAllHorizons(
         const { ensembleProb, agree } = fitted.predictProb(idx);
         return { enter: ensembleProb > execConfig.buyThreshold && agree, reason: `horizon=${horizon}` };
       },
-      fitted.atrAt, execConfig
+      fitted.atrAt, execConfig,
     );
 
     const metrics = computeMetrics(trades, equityCurve, execConfig.startingCapital);
-    const entry: HorizonEvalEntry = { horizon, metrics, trainSampleCount: fitted.trainSampleCount };
+    const entry: HorizonEvalEntry = { horizon, metrics, trainSampleCount: fitted.trainSampleCount, trades };
     results.push(entry);
     onHorizonDone?.(horizon, hi, HORIZONS_TO_TEST.length, entry);
-
-    // Yield AFTER each training too — lets React commit any state updates
-    // (e.g. step progress) before the next training blocks the thread.
     await tick();
   }
 
   return results;
 }
 
-// Shared by both horizon and threshold selection (Model Improvement Phase)
-// — extracted here so the SAME profit-factor+win-rate scoring philosophy
-// is used for both, rather than two independently-invented criteria.
+// Opt 2: Zero-cost alias. evaluateAllHorizonsWithTrades() previously called
+// fitEnsemble 5 extra times producing identical results. Now it just calls
+// evaluateAllHorizons() which already returns trades. No retraining, no change
+// in output.
+export async function evaluateAllHorizonsWithTrades(
+  candles:    Candle[],
+  execConfig: ExecConfig & { trainSplitPct: number; buyThreshold: number; seed: number },
+  cache?:     PrecomputedFitCache | null,
+  horizonFittedMap?: Map<number, import('./backtest').FittedEnsemble>,
+): Promise<HorizonEvalEntryWithTrades[]> {
+  return evaluateAllHorizons(candles, execConfig, undefined, cache, horizonFittedMap);
+}
+
 export function scoreMetrics(m: BacktestMetrics): number {
   return (m.profitFactor === Infinity ? 5 : m.profitFactor) * 0.6 + (m.winRate / 100) * 0.4;
 }
 
-// Picks the best horizon by a combined score (profit factor + win rate),
-// NOT by raw return alone — raw return can be dominated by a small number
-// of trades catching a lucky move, while profit factor and win rate are
-// more stable indicators of a repeatable edge. This is a deliberate choice
-// to avoid "optimizing for historical performance" in the way explicitly
-// warned against.
 export function pickBestHorizon(entries: HorizonEvalEntry[]): HorizonEvalEntry | null {
-  const withTrades = entries.filter(e => e.metrics.numTrades >= 5); // too few trades isn't a meaningful comparison
+  const withTrades = entries.filter(e => e.metrics.numTrades >= 5);
   if (!withTrades.length) return null;
   return withTrades.reduce((best, e) => scoreMetrics(e.metrics) > scoreMetrics(best.metrics) ? e : best);
-}
-
-import { ExecTrade } from './strategyExecutor';
-
-// Extended entry that carries raw trades — used by regimeEvaluation.ts
-// to group horizon performance by regime without re-running training.
-export type HorizonEvalEntryWithTrades = HorizonEvalEntry & { trades: ExecTrade[] };
-
-// Variant of evaluateAllHorizons that also returns trades per horizon.
-// Reuses the SAME fitEnsemble / simulateSignalStrategy path — zero duplication.
-// The existing evaluateAllHorizons is UNCHANGED.
-export async function evaluateAllHorizonsWithTrades(
-  candles: Candle[],
-  execConfig: ExecConfig & { trainSplitPct: number; buyThreshold: number; seed: number },
-): Promise<HorizonEvalEntryWithTrades[]> {
-  const HORIZONS_TO_TEST = [1, 3, 5, 10, 20];
-  const results: HorizonEvalEntryWithTrades[] = [];
-
-  for (const horizon of HORIZONS_TO_TEST) {
-    await tick();
-    const fitted = await fitEnsemble(candles, execConfig.trainSplitPct, execConfig.seed, horizon);
-    if (!fitted) continue;
-
-    const { trades, equityCurve } = simulateSignalStrategy(
-      candles, fitted.walkIndices,
-      (idx) => {
-        const { ensembleProb, agree } = fitted.predictProb(idx);
-        return { enter: ensembleProb > execConfig.buyThreshold && agree, reason: `horizon=${horizon}` };
-      },
-      fitted.atrAt, execConfig
-    );
-
-    const metrics = computeMetrics(trades, equityCurve, execConfig.startingCapital);
-    results.push({ horizon, metrics, trainSampleCount: fitted.trainSampleCount, trades });
-    await tick();
-  }
-
-  return results;
 }

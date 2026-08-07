@@ -53,15 +53,6 @@ export type BacktestMetrics = {
   avgHoldingBars: number; avgHoldingMs: number;
 };
 
-export type BacktestResult = {
-  trades: BacktestTrade[];
-  equityCurve: EquityPoint[];
-  metrics: BacktestMetrics;
-  trainSampleCount: number;
-  walkedBars: number;
-  featureCount: number;
-};
-
 export function computeMetrics(trades: ExecTrade[], equityCurve: EquityPoint[], startingCapital: number): BacktestMetrics {
   const finalEquity = equityCurve.length ? equityCurve[equityCurve.length - 1].equity : startingCapital;
   const netProfit = finalEquity - startingCapital;
@@ -106,8 +97,7 @@ export function computeMetrics(trades: ExecTrade[], equityCurve: EquityPoint[], 
   return {
     totalReturnPct, netProfit, winRate, lossRate, profitFactor, sharpeRatio, maxDrawdownPct: maxDD,
     avgWin, avgLoss, avgTrade, expectancy, numTrades: trades.length,
-    maxConsecutiveWins: maxWinStreak, maxConsecutiveLosses: maxLossStreak, avgHoldingBars, avgHoldingMs,
-  };
+    maxConsecutiveWins: maxWinStreak, maxConsecutiveLosses: maxLossStreak, avgHoldingBars, avgHoldingMs};
 }
 
 // A fitted, reusable ensemble — separates "train the model" from "execute
@@ -138,22 +128,69 @@ export type FittedEnsemble = {
   lr: LogisticRegression;
 }
 
-export async function fitEnsemble(candles: Candle[], trainSplitPct: number, seed: number, horizon: number = PRIMARY_HORIZON): Promise<FittedEnsemble | null> {
-  if (candles.length < 120) {
-    logger.warn('backtest', `Only ${candles.length} candles — need at least 120`);
-    return null;
-  }
-  const S = precomputeSeries(candles);
-  const maxHorizon = horizon;
+// ── Opt 4: precomputed cache type ─────────────────────────────────────────────
+// Allows callers to compute precomputeSeries + allFeatures ONCE and pass them
+// into every fitEnsemble call. Results are mathematically identical because
+// precomputeSeries and featuresAt are pure functions of candles only.
+export type PrecomputedFitCache = {
+  S:             Awaited<ReturnType<typeof precomputeSeries>>;
+  allFeatures:   number[][];
+  validIndices:  number[];
+};
 
+export async function buildFitCache(candles: Candle[]): Promise<PrecomputedFitCache | null> {
+  if (candles.length < 120) return null;
+  const S = await precomputeSeries(candles);
   const validIndices: number[] = [];
-  const allFeatures: number[][] = [];
+  const allFeatures:  number[][] = [];
   for (let i = 20; i < candles.length; i++) {
     const f = featuresAt(candles, i, S);
     if (!f) continue;
     validIndices.push(i);
     allFeatures.push(f);
   }
+  if (allFeatures.length < 60) return null;
+  return { S, allFeatures, validIndices };
+}
+
+// Yield interval for training loops inside fitEnsemble.
+// Controls how often the JS thread yields to the event loop during training.
+// Lower = more responsive UI, more overhead per fit.
+// Higher = less overhead, UI updates less frequently during long evaluations.
+// 25 is the production default — reduces yield count from 20 to 8 per fitEnsemble.
+// Set to 10 for debugging if you need finer-grained progress feedback.
+const FIT_YIELD_INTERVAL = 25;
+
+export async function fitEnsemble(
+  candles:      Candle[],
+  trainSplitPct: number,
+  seed:          number,
+  horizon:       number = PRIMARY_HORIZON,
+  // Opt 4: pass pre-built cache to skip precomputeSeries + feature extraction.
+  // If null/undefined, falls back to computing from scratch (backward-compatible).
+  cache?:        PrecomputedFitCache | null,
+): Promise<FittedEnsemble | null> {
+  if (candles.length < 120) {
+    logger.warn('backtest', `Only ${candles.length} candles — need at least 120`);
+    return null;
+  }
+  // Use provided cache or compute from scratch (identical result either way)
+  const S            = cache?.S            ?? await precomputeSeries(candles);
+  const validIndices = cache?.validIndices ?? (() => {
+    const idx: number[] = [];
+    for (let i = 20; i < candles.length; i++) { if (featuresAt(candles, i, S)) idx.push(i); }
+    return idx;
+  })();
+  const allFeatures  = cache?.allFeatures  ?? (() => {
+    const feats: number[][] = [];
+    for (let i = 20; i < candles.length; i++) {
+      const f = featuresAt(candles, i, S);
+      if (f) feats.push(f);
+    }
+    return feats;
+  })();
+
+  const maxHorizon = horizon;
   if (allFeatures.length < 60) {
     logger.warn('backtest', `Only ${allFeatures.length} valid feature samples — insufficient`);
     return null;
@@ -202,16 +239,20 @@ export async function fitEnsemble(candles: Candle[], trainSplitPct: number, seed
   // Seeded RNG → genuinely reproducible: same candles + same seed always
   // produces the same trained weights, the same trades, the same metrics.
   const rng = createRNG(seed);
+  const _fitT0 = Date.now();
   const mlp = new MLP(trainX[0].length, 8, rng);
   for (let e = 0; e < 100; e++) {
     mlp.trainEpoch(normTrainX, trainY, 0.08);
-    if (e % 10 === 9) await new Promise<void>(r => setTimeout(r, 0));
+    if (e % FIT_YIELD_INTERVAL === FIT_YIELD_INTERVAL - 1) await new Promise<void>(r => setTimeout(r, 0));
   }
+  logger.info('backtest:perf', `[FIT] h=${horizon} MLP 100ep: ${Date.now()-_fitT0}ms (N=${trainX.length},D=${trainX[0].length})`);
+  const _lrT0 = Date.now();
   const lr = new LogisticRegression(trainX[0].length, rng);
   for (let e = 0; e < 100; e++) {
     lr.trainEpoch(normTrainX, trainY, 0.15);
-    if (e % 10 === 9) await new Promise<void>(r => setTimeout(r, 0));
+    if (e % FIT_YIELD_INTERVAL === FIT_YIELD_INTERVAL - 1) await new Promise<void>(r => setTimeout(r, 0));
   }
+  logger.info('backtest:perf', `[FIT] h=${horizon} LR  100ep: ${Date.now()-_lrT0}ms`);
 
   const walkIndices = validIndices.slice(rawSplit);
   const indexToFeatureIdx = new Map(validIndices.map((idx, k) => [idx, k]));
@@ -263,15 +304,32 @@ export async function fitEnsemble(candles: Candle[], trainSplitPct: number, seed
     isExtremeVolatilityAt: (idx: number) => detectVolatilityRegime(S.histVol[idx] ?? avgVol, avgVol) === 'EXTREME',
     regimeLabelAt: (idx: number) => S.regimeData?.regimeArr?.[idx]?.label ?? null,
     walkIndices, trainSampleCount: trainX.length, candles, horizon,
-    testX, testY, mean, std, mlp, lr,
-  };
+    testX, testY, mean, std, mlp, lr};
 }
 
-export async function runBacktest(candles: Candle[], configOverrides: Partial<BacktestConfig> = {}): Promise<BacktestResult | null> {
+// Opt 3: BacktestResult now carries the fitted ensemble so evaluateProductionModel
+// can reuse it for Steps 3–8 without a second fitEnsemble() call.
+// The fitted field is optional so all existing callers that only use BacktestResult
+// fields (trades, metrics, etc.) are unaffected — backward compatible.
+export type BacktestResult = {
+  trades: BacktestTrade[];
+  equityCurve: EquityPoint[];
+  metrics: BacktestMetrics;
+  trainSampleCount: number;
+  walkedBars: number;
+  featureCount: number;
+  fitted?: FittedEnsemble;  // Opt 3: exposed for reuse, never changes the result values
+};
+
+export async function runBacktest(
+  candles:         Candle[],
+  configOverrides: Partial<BacktestConfig> = {},
+  cache?:          PrecomputedFitCache | null,  // Opt 4: optional pre-built cache
+): Promise<BacktestResult | null> {
   const config: BacktestConfig = { ...DEFAULT_BACKTEST_CONFIG, ...configOverrides };
   logger.info('backtest', `Starting backtest on ${candles.length} candles, seed=${config.seed}`);
 
-  const fitted = await fitEnsemble(candles, config.trainSplitPct, config.seed);
+  const fitted = await fitEnsemble(candles, config.trainSplitPct, config.seed, PRIMARY_HORIZON, cache);
   if (!fitted) return null;
 
   const { trades, equityCurve } = simulateSignalStrategy(
@@ -295,7 +353,9 @@ export async function runBacktest(candles: Candle[], configOverrides: Partial<Ba
 
   return {
     trades, equityCurve, metrics,
-    trainSampleCount: fitted.trainSampleCount, walkedBars: fitted.walkIndices.length, featureCount: FEATURE_NAMES.length,
+    trainSampleCount: fitted.trainSampleCount, walkedBars: fitted.walkIndices.length,
+    featureCount: FEATURE_NAMES.length,
+    fitted,  // Opt 3: returned for reuse, no change to any result field
   };
 }
 
@@ -379,6 +439,5 @@ export async function runComprehensiveBacktest(candles: Candle[], configOverride
     buyTrades: trades.filter(t => t.direction !== 'SHORT').length,
     sellTrades: trades.filter(t => t.direction === 'SHORT').length,
     shortingImplemented: true,
-    trainSampleCount: fitted.trainSampleCount, walkedBars: fitted.walkIndices.length, featureCount: FEATURE_NAMES.length,
-  };
+    trainSampleCount: fitted.trainSampleCount, walkedBars: fitted.walkIndices.length, featureCount: FEATURE_NAMES.length};
 }

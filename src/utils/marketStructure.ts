@@ -90,8 +90,7 @@ export function fibonacciLevels(swingHigh: number, swingLow: number) {
   return {
     level0: swingHigh, level236: swingHigh - range * 0.236, level382: swingHigh - range * 0.382,
     level500: swingHigh - range * 0.5, level618: swingHigh - range * 0.618, level786: swingHigh - range * 0.786,
-    level100: swingLow,
-  };
+    level100: swingLow};
 }
 
 // Session/period high-low aggregation — given intraday candles and a bucket

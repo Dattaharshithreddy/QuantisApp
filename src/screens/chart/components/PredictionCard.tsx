@@ -1,24 +1,20 @@
 // Presentational — receives ml state and callbacks, renders the full
 // prediction panel. No hooks. No memoization. Zero engine calls.
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, Pressable, Alert, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appendOverrideLog, readOverrideLog, summariseOverrideOutcomes, OverrideOutcomeSummary } from '../../../utils/overrideLog';
-import { notifyOverrideRecorded, notifySignalReady } from '../../../utils/paperNotifications';
+import { notifyOverrideRecorded } from '../../../utils/paperNotifications';
 import type { TradeReadiness } from '../../../utils/mtf/tradeReadiness';
-import { MLPrediction, PRIMARY_HORIZON, FEATURE_NAMES } from '../../../utils/mlSignal';
+import { MLPrediction, FEATURE_NAMES } from '../../../utils/mlSignal';
 import { explainPrediction } from '../../../utils/xai/xaiEngine';
 import { computeConfidence } from '../../../utils/confidence/confidenceEngine';
-import { generateExplanation } from '../../../utils/aiExplanation';
-import { checkRegimeFilter } from '../../../utils/regimeFilter';
-import { fromSinglePrediction, formatTradeQualityScore } from '../../../utils/tradeQuality';
 import { TrainingStatusCard } from '../../../components/TrainingStatusCard';
 import { formatMemoryResult } from '../../../utils/memoryEngine';
 import { PredictionSourceCard } from '../../../components/PredictionSourceCard';
 import { ModelUsageTimeline } from '../../../components/ModelUsageTimeline';
-import { Card, SectionLabel, Pill, GradientButton, Skeleton, Gauge, ExpandableToggle, MetricBox } from '../../../components/Common';
-import { Candle } from '../../../utils/indicators';
-import { RADIUS, SPACING } from '../../../theme/colors';
+import { Card, SectionLabel, GradientButton, Skeleton } from '../../../components/Common';
+import { RADIUS } from '../../../theme/colors';
 import { MarketContextCard } from '../../../components/MarketContextCard';
 import { navigateToPaperTrading, navigateToShadowJournal, navigateToLivePositions } from '../../../utils/navigationRef';
 
@@ -55,24 +51,28 @@ type Props = {
     mtfState: 'READY' | 'WAIT' | 'AVOID' | null;
     signalSnapshot: any; marketContext?: any;
   }) => void;
+  // Passed from useChartOverlays so PredictionCard can react to position close.
+  // When the open position for this symbol is closed externally (e.g. from Journal),
+  // this flips from true → false and ctaState resets to idle immediately.
+  hasOpenPosition?: boolean;
   T: any;
 };
 
-export function PredictionCard({
+export const PredictionCard = React.memo(function PredictionCard({
   symbol, tf, candlesLength, mlStatus, mlData, mlErr, tradeQualityResult,
   retrainDecision, postPredictionMsg, showQualityBreakdown, setShowQualityBreakdown,
   showConfidenceBreakdown, setShowConfidenceBreakdown,
   msStr, smcSnap, fvgSnap, vwapSnap, vpSnap, mtfSnap, regimeSnap,
   validatedPatterns,
-  onRunPrediction, onPaperTrade, readiness = null, isLiveMode = false, onLiveTrade, T,
+  onRunPrediction, onPaperTrade, readiness = null, isLiveMode = false, onLiveTrade,
+  hasOpenPosition = false,
+  T,
 }: Props) {
-  if (__DEV__) console.count('PredictionCard render');
-
   // Override log stats — read once on mount.
   // Initialized to null (no flash): async read only updates if there's history.
   // Uses a module-level cache so subsequent renders don't re-read AsyncStorage.
   const [overrideStats, setOverrideStats] = useState<OverrideOutcomeSummary | null>(null);
-  const overrideLoadedRef = React.useRef(false);
+
   // Guard: prevent double-tap on override/trade buttons while a position open is in-flight.
   // Without this, two rapid taps both pass the "already open" check before the first
   // position is written to AsyncStorage, creating duplicate positions + phantom shadows.
@@ -89,17 +89,68 @@ export function PredictionCard({
     | { type: 'error'; message: string };            // engine threw unexpectedly
 
   const [ctaState, setCtaState] = useState<CtaState>({ type: 'idle' });
+
+  // Stable callback — avoids new function reference on every render
+  // which would break React.memo on GradientButton's parent view
+  const handlePredict = useCallback(() => onRunPrediction(false), [onRunPrediction]);
   const lastSignalIdRef = useRef<string | null>(null);
 
+  // ── Reset ctaState when a new prediction signal arrives ──────────────────
+  // Previously this was done inline during render (setState-during-render),
+  // which caused a double render on every new prediction. Moving into a
+  // useEffect makes it a post-render side-effect: one clean render cycle.
+  const currentSignalId = mlData?.signalId ?? null;
   useEffect(() => {
-    if (overrideLoadedRef.current) return;  // already loaded this session
-    overrideLoadedRef.current = true;
+    if (currentSignalId && lastSignalIdRef.current !== currentSignalId) {
+      lastSignalIdRef.current = currentSignalId;
+      setCtaState({ type: 'idle' });
+    }
+  }, [currentSignalId]);
+
+  // ── Reset ctaState on symbol or timeframe change ──────────────────────────
+  // PredictionCard stays mounted across all symbol/tf changes (no key prop).
+  // Without this reset, a 'position_opened' state from ETH/15m bleeds into
+  // BTC, SOL, NIFTY, and every other ETH timeframe — they all show
+  // "Manage Position" even though no position exists for them.
+  // This useEffect fires whenever symbol or tf props change, and immediately
+  // returns ctaState to 'idle' so the user sees a clean Predict button.
+  const prevSymbolRef = useRef(symbol);
+  const prevTfRef     = useRef(tf);
+  useEffect(() => {
+    if (symbol !== prevSymbolRef.current || tf !== prevTfRef.current) {
+      prevSymbolRef.current = symbol;
+      prevTfRef.current     = tf;
+      setCtaState({ type: 'idle' });
+      lastSignalIdRef.current = null; // force re-check on next prediction
+    }
+  }, [symbol, tf]);
+
+  // ── Reset ctaState when open position is closed externally ───────────────
+  // If the user closes a position from the Journal or Paper Trading screen,
+  // hasOpenPosition flips false while ctaState is still 'position_opened'.
+  // This effect catches that transition and returns the UI to idle immediately
+  // without requiring a new predict run.
+  const prevHasOpenRef = useRef(hasOpenPosition);
+  useEffect(() => {
+    if (prevHasOpenRef.current === true && hasOpenPosition === false) {
+      // Position was just closed — reset CTA to idle
+      setCtaState({ type: 'idle' });
+      lastSignalIdRef.current = null;
+    }
+    prevHasOpenRef.current = hasOpenPosition;
+  }, [hasOpenPosition]);
+
+  useEffect(() => {
+    // Load override stats for current symbol+timeframe.
+    // Reload whenever symbol or tf changes so the count is always scoped correctly.
     readOverrideLog().then(log => {
       if (log.length > 0) {
-        summariseOverrideOutcomes(log, 'AVOID').then(setOverrideStats);
+        summariseOverrideOutcomes(log, 'AVOID', symbol, tf).then(setOverrideStats);
+      } else {
+        setOverrideStats(null);
       }
     }).catch(() => {});
-  }, []); // empty deps — load once per component mount
+  }, [symbol, tf]); // re-run on every symbol/tf change
 
   return (
     <Card theme={T} style={{ marginTop: 14 }}>
@@ -147,13 +198,12 @@ export function PredictionCard({
           inputImportance: imp, normalizedFeatures: normF,
           direction: dDir, probability: d.ensembleProbUp,
           mtfOverall: liveF[106], fvgFillPct: liveF[82],
-          regimeScores: { volatilityScore: liveF[114], meanRevScore: liveF[113], confidence: liveF[115], breakoutScore: liveF[112] },
-        });
+          regimeScores: { volatilityScore: liveF[114], meanRevScore: liveF[113], confidence: liveF[115], breakoutScore: liveF[112] }});
 
         // Confidence
         const conf = computeConfidence(
           d.confidenceBreakdown, d.ensembleProbUp, dDir,
-          d.ensembleAgree, d.walkForwardAccuracy * 100, d.riskScore,
+          d.ensembleAgree, d.walkForwardAccuracy, d.riskScore,
           msStr ?? { scoresArr: [] }, candlesLength - 1,
           smcSnap, fvgSnap ? { fvgConfidence: fvgSnap.fvgConfidence, fvgBias: fvgSnap.fvgBias, gapFillPct: fvgSnap.gapFillPct } : null,
           vwapSnap ? { sessionVWAP: vwapSnap.sessionVWAP } : null,
@@ -243,8 +293,7 @@ export function PredictionCard({
                 return (
                   <View style={{
                     backgroundColor: T.bg1, borderRadius: RADIUS.sm, padding: 11,
-                    borderWidth: 1, borderColor: T.border,
-                  }}>
+                    borderWidth: 1, borderColor: T.border}}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>
                         🧠 MARKET MEMORY
@@ -570,13 +619,6 @@ export function PredictionCard({
               const isReady = rdState === 'READY';
               const isBuy   = d.action === 'BUY';
 
-              // Reset CTA state whenever a new prediction arrives (new signalId = new candle).
-              // This is the canonical reset point — driven by data, not by user gesture.
-              if (d.signalId && lastSignalIdRef.current !== d.signalId) {
-                lastSignalIdRef.current = d.signalId;
-                if (ctaState.type !== 'idle') setCtaState({ type: 'idle' });
-              }
-
               // Final decision banner colors
               const bannerCol = isReady ? T.green : isAvoid ? T.red : T.amber;
               const bannerEmoji = isReady ? '✅' : isAvoid ? '🚫' : '⚠️';
@@ -605,8 +647,7 @@ export function PredictionCard({
                     bypassGates:    false,
                     mtfState:       rdState,
                     signalSnapshot: null,
-                    marketContext:  (d as any).marketContext ?? null,
-                  });
+                    marketContext:  (d as any).marketContext ?? null});
                 } else {
                   Promise.resolve(onPaperTrade(enriched, false, rdState))
                     .then((result: any) => {
@@ -662,17 +703,28 @@ export function PredictionCard({
                       style: 'cancel',
                       onPress: () => {
                         setIsSubmitting(false);
-                        // WAIT: user is just waiting, signal still active, no shadow written.
-                        // AVOID: engine already wrote a shadow entry when it evaluated this
-                        // signal. We confirm this from result.shadowRecorded, not from the
-                        // signal state. Since we don't have an engine result here (user
-                        // cancelled before attempting), we use WAIT state for both —
-                        // the shadow entry the engine wrote when computing AVOID readiness
-                        // is already in the journal from the earlier evaluation pass.
-                        // The ctaState here just controls what the button shows next.
-                        setCtaState({ type: 'waiting' });
-                      },
-                    },
+                        if (isAvoid) {
+                          // AVOID + Keep AI Decision: call the engine with bypassGates=false.
+                          // The engine evaluates all gates, finds the AVOID blocker, writes
+                          // a shadow trade entry, and returns {opened:false, shadowRecorded:true}.
+                          // This is the correct path — the shadow journal records "AI blocked
+                          // this signal and the user agreed, let's track what would have happened."
+                          const enriched = { ...d, _liveOverallConfidence: conf.overall, _liveConfGrade: conf.grade } as any;
+                          Promise.resolve(onPaperTrade(enriched, false, rdState))
+                            .then((result: any) => {
+                              if (result?.shadowRecorded) {
+                                setCtaState({ type: 'shadow_recorded' });
+                              } else {
+                                setCtaState({ type: 'waiting' });
+                              }
+                            })
+                            .catch(() => setCtaState({ type: 'waiting' }));
+                        } else {
+                          // WAIT: signal is borderline, not hard-blocked.
+                          // User chose to wait and re-predict — no shadow needed.
+                          setCtaState({ type: 'waiting' });
+                        }
+                      }},
                     {
                       text: 'Override & Enter Anyway',
                       style: 'destructive',
@@ -686,8 +738,7 @@ export function PredictionCard({
                             bypassGates:    true,
                             mtfState:       rdState,
                             signalSnapshot: null,
-                            marketContext:  (d as any).marketContext ?? null,
-                          });
+                            marketContext:  (d as any).marketContext ?? null});
                         } else {
                           Promise.resolve(onPaperTrade(enrichedOverride, true, rdState))
                             .then((result: any) => {
@@ -695,14 +746,14 @@ export function PredictionCard({
                                 appendOverrideLog({
                                   timestamp:             Date.now(),
                                   symbol,
+                                  timeframe:             tf,
                                   tradeReadiness:        rdState,
                                   blockerReason:         rdBlocker || bannerBody,
                                   predictionDirection:   dDir,
                                   predictionProbability: d.ensembleProbUp,
                                   confidenceOverall:     conf.overall,
                                   confidenceGrade:       conf.grade,
-                                  recommendation:        conf.recommendation,
-                                }).catch(() => {});
+                                  recommendation:        conf.recommendation}).catch(() => {});
                                 setOverrideStats(prev => prev
                                   ? { ...prev, total: prev.total + 1, forState: isAvoid ? prev.forState + 1 : prev.forState }
                                   : { total: 1, forState: isAvoid ? 1 : 0, wins: 0, losses: 0, winRate: NaN, settled: 0 }
@@ -723,9 +774,12 @@ export function PredictionCard({
                             })
                             .finally(() => setIsSubmitting(false));
                         }
-                      },
-                    },
+                      }},
                   ],
+                  // Android: hardware back button dismisses the alert without firing any
+                  // button onPress. Without cancelable+onDismiss, isSubmitting stays true
+                  // permanently, locking the override button until a new prediction arrives.
+                  { cancelable: true, onDismiss: () => setIsSubmitting(false) },
                 );
               };
 
@@ -739,8 +793,7 @@ export function PredictionCard({
                     borderLeftColor: bannerCol,
                     padding: 12,
                     borderWidth: 1,
-                    borderColor: bannerCol + '40',
-                  }}>
+                    borderColor: bannerCol + '40'}}>
                     <Text style={{ color: bannerCol, fontSize: 11, fontWeight: '800',
                       letterSpacing: 0.3, marginBottom: 5 }}>
                       {bannerEmoji} {bannerTitle}
@@ -795,80 +848,86 @@ export function PredictionCard({
                   {ctaState.type === 'idle' && (
                     <>
                       {isReady && (
-                        <TouchableOpacity
+                        <Pressable
                           onPress={handleTrade}
                           disabled={isSubmitting}
-                          activeOpacity={0.85}
-                          style={{ backgroundColor: isSubmitting ? (T.blue ?? T.accent) + '80' : (T.blue ?? T.accent),
-                            paddingVertical: 14, borderRadius: RADIUS.md, alignItems: 'center' }}>
+                          hitSlop={8}
+                          android_ripple={{color:'rgba(255,255,255,0.2)'}}
+                          style={({ pressed }) => ({ backgroundColor: isSubmitting ? (T.blue ?? T.accent) + '80' : (T.blue ?? T.accent),
+                            paddingVertical: 14, borderRadius: RADIUS.md, alignItems: 'center', opacity: pressed ? 0.82 : 1 })}>
                           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14, letterSpacing: 0.3 }}>
                             {isLiveMode ? '● ' : ''}{isBuy ? '▲ Open Long' : '▼ Open Short'}{isLiveMode ? ' (LIVE)' : ''}
                           </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
                       {isWait && (
-                        <TouchableOpacity
+                        <Pressable
                           onPress={handleOverrideTrade}
                           disabled={isSubmitting}
-                          activeOpacity={0.85}
-                          style={{ backgroundColor: isSubmitting ? (T.amber ?? '#F59E0B') + '80' : (T.amber ?? '#F59E0B'),
-                            paddingVertical: 14, borderRadius: RADIUS.md, alignItems: 'center' }}>
+                          hitSlop={8}
+                          android_ripple={{color:'rgba(255,255,255,0.2)'}}
+                          style={({ pressed }) => ({ backgroundColor: isSubmitting ? (T.amber ?? '#F59E0B') + '80' : (T.amber ?? '#F59E0B'),
+                            paddingVertical: 14, borderRadius: RADIUS.md, alignItems: 'center', opacity: pressed ? 0.82 : 1 })}>
                           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14, letterSpacing: 0.3 }}>
                             ⚠ {isBuy ? 'Open Long' : 'Open Short'} — Caution{isLiveMode ? ' (LIVE)' : ''}
                           </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
                       {isAvoid && (
-                        <TouchableOpacity
+                        <Pressable
                           onPress={handleOverrideTrade}
                           disabled={isSubmitting}
-                          activeOpacity={0.75}
-                          style={{ backgroundColor: T.red + '12', paddingVertical: 12,
+                          hitSlop={8}
+                          android_ripple={{color: T.red + '30'}}
+                          style={({ pressed }) => ({ backgroundColor: T.red + '12', paddingVertical: 12,
                             borderRadius: RADIUS.md, alignItems: 'center',
-                            borderWidth: 1.5, borderColor: isSubmitting ? T.red + '50' : T.red }}>
+                            borderWidth: 1.5, borderColor: isSubmitting ? T.red + '50' : T.red,
+                            opacity: pressed ? 0.75 : 1 })}>
                           <Text style={{ color: T.red, fontWeight: '700', fontSize: 14, letterSpacing: 0.3 }}>
                             {isBuy ? '▲ Open Long' : '▼ Open Short'}{isLiveMode ? ' (LIVE)' : ''} — Override AI
                           </Text>
                           <Text style={{ color: T.red + 'aa', fontSize: 9, marginTop: 2 }}>
                             Tap to see reasons and confirm
                           </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
                     </>
                   )}
 
                   {/* Position opened — replace button with Manage Position */}
                   {ctaState.type === 'position_opened' && (
-                    <TouchableOpacity
+                    <Pressable
                       onPress={() => ctaState.isLive ? navigateToLivePositions() : navigateToPaperTrading()}
-                      activeOpacity={0.85}
-                      style={{ backgroundColor: T.green + '18', paddingVertical: 14,
+                      hitSlop={8}
+                      android_ripple={{color: T.green + '30'}}
+                      style={({ pressed }) => ({ backgroundColor: T.green + '18', paddingVertical: 14,
                         borderRadius: RADIUS.md, alignItems: 'center',
-                        borderWidth: 1.5, borderColor: T.green }}>
+                        borderWidth: 1.5, borderColor: T.green, opacity: pressed ? 0.82 : 1 })}>
                       <Text style={{ color: T.green, fontWeight: '800', fontSize: 14, letterSpacing: 0.3 }}>
                         📊 Manage Position →
                       </Text>
                       <Text style={{ color: T.green + 'bb', fontSize: 10, marginTop: 2 }}>
                         {ctaState.isLive ? 'View in Live Positions' : 'View in Paper Trading'}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
 
                   {/* Shadow journal recorded — replace button with View Shadow Journal */}
                   {ctaState.type === 'shadow_recorded' && (
-                    <TouchableOpacity
+                    <Pressable
                       onPress={() => navigateToShadowJournal()}
-                      activeOpacity={0.85}
-                      style={{ backgroundColor: T.accent + '18', paddingVertical: 14,
+                      hitSlop={8}
+                      android_ripple={{color: T.accent + '30'}}
+                      style={({ pressed }) => ({ backgroundColor: T.accent + '18', paddingVertical: 14,
                         borderRadius: RADIUS.md, alignItems: 'center',
-                        borderWidth: 1.5, borderColor: T.accent }}>
+                        borderWidth: 1.5, borderColor: T.accent, opacity: pressed ? 0.82 : 1 })}>
                       <Text style={{ color: T.accent, fontWeight: '800', fontSize: 14, letterSpacing: 0.3 }}>
                         🔍 View Shadow Journal →
                       </Text>
                       <Text style={{ color: T.accent + 'bb', fontSize: 10, marginTop: 2 }}>
                         Opportunity tracked — tap to review
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
 
                   {/* User chose to wait — no shadow entry written, signal still valid */}
@@ -907,14 +966,14 @@ export function PredictionCard({
       <View style={{ marginTop: 12 }}>
         <GradientButton
           label={mlStatus === 'training' ? '⏳ Predicting...' : '🔮 Predict'}
-          onPress={() => onRunPrediction(false)}
+          onPress={handlePredict}
           color={T.accent}
           theme={T}
-          disabled={mlStatus === 'training'}
+          disabled={mlStatus === 'training' || isSubmitting}
         />
       </View>
 
     </Card>
   );
-}
+});
 

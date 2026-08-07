@@ -24,8 +24,7 @@ export function scoreFVG(fvg: DetectedFVG, atr: number, cfg: FVGConfig): ScoredF
     sizeScore,
     freshnessScore,
     strength:   Math.min(1, strength),
-    confidence: Math.min(1, confidence),
-  };
+    confidence: Math.min(1, confidence)};
 }
 
 // ── Cluster scoring ───────────────────────────────────────────────────────────
@@ -76,6 +75,5 @@ export function toFVGScores(
     fvgAge:             nearestFVG ? Math.min(1, nearestFVG.age / 100) : 1,
     clusterScore:       cluster ? cluster.strength : 0,
     fvgConfidence:      nearestFVG ? nearestFVG.confidence : 0,
-    fvgBias:            bias,
-  };
+    fvgBias:            bias};
 }

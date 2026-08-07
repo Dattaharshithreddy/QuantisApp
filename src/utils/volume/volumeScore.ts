@@ -37,8 +37,7 @@ export function scoreVWAP(
     aboveVWAP:      price > snap.sessionVWAP ? 1 : 0,
     slopeNorm,
     confidence,
-    bias,
-  };
+    bias};
 }
 
 // ── VP_SCORING_V1 ─────────────────────────────────────────────────────────────
@@ -80,8 +79,7 @@ export function scoreVP(
     valDistNorm:    d(vp.val),
     hvnProximity:   atr > 0 ? Math.max(0, 1 - Math.min(1, hvnMin / (atr * 2))) : 0,
     lvnProximity:   atr > 0 ? Math.max(0, 1 - Math.min(1, lvnMin / (atr * 2))) : 0,
-    profileBias,
-  };
+    profileBias};
 }
 
 // ── Aggregate to VolumeScores for ML ──────────────────────────────────────────
@@ -97,6 +95,5 @@ export function toVolumeScores(sv: ScoredVWAP, svp: ScoredVP): VolumeScores {
     hvnProximity:   svp.hvnProximity,
     lvnProximity:   svp.lvnProximity,
     profileBias:    svp.profileBias,
-    vwapConfidence: sv.confidence,
-  };
+    vwapConfidence: sv.confidence};
 }

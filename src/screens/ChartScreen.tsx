@@ -6,7 +6,7 @@
 // All state lives in the four hooks. All display lives in components.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, useWindowDimensions, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, Alert, useWindowDimensions } from 'react-native';
 // ScrollView MUST come from react-native-gesture-handler here: the chart inside
 // uses RNGH GestureDetector, and RN's ScrollView fights RNGH's gesture arena on
 // Android → native crash on touch. RNGH's ScrollView participates in the same
@@ -18,54 +18,56 @@ const E2_CHART_INERT = false;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
-import { Candle, pFmt } from '../utils/indicators';
+import { calcMA, calcRSI, calcVolumeProfile, pFmt } from '../utils/indicators';
 import { managementOutcomeLabel } from '../utils/predictionResult';
 import { generateObservations } from '../utils/tradeObservations';
-import { getPricePrecisionSync, getPricePrecision } from '../utils/pricePrecision';
-import { logger } from '../utils/logger';
-import { generateExplanation } from '../utils/aiExplanation';
 import { getLatestTrainingStatus, TrainingStatusInfo } from '../utils/trainingHistory';
 import { analyzeWithClaude, buildAnalysisPrompt, AIAnalysis } from '../api/claude';
-import { calcMA, calcRSI, calcVolumeProfile } from '../utils/indicators';
-import { getMarketStructureSnapshot } from '../utils/marketStructureSnapshot';
 import { computeConfidence } from '../utils/confidence/confidenceEngine';
 import { computeTradeReadiness } from '../utils/mtf/tradeReadiness';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { TrainingSummaryModal } from '../components/TrainingSummaryModal';
 import { OrderBookCard } from '../components/OrderBookCard';
-import CandlestickChart from '../components/chart/ChartAdapter';
-import type { OverlayToggles } from '../components/chart/ChartAdapter';
-import { Card, SectionLabel, Skeleton, Pill, GradientButton } from '../components/Common';
+import CandlestickChart, { OverlayToggles } from '../components/chart/ChartAdapter';
+import { Card, SectionLabel, StatBox, PrimaryButton, GradientButton, Pill, Skeleton } from '../components/Common';
 import { RADIUS, SPACING } from '../theme/colors';
-import { trainAndPredict, MLPrediction, PRIMARY_HORIZON, FEATURE_NAMES } from '../utils/mlSignal';
-import { getOptimalConfig } from '../utils/modelOptimization';
-import { resolveOutcomes } from '../utils/predictionHistory';
 
 // Hooks
-import { useChartData }       from './chart/hooks/useChartData';
+import { useChartData } from './chart/hooks/useChartData';
 import { useChartIndicators } from './chart/hooks/useChartIndicators';
-import { usePrediction }      from './chart/hooks/usePrediction';
-import { useChartOverlays }   from './chart/hooks/useChartOverlays';
-import { useLiveTrading }     from './chart/hooks/useLiveTrading';
+import { usePrediction } from './chart/hooks/usePrediction';
+import { useChartOverlays } from './chart/hooks/useChartOverlays';
+import { useLiveTrading } from './chart/hooks/useLiveTrading';
 
 // Components
-import { ChartHeader }         from './chart/components/ChartHeader';
-import { ChartToolbar }        from './chart/components/ChartToolbar';
-import { IndicatorPanel }      from './chart/components/IndicatorPanel';
+import { ChartHeader } from './chart/components/ChartHeader';
+import { ChartToolbar } from './chart/components/ChartToolbar';
+import { IndicatorPanel } from './chart/components/IndicatorPanel';
 import { MarketStructureCard } from './chart/components/MarketStructureCard';
+import { usePriceSelector } from '../hooks/usePriceSelector';
 import { usePatternOutcomeMonitor } from '../utils/patternValidation/patternOutcomeMonitor';
 import { PredictionCard } from './chart/components/PredictionCard';
 import { SessionExpiredBanner } from '../components/SessionExpiredBanner';
-import { AICopilotPanel }      from './chart/components/AICopilotPanel';
+import { AICopilotPanel } from './chart/components/AICopilotPanel';
 import { getActiveStrategyId } from '../utils/strategy/strategyStorage';
 import { getProfile } from '../utils/strategy/strategyProfiles';
+import { LiveCandleCountdown } from './chart/components/LiveCandleCountdown';
+import { ExchangeSelector } from './chart/components/ExchangeSelector';
+// setExchangePreference moved to DataContext.updateExchangePreference
+
+// FIX H-5: Module-level stable empty arrays/arrays so `?? []` in JSX never
+// creates a new object reference on every render. When these are created inline
+// (e.g. `validatedPatterns ?? []`), React.memo on child components always sees a
+// new prop reference and re-renders unnecessarily — once per 1s nowTick cycle.
+const EMPTY_VALIDATED_PATTERNS: any[] = [];
+const EMPTY_CANDLE_PATTERNS:    any[] = [];
+const EMPTY_MTF_SIGNALS:        any[] = [];
+const EMPTY_FVG:                any[] = [];
 
 export default function ChartScreen({ route, navigation }: any) {
   const { height: screenHeight } = useWindowDimensions();
-  if (__DEV__) console.count('ChartScreen render');
   const { theme: T } = useTheme();
-  const { prices, aoSession, avKey, anthropicKey, news, allAssets } = useData();
-  const initialSymbol = route?.params?.symbol || 'NIFTY50';
+  const { aoSession, avKey, anthropicKey, news, allAssets, logicalAssets, updateExchangePreference, nftTokenError, retryNFOTokens } = useData();
   // Active strategy profile — loaded from AsyncStorage on mount and when symbol changes.
   // Passed into computeTradeReadiness so strategy gates are applied before the UI renders.
   const [activeStrategyProfile, setActiveStrategyProfile] = React.useState<any>(null);
@@ -95,29 +97,63 @@ export default function ChartScreen({ route, navigation }: any) {
   // between renders. Without this, every price-tick re-render of ChartScreen
   // creates a new arrow function, which changes the loadCandles useCallback
   // dep, which fires useEffect, which triggers a full candle reload every second.
+  // Stable ref for onCandleClose — allows useChartData to call it before
+  // usePrediction is initialized (hooks must be called in fixed order).
+  const onCandleCloseRef = useRef<((c: any[]) => void) | undefined>(undefined);
+  const onCandleCloseStable = useCallback((c: any[]) => {
+    onCandleCloseRef.current?.(c);
+  }, []);
+
   const onBeforeLoad = useCallback(
     () => setAi({ status: 'idle', data: null, err: null }),
     [], // setAi is stable from useState — no deps needed
   );
 
-  const chartData = useChartData(initialSymbol, { onBeforeLoad });
+  // Stable callbacks for ChartHeader — inline arrows would break React.memo
+  // on ChartHeader since a new function reference is created on every render
+  // (every ~1s price tick), defeating the memo entirely.
+  const onSymbolChange = useCallback((sym: string) => {
+    setSymbol(sym);
+    setReviewTrade(null);
+  }, [setSymbol]);
+  const onSearch = useCallback(() =>
+    navigation.navigate('SymbolSearch', { returnTo: 'Chart' }), [navigation]);
+  const initialSymbol = route?.params?.symbol || 'NIFTY50';
+  const initialAssetId = route?.params?.assetId ?? route?.params?.symbol ?? 'NIFTY50';
+  const initialExchange = route?.params?.exchange ?? '';
+  const chartData = useChartData(initialAssetId, initialExchange, { onBeforeLoad, onCandleClose: onCandleCloseStable });
   const {
+    assetId, setAssetId, exchange, setExchange, variant,
     symbol, setSymbol, tf, setTf, candles, loading, errMsg,
-    candleLoadExplanation, dataSrc, pricePrecision, cp, asset,
-    liveCandleInfo, assetType, loadMoreHistory, TIMEFRAMES: TF_LIST,
-  } = chartData;
+    candleLoadExplanation, dataSrc, pricePrecision, asset,
+    assetType, loadMoreHistory, loadingOlder, TIMEFRAMES: TF_LIST} = chartData;
+  // FIX H-2: liveCandleInfo removed — rendered by LiveCandleCountdown component below
+
+  // Stable memoized lookup of the LogicalAsset for the current assetId
+  // Avoids running logicalAssets.find on every render
+  const activeLogicalAsset = React.useMemo(
+    () => logicalAssets.find((a: any) => a.id === assetId) ?? null,
+    [logicalAssets, assetId]
+  );
+
+  // cp: throttled price selector — re-renders ChartScreen at most 2x/sec.
+  // cpRef.current always has the latest price for prediction/order book reads.
+  // Previously ChartScreen consumed `prices` directly from useData(), causing
+  // a re-render on every aggTrade tick (50-200ms) — 5-20 renders/second.
+  const { cp, cpRef } = usePriceSelector(symbol);
 
   const indicators = useChartIndicators(candles);
   const {
     geoPatterns, validatedPatterns, candlePatterns, msSnapshot, msStr, smcSnap, fvgSnap, fvgBull, fvgBear,
-    vwapSnap, vpSnap, mtfSnap, mtfSignals, regimeSnap, techSummary,
-  } = indicators ?? {};
+    vwapSnap, vpSnap, mtfSnap, mtfSignals, regimeSnap, techSummary} = indicators ?? {};
 
   const prediction = usePrediction(symbol, tf, candles, assetType);
 
   // Pattern Outcome Monitor — per new candle, updates TP/SL/expiry state.
-  usePatternOutcomeMonitor(symbol, tf, candles, validatedPatterns ?? []);
-  const { ml, retrainDecision, postPredictionMsg, runMLPrediction, tradeQualityResult } = prediction;
+  usePatternOutcomeMonitor(symbol, tf, candles, validatedPatterns ?? EMPTY_VALIDATED_PATTERNS);
+  const { ml, retrainDecision, postPredictionMsg, runMLPrediction, tradeQualityResult, onCandleClose } = prediction;
+  // Wire prediction's onCandleClose into the stable ref used by useChartData
+  onCandleCloseRef.current = onCandleClose;
 
   const overlays = useChartOverlays(symbol, tf, candles, ml.data, tradeQualityResult, assetType, regimeSnap ?? null, reviewTrade);
   const live     = useLiveTrading(asset, aoSession, navigation);
@@ -130,43 +166,41 @@ export default function ChartScreen({ route, navigation }: any) {
     if (!ml.data) return null;
     // If MTF/regime not yet computed, use a lightweight fallback that still
     // renders the button. The full readiness replaces it in the next frame.
-    if (!mtfSnap || !regimeSnap) return null;
-    const topPat = (validatedPatterns ?? [])
+    // NOTE: mtfSnap is permanently null on 1D timeframe (TF_ORDER tops out at '1d',
+    // no higher TF available). Without this fallback the CTA shows an infinite spinner
+    // on 1D charts. We pass null snaps — computeTradeReadiness handles them gracefully.
+    const topPat = (validatedPatterns ?? EMPTY_VALIDATED_PATTERNS)
       .filter(vp => vp.status !== 'FAILED' && vp.status !== 'EXPIRED' && vp.confidence >= 40)
       .sort((a: any, b: any) => b.confidence - a.confidence)[0] ?? null;
     return computeTradeReadiness({
       prediction: ml.data,
-      mtfSnap,
-      mtfSignals: mtfSignals ?? [],
-      regimeSnap,
+      mtfSnap:    mtfSnap ?? null,
+      mtfSignals: mtfSignals ?? EMPTY_MTF_SIGNALS,
+      regimeSnap: regimeSnap ?? null,
       baseTF: tf as any,
       smcSnap: smcSnap ?? null,
       topPattern: topPat ? { direction: topPat.direction, confidence: topPat.confidence } : null,
-      // Strategy profile: gates applied inside computeTradeReadiness AFTER engine
-      // state is derived. This is the correct position in the flow:
-      //   Predict → Confidence → Strategy Filters → Trade Readiness → UI
-      strategyProfile: activeStrategyProfile ?? null,
-    });
+      strategyProfile: activeStrategyProfile ?? null});
   }, [ml.data, mtfSnap, regimeSnap, tf, smcSnap, validatedPatterns, mtfSignals, activeStrategyProfile]);
   const {
     openPosition, autoOpenResult, setAutoOpenResult,
     handlePaperTrade, chartTradeLevels, chartMarkers, chartLivePrediction,
     showMA, setShowMA, showVP, setShowVP, overlayToggles, toggleOverlay,
     showQualityBreakdown, setShowQualityBreakdown,
-    showConfidenceBreakdown, setShowConfidenceBreakdown,
-  } = overlays;
+    showConfidenceBreakdown, setShowConfidenceBreakdown} = overlays;
 
   // ── Local state: Training Summary (screen-level only) ────────────────────
   const [trainingSummary, setTrainingSummary] = useState<TrainingStatusInfo | null>(null);
   const [showTrainingSummary, setShowTrainingSummary] = useState(false);
 
-
-
   // Handle route param change (new symbol from search)
   useEffect(() => {
     const newSym = route?.params?.symbol;
     const newTf  = route?.params?.initialTf;
-    if (newSym && newSym !== symbol) setSymbol(newSym);
+    if (newSym && newSym !== symbol) {
+      setSymbol(newSym);
+      setReviewTrade(null); // clear review when navigating to a different symbol
+    }
     if (newTf  && newTf  !== tf)     setTf(newTf);
     if (route?.params?.reviewTrade !== undefined) setReviewTrade(route.params.reviewTrade);
   }, [route?.params?.symbol, route?.params?.initialTf, route?.params?.reviewTrade]);
@@ -176,33 +210,37 @@ export default function ChartScreen({ route, navigation }: any) {
     getLatestTrainingStatus(symbol, tf).then(setTrainingSummary).catch(() => {});
   }, [symbol, tf, ml.data]);
 
+  // Per-symbol analysis history for continuity across Analyze calls
+  const priorAnalysisRef = React.useRef<Record<string, import('../api/claude').AIAnalysis>>({});
 
   // ── AI Copilot analysis ────────────────────────────────────────────────────
   const runAnalysis = useCallback(async () => {
     if (!candles.length) return;
     setAi({ status: 'loading', data: null, err: null });
-    // Yield to React so the skeleton paints THIS frame.
-    // Without this, setState is queued but JS continues running the sync
-    // work below — the spinner only appears at the first real await
-    // (analyzeWithClaude), 15-80ms later depending on device speed.
     await Promise.resolve();
     try {
       const last  = candles[candles.length - 1];
-      const l10   = candles.slice(-10);
-      const ma20  = calcMA(candles, 20)[candles.length - 1];
-      const ma50  = calcMA(candles, 50)[candles.length - 1];
+      const l30   = candles.slice(-30);
+      const ma20v = calcMA(candles, 20)[candles.length - 1];
+      const ma50v = calcMA(candles, 50)[candles.length - 1];
       const p5    = candles[candles.length - 6]?.close;
       const ch5   = p5 ? (((last.close - p5) / p5) * 100).toFixed(3) : '0';
       const rsi   = calcRSI(candles);
-      const ohlc  = l10.map(c => `O:${pFmt(c.open)} H:${pFmt(c.high)} L:${pFmt(c.low)} C:${pFmt(c.close)} V:${(c.volume / 1000).toFixed(0)}K`).join('\n');
+      const atrRaw = candles.slice(-15).reduce((s: number, c: any, i: number) => i === 0 ? s : s + Math.abs(c.high - c.low), 0) / 14;
+      const ohlc  = l30.map(c => `O:${pFmt(c.open)} H:${pFmt(c.high)} L:${pFmt(c.low)} C:${pFmt(c.close)} V:${(c.volume / 1000).toFixed(0)}K`).join('\n');
       const { poc } = calcVolumeProfile(candles, 28);
-      const depth = cp?.depth;
+      const depth = cpRef.current?.depth;
       let depthLine = '';
+      let depthDetailLines = '';
       if (depth) {
-        const buyQ = depth.buy.reduce((s: number, d: any) => s + d.qty, 0);
+        const buyQ  = depth.buy.reduce((s: number, d: any) => s + d.qty, 0);
         const sellQ = depth.sell.reduce((s: number, d: any) => s + d.qty, 0);
         const total = buyQ + sellQ || 1;
-        depthLine = `Order Book: Buy ${((buyQ / total) * 100).toFixed(0)}% / Sell ${((sellQ / total) * 100).toFixed(0)}%`;
+        const spread = depth.sell[0]?.price && depth.buy[0]?.price ? (depth.sell[0].price - depth.buy[0].price).toFixed(4) : 'n/a';
+        depthLine = `ORDER BOOK: Buy ${((buyQ / total) * 100).toFixed(0)}% / Sell ${((sellQ / total) * 100).toFixed(0)}% | Best Bid:${depth.buy[0]?.price ?? 'n/a'} | Best Ask:${depth.sell[0]?.price ?? 'n/a'} | Spread:${spread}`;
+        const bidRows = depth.buy.slice(0, 5).map((d: any) => `  BID ${pFmt(d.price)} x ${d.qty.toFixed(3)}`).join('\n');
+        const askRows = depth.sell.slice(0, 5).map((d: any) => `  ASK ${pFmt(d.price)} x ${d.qty.toFixed(3)}`).join('\n');
+        depthDetailLines = `ORDER BOOK DEPTH (top 5):\n${bidRows}\n${askRows}`;
       }
       let mlLine = '';
       if (ml.status === 'done' && ml.data) {
@@ -266,8 +304,14 @@ export default function ChartScreen({ route, navigation }: any) {
             : '');
       };
       const recentNews = news.slice(0, 5).map((n: any) => `[${n.t}] ${n.txt} (${n.imp})`).join('\n');
-      const high10 = Math.max(...l10.map((x: any) => x.high));
-      const low10  = Math.min(...l10.map((x: any) => x.low));
+      const high30 = Math.max(...l30.map((x: any) => x.high));
+      const low30  = Math.min(...l30.map((x: any) => x.low));
+      // Prior analysis for continuity
+      const priorKey  = `${symbol}/${tf}`;
+      const priorData = priorAnalysisRef.current[priorKey];
+      const priorAnalysis = priorData
+        ? `Prior call: ${priorData.tradeType} @ entry:${pFmt(priorData.entry ?? 0)} SL:${pFmt(priorData.stopLoss ?? 0)} TP1:${pFmt(priorData.target1 ?? 0)} confidence:${priorData.confidence}% | ${priorData.executiveSummary?.slice(0, 100)}`
+        : undefined;
       const prompt = buildAnalysisPrompt({
         assetName:  asset?.name ?? symbol,
         symbol,
@@ -275,25 +319,37 @@ export default function ChartScreen({ route, navigation }: any) {
         tf,
         srcLabel:   asset?.src  ?? 'binance',
         price:      last.close,
-        ch5,
+        ch5, atr: atrRaw,
         rsi:        rsi?.[rsi.length - 1] ?? 50,
-        ma20:       ma20 ?? null,
-        ma50:       ma50 ?? null,
-        high10,
-        low10,
-        ohlc,
-        recentNews,
-        pocLine:    poc ? `POC: ${poc.price?.toFixed?.(2)}` : undefined,
-        obLine:     depthLine || undefined,
-        mlLine:     mlLine   || undefined,
+        ma20:       ma20v ?? null,
+        ma50:       ma50v ?? null,
+        high10:     high30, low10: low30,
+        ohlc, recentNews,
+        pocLine:       poc ? `VOLUME POC: ${poc.price?.toFixed?.(2)} (highest volume price)` : undefined,
+        obLine:        depthLine || undefined,
+        obDepthLines:  depthDetailLines || undefined,
+        mlLine:        mlLine || undefined,
+        priorAnalysis,
       });
       const data = await analyzeWithClaude(prompt, anthropicKey);
+      priorAnalysisRef.current[priorKey] = data;
       setAi({ status: 'done', data, err: null });
     } catch (e: any) { setAi({ status: 'error', data: null, err: e.message ?? 'Analysis failed' }); }
-  }, [candles, symbol, tf, asset, cp, ml, news, anthropicKey]);
+  // FIX H-3: `candles` in deps caused runAnalysis to rebuild on every kline update
+  // (throttled to 1s), which gave AICopilotPanel a new onAnalyze prop every second,
+  // defeating its React.memo entirely. `ml` (whole object) rebuilt on every prediction
+  // status change even though only ml.status and ml.data are actually read inside.
+  // candles.length is a stable primitive that only changes when a candle is added/closed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles.length, symbol, tf, asset, ml.status, ml.data, news, anthropicKey]);
 
   // ── Derived display values ─────────────────────────────────────────────────
-  const isPos      = (cp?.chg || 0) >= 0;
+  // Use last candle's open vs close for color — matches the chart candle color exactly
+  const lastCandle     = candles.length > 0 ? candles[candles.length - 1] : null;
+  const liveCandleClose = lastCandle?.close ?? cp?.price ?? 0;
+  const isPos      = lastCandle
+    ? liveCandleClose >= lastCandle.open   // green if close >= open (same as chart candle)
+    : (cp?.chg || 0) >= 0;
   const priceColor = isPos ? T.green : T.red;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -301,31 +357,47 @@ export default function ChartScreen({ route, navigation }: any) {
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }}>
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={{ padding: 16, paddingTop: 12, paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl refreshing={false} onRefresh={() => {}} tintColor={T.accent} />
-        }>
+        scrollEventThrottle={16}
+        removeClippedSubviews={true}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 16, paddingTop: 12, paddingBottom: 40 }}>
 
+        {/* ── Exchange selector — TradingView-style exchange switcher ─── */}
+        {activeLogicalAsset && Object.keys(activeLogicalAsset.exchanges).length > 1 && (
+          <ExchangeSelector
+            asset={activeLogicalAsset}
+            currentExchange={exchange || activeLogicalAsset.defaultExchange}
+            T={T}
+            onSelect={async (newExchange: string) => {
+              await updateExchangePreference(activeLogicalAsset.name, newExchange);
+              setExchange(newExchange);
+            }}
+          />
+        )}
         {/* ── Header: symbol selector + price card ─────────────────────── */}
         <ChartHeader
           symbol={symbol} asset={asset} allAssets={allAssets}
           dataSrc={dataSrc} cp={cp} priceColor={priceColor} isPos={isPos}
-          onSymbol={setSymbol}
-          onSearch={() => navigation.navigate('SymbolSearch', { returnTo: 'Chart' })}
+          livePrice={candles.length > 0 ? candles[candles.length - 1].close : undefined}
+          onSymbol={onSymbolChange}
+          onSearch={onSearch}
           T={T}
         />
 
         {/* ── PAPER / LIVE trading mode toggle ─────────────────────────── */}
         {/* Only shown for AO and Binance assets — not for forex/AV */}
-        {(asset?.src === 'ao' || asset?.src === 'binance') && (
+        {/* FIX: added 'ao_futures' — NFO futures use Angel One and support Paper/Live mode */}
+        {(asset?.src === 'ao' || asset?.src === 'ao_futures' || asset?.src === 'binance') && (
           <View style={{ flexDirection: 'row', alignItems: 'center',
             paddingHorizontal: 12, paddingVertical: 6,
             backgroundColor: live.isLiveMode ? T.red + '10' : T.bg2 ?? T.bg3,
             borderBottomWidth: 0.5, borderBottomColor: T.border }}>
             <View style={{ flexDirection: 'row', flex: 1, gap: 6 }}>
               {(['PAPER', 'LIVE'] as const).map(mode => (
-                <TouchableOpacity
+                <Pressable
                   key={mode}
+                  hitSlop={6}
+                  android_ripple={{color:'rgba(255,255,255,0.15)'}}
                   onPress={() => {
                     if (mode === 'LIVE') {
                       const err = live.validateLiveReady();
@@ -341,15 +413,13 @@ export default function ChartScreen({ route, navigation }: any) {
                     borderWidth: 1,
                     borderColor: live.tradingMode === mode
                       ? (mode === 'LIVE' ? T.red : T.accent)
-                      : T.border,
-                  }}>
+                      : T.border}}>
                   <Text style={{
                     color: live.tradingMode === mode ? '#fff' : T.textDim,
-                    fontSize: 10, fontWeight: '700',
-                  }}>
+                    fontSize: 10, fontWeight: '700'}}>
                     {mode === 'LIVE' ? '● LIVE' : '○ PAPER'}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
             {live.isLiveMode && (
@@ -408,16 +478,14 @@ export default function ChartScreen({ route, navigation }: any) {
                 borderWidth: 1,
                 borderColor: isProfit ? (T.green + '50') : (T.red + '50'),
                 marginBottom: 8,
-                overflow: 'hidden',
-              }}>
+                overflow: 'hidden'}}>
                 {/* Header row: symbol + strategy + dismiss */}
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
                   justifyContent: 'space-between',
                   backgroundColor: T.bg3,
                   paddingHorizontal: 12, paddingVertical: 8,
-                  borderBottomWidth: 1, borderBottomColor: T.border,
-                }}>
+                  borderBottomWidth: 1, borderBottomColor: T.border}}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700',
                       letterSpacing: 0.5, backgroundColor: T.bg0,
@@ -438,13 +506,14 @@ export default function ChartScreen({ route, navigation }: any) {
                     )}
                   </View>
                   {/* Dismiss — clears review, returns to live chart */}
-                  <TouchableOpacity
+                  <Pressable
+                    hitSlop={8}
                     onPress={() => setReviewTrade(null)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     style={{ backgroundColor: T.bg0, borderRadius: 12,
                       width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ color: T.textDim, fontSize: 13, lineHeight: 16 }}>✕</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
 
                 {/* Body: two columns */}
@@ -518,7 +587,11 @@ export default function ChartScreen({ route, navigation }: any) {
                     <Text style={{ color: T.textDim, fontSize: 8, textAlign: 'right',
                       lineHeight: 12, marginTop: 2 }}>
                       {new Date(rt.entryTime).toLocaleDateString()}{' · '}
-                      {(rt.holdingMs / 60000).toFixed(0)}m held
+                      {rt.holdingMs < 60000
+                        ? `${Math.round(rt.holdingMs / 1000)}s held`
+                        : rt.holdingMs < 3600000
+                          ? `${(rt.holdingMs / 60000).toFixed(0)}m held`
+                          : `${(rt.holdingMs / 3600000).toFixed(1)}h held`}
                     </Text>
                   </View>
                 </View>
@@ -530,8 +603,7 @@ export default function ChartScreen({ route, navigation }: any) {
                   return (
                     <View style={{
                       borderTopWidth: 1, borderTopColor: T.border,
-                      paddingTop: 8, paddingHorizontal: 10, paddingBottom: 10,
-                    }}>
+                      paddingTop: 8, paddingHorizontal: 10, paddingBottom: 10}}>
                       <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700',
                         letterSpacing: 0.5, marginBottom: 5 }}>OBSERVATIONS</Text>
                       {observations.map((obs, i) => (
@@ -556,11 +628,12 @@ export default function ChartScreen({ route, navigation }: any) {
             <CandlestickChart
               data={candles} theme={T} showMA={showMA} showVP={showVP}
               height={Math.round(screenHeight * 0.52)}
-              onRequestOlderData={loadMoreHistory} loadingOlder={false}
+              onRequestOlderData={loadMoreHistory} loadingOlder={loadingOlder}
               tradeLevels={reviewTrade ? overlays.reviewTradeLevels : chartTradeLevels} markers={reviewTrade ? overlays.reviewMarkers : chartMarkers}
               livePrediction={chartLivePrediction} overlays={overlayToggles}
               pricePrecision={pricePrecision}
               geoPatterns={geoPatterns ?? null}
+              livePrice={cp?.price}
               onChartTouchStart={onChartTouchStart}
               onChartTouchEnd={onChartTouchEnd}
             />
@@ -568,20 +641,31 @@ export default function ChartScreen({ route, navigation }: any) {
         </View>
         )}
 
-        {/* ── Live candle info bar ──────────────────────────────────────── */}
-        {liveCandleInfo && (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: T.bg2, borderRadius: RADIUS.sm, padding: 10, marginTop: 8 }}>
-            <Text style={{ color: T.textDim, fontSize: 10 }}>Live candle · closes in <Text style={{ color: T.text, fontWeight: '700' }}>{liveCandleInfo.countdownLabel}</Text></Text>
-            <Text style={{ color: liveCandleInfo.changePct >= 0 ? T.green : T.red, fontSize: 10, fontWeight: '700' }}>
-              {liveCandleInfo.changePct >= 0 ? '+' : ''}{liveCandleInfo.changePct.toFixed(2)}%
-            </Text>
-          </View>
-        )}
+        {/* ── Live candle info bar ─────────────────────────────────────────── */}
+        {/* FIX H-2: LiveCandleCountdown owns its own 1s timer — only this tiny
+            component re-renders per second, not all of ChartScreen. */}
+        <LiveCandleCountdown
+          lastCandle={candles.length > 0 ? candles[candles.length - 1] : null}
+          tf={tf}
+          T={T}
+        />
 
         {/* ── Error / no-data ───────────────────────────────────────────── */}
         {!loading && errMsg ? (
           <View style={{ backgroundColor: T.red + '15', padding: 12, borderRadius: RADIUS.md, marginTop: 12 }}>
             <Text style={{ color: T.red, fontSize: 12 }}>{errMsg}</Text>
+            {/* Show retry button when NFO token fetch failed or is stuck loading */}
+            {asset?.src === 'ao_futures' && aoSession?.jwtToken ? (
+              <Pressable
+                hitSlop={8}
+                android_ripple={{color:'rgba(255,255,255,0.15)'}}
+                onPress={retryNFOTokens}
+                style={{ marginTop: 10, alignSelf: 'flex-start', backgroundColor: T.accent + '22',
+                         borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7,
+                         borderWidth: 1, borderColor: T.accent + '55' }}>
+                <Text style={{ color: T.accent, fontSize: 12, fontWeight: '700' }}>↻ Retry Loading Token</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 
@@ -593,14 +677,14 @@ export default function ChartScreen({ route, navigation }: any) {
           <MarketStructureCard
             candles={candles} msSnapshot={msSnapshot ?? null}
             smcSnap={smcSnap ?? null} fvgSnap={fvgSnap ?? null}
-            fvgBull={fvgBull ?? []} fvgBear={fvgBear ?? []}
+            fvgBull={fvgBull ?? EMPTY_FVG} fvgBear={fvgBear ?? EMPTY_FVG}
             vwapSnap={vwapSnap ?? null} vpSnap={vpSnap ?? null}
-            mtfSnap={mtfSnap ?? null} mtfSignals={mtfSignals ?? []}
+            mtfSnap={mtfSnap ?? null} mtfSignals={mtfSignals ?? EMPTY_MTF_SIGNALS}
             regimeSnap={regimeSnap ?? null}
             strategyProfile={activeStrategyProfile ?? null}
             geoPatterns={geoPatterns ?? null}
-            validatedPatterns={validatedPatterns ?? []}
-            candlePatterns={candlePatterns ?? []}
+            validatedPatterns={validatedPatterns ?? EMPTY_VALIDATED_PATTERNS}
+            candlePatterns={candlePatterns ?? EMPTY_CANDLE_PATTERNS}
             prediction={ml.data}
             baseTF={tf}
             pricePrecision={pricePrecision}
@@ -609,14 +693,15 @@ export default function ChartScreen({ route, navigation }: any) {
         )}
 
         {/* ── Order Book ────────────────────────────────────────────────── */}
-        {(asset.src === 'ao' || asset.src === 'binance') && (
+        {/* FIX: added 'ao_futures' — NFO futures have live depth data via Angel One */}
+        {(asset.src === 'ao' || asset.src === 'ao_futures' || asset.src === 'binance') && (
           <Card theme={T} style={{ marginTop: 14 }}>
             <SectionLabel theme={T}>ORDER BOOK · LIVE DEPTH</SectionLabel>
             <OrderBookCard
               snapshot={cp?.depth ? { source: asset.src as 'ao'|'binance', symbol, buy: cp.depth.buy, sell: cp.depth.sell, timestamp: cp.lastUpdated ?? Date.now() } : null}
               unavailableReason={
                 asset.type === 'INDEX' ? `${asset.name} is an index — no order book.`
-                : asset.src === 'ao' && !aoSession?.jwtToken ? 'Connect Angel One in Settings.'
+                : (asset.src === 'ao' || asset.src === 'ao_futures') && !aoSession?.jwtToken ? 'Connect Angel One in Settings.'
                 : null
               }
               pricePrecision={pricePrecision}
@@ -628,34 +713,52 @@ export default function ChartScreen({ route, navigation }: any) {
         {/* ── AO session expiry warning ─────────────────────────────────── */}
         <SessionExpiredBanner />
 
-        {/* ── Signal Engine (Prediction Card) ──────────────────────────── */}
-        <PredictionCard
-          symbol={symbol} tf={tf} candlesLength={candles.length}
-          mlStatus={ml.status} mlData={ml.data} mlErr={ml.err}
-          tradeQualityResult={tradeQualityResult}
-          validatedPatterns={validatedPatterns ?? null}
-          retrainDecision={retrainDecision}
-          postPredictionMsg={postPredictionMsg}
-          showQualityBreakdown={showQualityBreakdown} setShowQualityBreakdown={setShowQualityBreakdown}
-          showConfidenceBreakdown={showConfidenceBreakdown} setShowConfidenceBreakdown={setShowConfidenceBreakdown}
-          msStr={msStr ?? null} smcSnap={smcSnap ?? null} fvgSnap={fvgSnap ?? null}
-          vwapSnap={vwapSnap ?? null} vpSnap={vpSnap ?? null}
-          mtfSnap={mtfSnap ?? null} regimeSnap={regimeSnap ?? null}
-          onRunPrediction={runMLPrediction} onPaperTrade={handlePaperTrade}
-          readiness={chartReadiness}
-          isLiveMode={live.isLiveMode}
-          onLiveTrade={live.handleLiveTrade}
-          T={T}
-        />
+        {/* ── Signal Engine (Prediction Card) — hidden during trade review ── */}
+        {!reviewTrade && (
+          <PredictionCard
+            symbol={symbol} tf={tf} candlesLength={candles.length}
+            mlStatus={ml.status} mlData={ml.data} mlErr={ml.err}
+            tradeQualityResult={tradeQualityResult}
+            validatedPatterns={validatedPatterns ?? null}
+            retrainDecision={retrainDecision}
+            postPredictionMsg={postPredictionMsg}
+            showQualityBreakdown={showQualityBreakdown} setShowQualityBreakdown={setShowQualityBreakdown}
+            showConfidenceBreakdown={showConfidenceBreakdown} setShowConfidenceBreakdown={setShowConfidenceBreakdown}
+            msStr={msStr ?? null} smcSnap={smcSnap ?? null} fvgSnap={fvgSnap ?? null}
+            vwapSnap={vwapSnap ?? null} vpSnap={vpSnap ?? null}
+            mtfSnap={mtfSnap ?? null} regimeSnap={regimeSnap ?? null}
+            onRunPrediction={runMLPrediction} onPaperTrade={handlePaperTrade}
+            readiness={chartReadiness}
+            isLiveMode={live.isLiveMode}
+            onLiveTrade={live.handleLiveTrade}
+            hasOpenPosition={!!openPosition}
+            T={T}
+          />
+        )}
 
-        {/* ── AI Copilot ────────────────────────────────────────────────── */}
-        <AICopilotPanel
-          ai={ai} assetName={asset.name} symbol={symbol}
-          anthropicKey={anthropicKey} loading={loading}
-          onAnalyze={runAnalysis}
-          onNavigateChat={sym => navigation.navigate('AIChat', { symbol: sym })}
-          T={T}
-        />
+        {/* ── AI Copilot — hidden during trade review ───────────────────── */}
+        {!reviewTrade && (
+          <AICopilotPanel
+            ai={ai} assetName={asset.name} symbol={symbol}
+            anthropicKey={anthropicKey} loading={loading}
+            onAnalyze={runAnalysis}
+            onNavigateChat={sym => navigation.navigate('AIChat', {
+              symbol: sym,
+              // Pass the current ML prediction so the copilot starts with the
+              // same signal the Predict button just showed. Without this the
+              // copilot has no knowledge of the on-device model's call.
+              mlSignal: ml.data ? {
+                action:              ml.data.action,
+                direction:           ml.data.direction,
+                ensembleProbUp:      ml.data.ensembleProbUp,
+                confidence:          ml.data.confidence,
+                walkForwardAccuracy: ml.data.walkForwardAccuracy,
+                topFeatures:         ml.data.topFeatures?.slice(0, 4) ?? [],
+              } : null,
+            })}
+            T={T}
+          />
+        )}
 
       </ScrollView>
 

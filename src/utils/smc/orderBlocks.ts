@@ -107,8 +107,7 @@ export function computeDetectedOBs(
           zoneHigh:     ob.zoneHigh,
           zoneLow:      ob.zoneLow,
           sourceOBIndex:ob.index,
-          age:          0,
-        });
+          age:          0});
       }
 
       // Update touch count (deterministic — price entered the zone this bar)
@@ -145,8 +144,7 @@ export function computeDetectedOBs(
             bosIndex:  i,
             status:    'fresh',
             touches:   0,
-            age:       i - obIdx,
-          });
+            age:       i - obIdx});
         }
       }
       if (isBearBreak) {
@@ -160,8 +158,7 @@ export function computeDetectedOBs(
             bosIndex:  i,
             status:    'fresh',
             touches:   0,
-            age:       i - obIdx,
-          });
+            age:       i - obIdx});
         }
       }
     }

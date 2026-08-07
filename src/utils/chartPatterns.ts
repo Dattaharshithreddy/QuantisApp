@@ -295,8 +295,7 @@ function detectHeadAndShoulders(
             { barIndex: head.index, price: head.price,  role: 'head' },
             { barIndex: nl2.index,  price: nl2.price,  role: 'necklineRight' },
             { barIndex: rs.index,   price: rs.price,   role: 'rightShoulder' },
-          ],
-        };
+          ]};
       }
     }
   }
@@ -333,8 +332,7 @@ function detectHeadAndShoulders(
             { barIndex: head.index, price: head.price,  role: 'head' },
             { barIndex: nl2.index,  price: nl2.price,  role: 'necklineRight' },
             { barIndex: rs.index,   price: rs.price,   role: 'rightShoulder' },
-          ],
-        };
+          ]};
       }
     }
   }
@@ -527,8 +525,7 @@ function detectCupAndHandle(candles: Candle[], i: number): PatternResult | null 
         { barIndex: handleStart - 1, price: cupHigh, role: 'cupRimRight' },
         { barIndex: handleStart, price: handleHigh, role: 'handleStart' },
         { barIndex: i,           price: handleCandles[handleCandles.length - 1].close, role: 'handleEnd' },
-      ],
-    };
+      ]};
   }
   return null;
 }
@@ -542,14 +539,16 @@ export function detectChartPatterns(
   candles: Candle[], i: number, atrAt: (idx: number) => number,
   precomputedHighs?: SwingPoint[], precomputedLows?: SwingPoint[]
 ): ChartPatternSummary {
-  const slice = candles.slice(0, i + 1);
+  // FIX: eliminated `const slice = candles.slice(0, i+1)` which was O(n^2)
+  // total when called for every bar in precomputeSeries (cpScores.map).
+  // All pattern detectors now receive the full candles array + index i and
+  // only access candles[0..i] internally — same causal guarantee, zero alloc.
   const empty: ChartPatternSummary = {
     patterns: [], compositeScore: 0,
     triangleScore: 0, flagScore: 0, doubleTopBottomScore: 0,
     headShouldersScore: 0, wedgeScore: 0, channelScore: 0,
-    supportScore: 0, resistanceScore: 0,
-  };
-  if (slice.length < 25) return empty;
+    supportScore: 0, resistanceScore: 0};
+  if (i < 24) return empty;
 
   // P0 #2: use pre-computed swings when available (avoids O(n^2) re-detection
   // during training). The causal filter s.index <= i-4 is equivalent to what
@@ -558,28 +557,25 @@ export function detectChartPatterns(
   // candles.slice(0,i+1) excludes the last 4 bars; our filter excludes j>i-4.
   let highs: SwingPoint[], lows: SwingPoint[];
   if (precomputedHighs && precomputedLows) {
-    // Causal filter: swing at j classified using bars j-4..j+4;
-    // j+4 <= i iff j <= i-4. All pattern detectors filter >=5 bars old
-    // (a strict subset), so this is always sufficient.
     highs = precomputedHighs.filter(s => s.index <= i - 4);
     lows  = precomputedLows.filter(s => s.index <= i - 4);
   } else {
-    const swings = detectSwings(slice, 4);
+    const swings = detectSwings(candles.slice(0, i + 1), 4);
     highs = swings.filter(s => s.type === 'high');
     lows  = swings.filter(s => s.type === 'low');
   }
-  const atr     = atrAt(i) || slice[i].close * 0.01;
+  const atr     = atrAt(i) || candles[i].close * 0.01;
 
-  const triangle     = detectTriangle(highs, lows, i, slice[i].close, atr);
-  const flag         = detectFlagPennant(slice, i, atr);
-  const doubleTopBot = detectDoubleTopBottom(highs, lows, slice, i);
-  const hs           = detectHeadAndShoulders(highs, lows, slice, i);
-  const wedge        = detectWedge(highs, lows, slice, i);
-  const channel      = detectChannel(highs, lows, slice, i);
-  const cup          = detectCupAndHandle(slice, i);
-  const srLevels     = detectSupportResistance(highs, lows, slice, i, atr);
+  const triangle     = detectTriangle(highs, lows, i, candles[i].close, atr);
+  const flag         = detectFlagPennant(candles, i, atr);
+  const doubleTopBot = detectDoubleTopBottom(highs, lows, candles, i);
+  const hs           = detectHeadAndShoulders(highs, lows, candles, i);
+  const wedge        = detectWedge(highs, lows, candles, i);
+  const channel      = detectChannel(highs, lows, candles, i);
+  const cup          = detectCupAndHandle(candles, i);
+  const srLevels     = detectSupportResistance(highs, lows, candles, i, atr);
 
-  const currentPrice = slice[i].close;
+  const currentPrice = candles[i].close;
   const allPatterns: PatternResult[] = [triangle, flag, doubleTopBot, hs, wedge, channel, cup]
     .filter((p): p is PatternResult => p !== null)
     .filter(p => {
@@ -614,6 +610,5 @@ export function detectChartPatterns(
     wedgeScore:           wedge        ? wedge.score        : 0,
     channelScore:         channel      ? channel.score      : 0,
     supportScore:         srLevels.supportScore,
-    resistanceScore:      -srLevels.resistanceScore,
-  };
+    resistanceScore:      -srLevels.resistanceScore};
 }

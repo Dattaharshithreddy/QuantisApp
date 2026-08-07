@@ -412,9 +412,8 @@ test('NIFTY July 2026 symbol format', () => {
   const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const yy  = String(year).slice(2);  // '26'
   const mon = MONTHS[month];          // 'JUL'
-  const lot = LOT_SIZES[underlying];  // 75
-  const sym = `${underlying}${yy}${mon}${lot}FUT`;
-  assertEqual(sym, 'NIFTY26JUL75FUT', 'NFO symbol format correct');
+  const sym = `${underlying}${yy}${mon}FUT`;
+  assertEqual(sym, 'NIFTY26JULFUT', 'NFO symbol format correct');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

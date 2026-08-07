@@ -28,7 +28,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Candle } from './indicators';
-import { FittedEnsemble, computeMetrics, BacktestConfig, DEFAULT_BACKTEST_CONFIG, BacktestMetrics } from './backtest';
+import { FittedEnsemble, computeMetrics, BacktestConfig, BacktestMetrics } from './backtest';
 import { ExecTrade } from './strategyExecutor';
 import { compareModelsWithTrades, ModelComparisonEntryWithTrades } from './modelComparison';
 import { evaluateAllHorizonsWithTrades, HorizonEvalEntryWithTrades } from './horizonEvaluation';
@@ -276,8 +276,7 @@ function buildComparison(breakdowns: RegimeBreakdown[]): RegimeComparisonResult 
     bestStrategyInBull, bestStrategyInBear, bestStrategyInSideways,
     bestHorizonInBull, bestHorizonInBear, bestHorizonInSideways,
     bestModelInHighVol, bestModelInLowVol,
-    recommendations: recs,
-  };
+    recommendations: recs};
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -317,22 +316,19 @@ export async function evaluateRegimes(
   // Model trade maps by regime
   const modelMaps  = modelEntries.map(e => ({
     modelName: e.modelName,
-    byRegime:  bucketTradesByFittedRegime(e.trades, candles, fitted),
-  }));
+    byRegime:  bucketTradesByFittedRegime(e.trades, candles, fitted)}));
 
   // Horizon trade maps by regime
   const horizonMaps = horizonEntries.map(e => ({
     horizon:  e.horizon,
-    byRegime: bucketTradesByFittedRegime(e.trades, candles, fitted),
-  }));
+    byRegime: bucketTradesByFittedRegime(e.trades, candles, fitted)}));
 
   // Strategy trade maps by regime
   const strategyMaps = strategyEntries.map(e => ({
     strategyId:   e.strategyId,
     strategyName: e.strategyName,
     strategyIcon: e.strategyIcon,
-    byRegime:     bucketTradesByFittedRegime(e.trades, candles, fitted),
-  }));
+    byRegime:     bucketTradesByFittedRegime(e.trades, candles, fitted)}));
 
   const breakdowns: RegimeBreakdown[] = ALL_REGIME_LABELS.map(regime => {
     const trades    = primaryMap.get(regime) ?? [];
@@ -366,8 +362,7 @@ export async function evaluateRegimes(
       metrics,
       byModel,
       byHorizon,
-      byStrategy,
-    };
+      byStrategy};
   });
 
   const comparison = buildComparison(breakdowns);

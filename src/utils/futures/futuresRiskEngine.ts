@@ -65,8 +65,7 @@ export async function computeFuturesLots(
         `Insufficient margin for 1 lot of ${underlying} futures.\n\n` +
         `Required: ₹${required} (${(marginPct * 100).toFixed(0)}% of ₹${notionalPerLot.toFixed(0)} notional)\n` +
         `Available: ₹${available} (80% of ₹${availableMargin.toFixed(0)} RMS balance)\n\n` +
-        `Add funds to your Angel One account or trade a lower-notional contract.`,
-    };
+        `Add funds to your Angel One account or trade a lower-notional contract.`};
   }
 
   // 2. Risk-based sizing: how many lots fit within the risk budget?
@@ -99,6 +98,5 @@ export async function computeFuturesLots(
     reason:
       `${finalLots} lot${finalLots !== 1 ? 's' : ''} (${qty} units)${capNote}\n` +
       `Margin required: ≈ ₹${marginRequired.toFixed(0)}\n` +
-      `Risk per trade: ₹${riskAmount.toFixed(0)} (${settings.riskPerTradePct}% of ₹${availableMargin.toFixed(0)})`,
-  };
+      `Risk per trade: ₹${riskAmount.toFixed(0)} (${settings.riskPerTradePct}% of ₹${availableMargin.toFixed(0)})`};
 }

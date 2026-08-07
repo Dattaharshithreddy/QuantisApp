@@ -67,8 +67,7 @@ async function checkCredentialsNotInAsyncStorage(): Promise<AuditFinding> {
     description: leaked.length > 0
       ? `Found plaintext credentials in AsyncStorage: ${leaked.join(', ')}. These should be in expo-secure-store.`
       : 'All credential keys are absent from AsyncStorage. Correctly stored in SecureStore.',
-    passed: leaked.length === 0,
-  };
+    passed: leaked.length === 0};
 }
 
 async function checkSecureStoreAccessible(): Promise<AuditFinding> {
@@ -82,15 +81,13 @@ async function checkSecureStoreAccessible(): Promise<AuditFinding> {
       description: val === 'ok'
         ? 'SecureStore is accessible and working correctly.'
         : 'SecureStore write succeeded but read returned unexpected value.',
-      passed: val === 'ok',
-    };
+      passed: val === 'ok'};
   } catch (e: any) {
     return {
       id: 'secure-store-ok', severity: 'high',
       title: 'SecureStore read/write functional',
       description: `SecureStore inaccessible: ${e.message}. API keys cannot be stored securely.`,
-      passed: false,
-    };
+      passed: false};
   }
 }
 
@@ -119,8 +116,7 @@ async function checkNoSecretsInLogs(): Promise<AuditFinding> {
     description: leaks.length > 0
       ? `Potential credential leak in logs:\n${leaks.slice(0, 3).join('\n')}`
       : 'No credential patterns detected in recent log entries.',
-    passed: leaks.length === 0,
-  };
+    passed: leaks.length === 0};
 }
 
 async function checkNoHardcodedTestCreds(): Promise<AuditFinding> {
@@ -143,8 +139,7 @@ async function checkNoHardcodedTestCreds(): Promise<AuditFinding> {
     description: found.length > 0
       ? `Possible test/placeholder credentials in: ${found.join(', ')}`
       : 'No test credentials detected in stored keys.',
-    passed: found.length === 0,
-  };
+    passed: found.length === 0};
 }
 
 function checkNetworkSecurity(): AuditFinding {
@@ -164,8 +159,7 @@ function checkNetworkSecurity(): AuditFinding {
     description: insecure.length > 0
       ? `Insecure HTTP endpoints: ${insecure.join(', ')}`
       : `All ${brokerUrls.length} broker API endpoints use HTTPS/TLS.`,
-    passed: insecure.length === 0,
-  };
+    passed: insecure.length === 0};
 }
 
 // ── Main audit runner ─────────────────────────────────────────────────────────
@@ -186,8 +180,7 @@ export async function runSecurityAudit(): Promise<SecurityAuditResult> {
     ranAt:        Date.now(),
     buildVersion: BUILD_VERSION,
     allPassed,
-    findings,
-  };
+    findings};
 
   await AsyncStorage.setItem(AUDIT_KEY, JSON.stringify(result)).catch(() => {});
 

@@ -121,8 +121,7 @@ async function capture(
       buildVersion: BUILD_VERSION,
       buildDate:    BUILD_DATE,
       context:      recent.map(sanitise),
-      handled,
-    };
+      handled};
 
     await saveCrashReport(report);
     logger.error('crashReporter', `Captured ${type}: ${message.slice(0, 100)}`);
@@ -134,8 +133,7 @@ async function capture(
       const Sentry = require('@sentry/react-native');
       Sentry.captureException(error, {
         tags: { type, screen: currentScreen ?? 'unknown', buildVersion: BUILD_VERSION },
-        extra: { context: recent.slice(0, 5).join('\n') },
-      });
+        extra: { context: recent.slice(0, 5).join('\n') }});
     } catch { /* Sentry not installed — local storage only */ }
 
   } catch (e: any) {

@@ -79,8 +79,7 @@ export async function rankOpportunities(
         modelAgree: highestTf.prediction.ensembleAgree,
         walkForwardAccuracy: highestTf.prediction.walkForwardAccuracy,
         volumeRatio: snapshot?.relativeVolume ?? null,
-        currentRegime: highestTf.currentRegime,
-      };
+        currentRegime: highestTf.currentRegime};
       const compositeScore = computeCompositeScore(entry);
       const prev = previous[asset.symbol];
 
@@ -88,8 +87,7 @@ export async function rankOpportunities(
         ...entry, compositeScore,
         previousCompositeScore: prev?.compositeScore ?? null,
         previousDirection: prev?.direction ?? null,
-        signalChanged: prev ? prev.direction !== consensus.overallDirection : false,
-      });
+        signalChanged: prev ? prev.direction !== consensus.overallDirection : false});
     } catch (e: any) {
       logger.error('opportunityRanking', `${asset.symbol}: ranking failed: ${e.message}`);
     }

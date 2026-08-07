@@ -8,7 +8,7 @@
 //   exchange:     NFO (not NSE/BSE)
 //   quantity:     lots × lotSize — minimum unit is one lot
 //   symboltoken:  NFO instrument token (different token space from equity)
-//   symbol:       full NSE symbol e.g. "NIFTY26JUL75FUT"
+//   symbol:       full NSE symbol e.g. "NIFTY26JULFUT"
 //
 // Prerequisites:
 //   • Angel One F&O segment must be active on the account
@@ -79,8 +79,7 @@ export const AngelOneFuturesExecutor: ExecutionProvider = {
     orders:    { market: true, limit: true, stopLoss: true, bracket: false },
     position:  { overnight: true, lotBased: true, partialClose: false, maxLotsPerOrder: 5 },
     risk:      { marginRequired: true, leverage: true, preFlight: true },
-    display:   { currency: '₹', exchangeLabel: 'NFO Futures', priceDecimals: 2, qtyLabel: 'lots' },
-  },
+    display:   { currency: '₹', exchangeLabel: 'NFO Futures', priceDecimals: 2, qtyLabel: 'lots' }},
   async execute(req: ExecutionOrderRequest, ctx: ExecutionContext): Promise<ExecutionFill> {
     if (!ctx.aoSession?.jwtToken) {
       throw new Error('Angel One session not connected. Please reconnect in Settings.');
@@ -103,8 +102,7 @@ export const AngelOneFuturesExecutor: ExecutionProvider = {
       orderType:    req.orderType,
       expiry:       req.expiry ?? Date.now() + 86_400_000,   // fallback: 1 day (should always be set)
       marginNeeded,
-      aoSession:    ctx.aoSession!,
-    });
+      aoSession:    ctx.aoSession!});
 
     if (!preFlight.ok) {
       // Pre-flight throws with a user-readable reason — executor surfaces it via
@@ -121,7 +119,7 @@ export const AngelOneFuturesExecutor: ExecutionProvider = {
 
     const params: AOPlaceOrderParams = {
       variety:         'NORMAL',
-      tradingsymbol:   req.symbol,          // e.g. "NIFTY26JUL75FUT"
+      tradingsymbol:   req.symbol,          // e.g. "NIFTY26JULFUT"
       symboltoken:     req.symbolToken!,    // NFO token from scrip master
       transactiontype,
       exchange:        'NFO',
@@ -168,8 +166,7 @@ export const AngelOneFuturesExecutor: ExecutionProvider = {
       marginBlocked,
       underlying:   req.underlying,
       expiry:       req.expiry,
-      expiryLabel:  req.expiryLabel,
-    };
+      expiryLabel:  req.expiryLabel};
   },
 
   async cancel(orderId: string, _symbol: string, ctx: ExecutionContext): Promise<void> {

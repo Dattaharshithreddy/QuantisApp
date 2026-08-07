@@ -50,8 +50,7 @@ export function estimateMarginBreakdown(
     spanMargin: span, exposureMargin: exposure, totalMargin: total,
     marginPct: marginPct * 100, estimatedBrokerage: brokerage,
     totalRequired: total + brokerage,
-    source: 'estimated',
-  };
+    source: 'estimated'};
 }
 
 // ── Live margin (Angel One API) ────────────────────────────────────────────────
@@ -59,7 +58,7 @@ export function estimateMarginBreakdown(
 
 export async function getLiveMargin(
   params: {
-    symbol:    string;    // NFO symbol e.g. "NIFTY26JUL75FUT"
+    symbol:    string;    // NFO symbol e.g. "NIFTY26JULFUT"
     token:     string;    // instrument token
     lots:      number;
     lotSize:   number;
@@ -85,8 +84,7 @@ export async function getLiveMargin(
           'X-ClientPublicIP': '1.1.1.1',
           'X-MACAddress':     'fe80::1',
           'X-PrivateKey':     session.apiKey,
-          Authorization:      `Bearer ${session.jwtToken}`,
-        },
+          Authorization:      `Bearer ${session.jwtToken}`},
         body: JSON.stringify({
           positions: [{
             exchange:        'NFO',
@@ -94,10 +92,7 @@ export async function getLiveMargin(
             price:           String(params.price),
             productType:     'CARRYFORWARD',
             token:           params.token,
-            tradeType:       params.direction === 'LONG' ? 'BUY' : 'SELL',
-          }],
-        }),
-      }
+            tradeType:       params.direction === 'LONG' ? 'BUY' : 'SELL'}]})}
     );
 
     if (!r.ok) throw new Error(`Margin API HTTP ${r.status}`);
@@ -119,8 +114,7 @@ export async function getLiveMargin(
       marginPct:          (total / (qty * params.price)) * 100,
       estimatedBrokerage: brokerage,
       totalRequired:      total + brokerage,
-      source:             'live',
-    };
+      source:             'live'};
   } catch {
     // Fall back to estimated if live call fails
     return estimateMarginBreakdown(underlying, params.price, params.lots);

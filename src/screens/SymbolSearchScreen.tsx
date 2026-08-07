@@ -6,6 +6,7 @@ import { useData } from '../context/DataContext';
 import { Pill } from '../components/Common';
 import { Asset, TYPE_COLORS } from '../api/assets';
 import { searchBinance, searchNSE, searchAlphaVantage, searchForex } from '../api/symbolSearch';
+import { findAssetByLegacySymbol } from '../utils/assetResolver';
 import { fetchForexRates } from '../api/forex';
 
 const MARKETS = [
@@ -60,7 +61,20 @@ export default function SymbolSearchScreen({ navigation, route }: any) {
 
   async function handlePick(asset: Asset) {
     await addAsset(asset);
-    navigation.navigate('MainTabs', { screen: returnTo, params: { symbol: asset.symbol } });
+    // Phase 6: navigate with assetId+exchange for known built-in assets so
+    // ExchangeSelector appears automatically in ChartScreen. Custom/search
+    // results that don't resolve to a built-in fall back to legacy symbol param.
+    const resolved = findAssetByLegacySymbol(asset.symbol);
+    if (resolved) {
+      navigation.navigate('MainTabs', { screen: returnTo, params: {
+        assetId: resolved.assetId,
+        exchange: resolved.exchange,
+      }});
+    } else {
+      // Custom asset or unknown symbol — use legacy symbol param.
+      // ChartScreen backward-compat shim handles this correctly.
+      navigation.navigate('MainTabs', { screen: returnTo, params: { symbol: asset.symbol } });
+    }
   }
 
   return (
@@ -108,8 +122,7 @@ export default function SymbolSearchScreen({ navigation, route }: any) {
         {results.map((a, i) => (
           <TouchableOpacity key={a.symbol + i} onPress={() => handlePick(a)} style={{
             flexDirection: 'row', alignItems: 'center', backgroundColor: T.card, borderWidth: 1, borderColor: T.cardBorder,
-            borderRadius: 8, padding: 12, marginBottom: 8,
-          }}>
+            borderRadius: 8, padding: 12, marginBottom: 8}}>
             <View style={{ width: 4, height: 32, borderRadius: 2, backgroundColor: TYPE_COLORS[a.type], marginRight: 12 }} />
             <View style={{ flex: 1 }}>
               <Text style={{ color: T.text, fontWeight: '700', fontSize: 14 }}>{a.symbol}</Text>

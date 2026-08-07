@@ -86,8 +86,7 @@ function enrich(t: PaperTradeRecord): ValidatedTrade {
     sessionLabel: sessionOf(t.entryTime * 1000),
     mtfAligned:  Math.abs(featVal(t, 'MTF overall score')) > 0.2,
     hasBullOB:   featVal(t, 'SMC bull OB strength') > 0.2,
-    hasFVG:      featVal(t, 'FVG bull strength') > 0.2 || featVal(t, 'FVG bear strength') > 0.2,
-  };
+    hasFVG:      featVal(t, 'FVG bull strength') > 0.2 || featVal(t, 'FVG bear strength') > 0.2};
 }
 
 // ── Core statistics from a set of trades ─────────────────────────────────────
@@ -96,8 +95,7 @@ function computeStats(trades: ValidatedTrade[]): ValidationStats {
   if (n === 0) return {
     tradeCount:0,winCount:0,lossCount:0,winRate:0,profitFactor:0,
     expectancy:0,avgWin:0,avgLoss:0,avgMFE:0,avgMAE:0,avgHoldingBars:0,
-    sharpeRatio:0,sortinoRatio:0,calmarRatio:0,maxDrawdownPct:0,totalReturnPct:0,
-  };
+    sharpeRatio:0,sortinoRatio:0,calmarRatio:0,maxDrawdownPct:0,totalReturnPct:0};
 
   const wins   = trades.filter(t => t.isWin);
   const losses = trades.filter(t => !t.isWin);
@@ -140,8 +138,7 @@ function computeStats(trades: ValidatedTrade[]): ValidationStats {
   return {
     tradeCount: n, winCount: wins.length, lossCount: losses.length, winRate,
     profitFactor, expectancy, avgWin, avgLoss, avgMFE, avgMAE, avgHoldingBars,
-    sharpeRatio, sortinoRatio, calmarRatio, maxDrawdownPct: maxDD, totalReturnPct,
-  };
+    sharpeRatio, sortinoRatio, calmarRatio, maxDrawdownPct: maxDD, totalReturnPct};
 }
 
 // ── Group into slices ─────────────────────────────────────────────────────────
@@ -189,8 +186,7 @@ function buildFalseSignals(trades: ValidatedTrade[]): FalseSignalSummary[] {
       type, count: group.length,
       pct: group.length / trades.length,
       avgLossPct: group.reduce((s,t)=>s+t.pnlPct,0)/group.length,
-      commonRegime,
-    };
+      commonRegime};
   }).filter(Boolean) as FalseSignalSummary[];
 }
 
@@ -208,8 +204,7 @@ function featureAttribution(trades: ValidatedTrade[], wins: boolean) {
   return Object.entries(counts)
     .map(([name, { sum, n }]) => ({
       name,
-      [wins ? 'avgInfluenceOnWins' : 'avgInfluenceOnLosses']: sum / n,
-    }))
+      [wins ? 'avgInfluenceOnWins' : 'avgInfluenceOnLosses']: sum / n}))
     .sort((a, b) => {
       const key = wins ? 'avgInfluenceOnWins' : 'avgInfluenceOnLosses';
       return (b as any)[key] - (a as any)[key];
@@ -274,6 +269,5 @@ export async function generateValidationReport(
     lowConfTrades:  trades.filter(t => t.aiConfidence < 0.45)
                          .sort((a,b) => a.pnlPct - b.pnlPct).slice(0,10),
     bestFeatures:   featureAttribution(trades, true),
-    worstFeatures:  featureAttribution(trades, false),
-  };
+    worstFeatures:  featureAttribution(trades, false)};
 }

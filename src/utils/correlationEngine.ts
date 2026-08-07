@@ -162,8 +162,7 @@ export function getDynamicCorrelation(
     correlation: r, window,
     computedAt:  Date.now(),
     nBarsA:      candlesA.length,
-    nBarsB:      candlesB.length,
-  });
+    nBarsB:      candlesB.length});
 
   return r;
 }

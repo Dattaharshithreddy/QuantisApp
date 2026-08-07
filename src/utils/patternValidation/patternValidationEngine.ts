@@ -50,8 +50,7 @@ function makeComponent(
     rawScore:      clamped,
     weightedScore: Math.round(clamped * weight * 100 * 10) / 10,
     reasons,
-    failedConditions: failed,
-  };
+    failedConditions: failed};
 }
 
 // 20-bar volume average (O(n) rolling, same as swingEngine.ts)
@@ -540,8 +539,7 @@ export function computeValidationBreakdown(
     momentum,
     candlestick,
     supportResist:  suppRes,
-    patternQuality: quality,
-  };
+    patternQuality: quality};
 
   // Weighted sum → 0–100
   const totalConfidence = Math.round(

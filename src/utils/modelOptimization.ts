@@ -100,16 +100,14 @@ export async function getOptimalConfig(symbol: string, timeframe: string): Promi
 function toEvidence(e: { metrics: { totalReturnPct: number; profitFactor: number; winRate: number; numTrades: number } }) {
   return {
     returnPct: e.metrics.totalReturnPct, profitFactor: e.metrics.profitFactor,
-    winRate: e.metrics.winRate, numTrades: e.metrics.numTrades,
-  };
+    winRate: e.metrics.winRate, numTrades: e.metrics.numTrades};
 }
 
 function toExecEvidence(m: ReturnType<typeof computeMetrics>) {
   return {
     returnPct: m.totalReturnPct, profitFactor: m.profitFactor,
     winRate: m.winRate, numTrades: m.numTrades,
-    maxDrawdownPct: m.maxDrawdownPct, sharpeRatio: m.sharpeRatio,
-  };
+    maxDrawdownPct: m.maxDrawdownPct, sharpeRatio: m.sharpeRatio};
 }
 
 // Composite score used for ALL parameter selection in this module.
@@ -150,8 +148,7 @@ function sweepExecParams(
     atrTargetMultiplier: DEFAULT_BACKTEST_CONFIG.atrTargetMultiplier,
     maxHoldingBars: DEFAULT_BACKTEST_CONFIG.maxHoldingBars,
     riskPerTradePct: DEFAULT_BACKTEST_CONFIG.riskPerTradePct,
-    threshold: fixedThreshold,
-  };
+    threshold: fixedThreshold};
 
   // Compute default baseline
   const { trades: dTrades, equityCurve: dEq } = simulateSignalStrategy(
@@ -273,8 +270,7 @@ export async function computeOptimalConfig(
     atrTargetMultiplier: DEFAULT_BACKTEST_CONFIG.atrTargetMultiplier,
     maxHoldingBars: DEFAULT_BACKTEST_CONFIG.maxHoldingBars,
     riskPerTradePct: DEFAULT_BACKTEST_CONFIG.riskPerTradePct,
-    threshold: DEFAULT_BACKTEST_CONFIG.buyThreshold,
-  };
+    threshold: DEFAULT_BACKTEST_CONFIG.buyThreshold};
 
   // Score improvement threshold: must be meaningfully better, not noise
   const IMPROVEMENT_THRESHOLD = 0.05; // 5% relative improvement required
@@ -339,8 +335,7 @@ export async function computeOptimalConfig(
     paramChanges,
     generalizationPassed: acceptImprovement ? generalizationPassed : true,
     generalizationNote,
-    computedAt: Date.now(),
-  };
+    computedAt: Date.now()};
 
   await AsyncStorage.setItem(KEY(symbol, timeframe), JSON.stringify(config));
   logger.info('modelOptimization', `${symbol}/${timeframe}: done. Horizon=${config.bestHorizon}, Threshold=${config.bestThreshold}, SL=${trulyFinalExecParams.atrStopMultiplier}×ATR, TP=${trulyFinalExecParams.atrTargetMultiplier}×ATR, Hold=${trulyFinalExecParams.maxHoldingBars}bars. PF: ${defaultMetrics.profitFactor.toFixed(2)} → ${trulyFinalExecMetrics.profitFactor.toFixed(2)}`);

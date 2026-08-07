@@ -1,10 +1,10 @@
 // ── AICopilotPanel — AI Copilot card (analysis request + result display) ──────
 // Pure presentational. All business logic (runAnalysis, state) stays in ChartScreen.
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable } from 'react-native';
 import { pFmt } from '../../../utils/indicators';
 import { AIAnalysis } from '../../../api/claude';
-import { Card, SectionLabel, Skeleton } from '../../../components/Common';
+import { Card, Skeleton } from '../../../components/Common';
 import { RADIUS } from '../../../theme/colors';
 
 const TRADE_LABELS: Record<string, { l: string; bg: string }> = {
@@ -26,7 +26,7 @@ type Props = {
   T: any;
 };
 
-export function AICopilotPanel({ ai, assetName, symbol, anthropicKey, loading, onAnalyze, onNavigateChat, T }: Props) {
+export const AICopilotPanel = React.memo(function AICopilotPanel({ ai, assetName, symbol, anthropicKey, loading, onAnalyze, onNavigateChat, T }: Props) {
   return (
     <Card theme={T} style={{ marginTop: 18 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -35,12 +35,12 @@ export function AICopilotPanel({ ai, assetName, symbol, anthropicKey, loading, o
           <Text style={{ color: T.textDim, fontSize: 9, marginTop: 2 }}>Claude Sonnet · Institutional Grade</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={() => onNavigateChat(symbol)} style={{ backgroundColor: T.purple, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.sm }}>
+          <Pressable onPress={() => onNavigateChat(symbol)} hitSlop={6} android_ripple={{color:'rgba(255,255,255,0.2)'}} style={{ backgroundColor: T.purple, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.sm }}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>💬 Chat</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onAnalyze} disabled={ai.status === 'loading' || loading} style={{ backgroundColor: T.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.sm, opacity: ai.status === 'loading' ? 0.6 : 1 }}>
+          </Pressable>
+          <Pressable onPress={onAnalyze} disabled={ai.status === 'loading' || loading} hitSlop={6} android_ripple={{color:'rgba(255,255,255,0.2)'}} style={{ backgroundColor: T.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.sm, opacity: ai.status === 'loading' ? 0.6 : 1 }}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>{ai.status === 'loading' ? 'ANALYZING…' : 'ANALYZE'}</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 
@@ -83,13 +83,30 @@ export function AICopilotPanel({ ai, assetName, symbol, anthropicKey, loading, o
                 </Text>
               </View>
             ))}
+            {d.invalidation ? (
+              <View style={{ backgroundColor: T.red + '12', borderRadius: 6, padding: 8, marginBottom: 10 }}>
+                <Text style={{ color: T.red, fontSize: 9, fontWeight: '700', marginBottom: 2 }}>INVALIDATION</Text>
+                <Text style={{ color: T.textSub, fontSize: 11, lineHeight: 17 }}>{d.invalidation}</Text>
+              </View>
+            ) : null}
+            {d.priorCallUpdate && d.priorCallUpdate !== 'n/a' ? (
+              <View style={{ backgroundColor: T.blue + '12', borderRadius: 6, padding: 8, marginBottom: 10 }}>
+                <Text style={{ color: T.blue, fontSize: 9, fontWeight: '700', marginBottom: 2 }}>PRIOR CALL UPDATE</Text>
+                <Text style={{ color: T.textSub, fontSize: 11, lineHeight: 17 }}>{d.priorCallUpdate}</Text>
+              </View>
+            ) : null}
             <View style={{ backgroundColor: T.accent + '15', padding: 10, borderRadius: RADIUS.sm }}>
               <Text style={{ color: T.accent, fontSize: 9, fontWeight: '700', marginBottom: 4 }}>EXECUTIVE SUMMARY</Text>
               <Text style={{ color: T.text, fontSize: 12, fontStyle: 'italic', lineHeight: 18 }}>{d.executiveSummary}</Text>
             </View>
+            {d.analyzedAt ? (
+              <Text style={{ color: T.textDim, fontSize: 9, textAlign: 'right', marginTop: 6 }}>
+                Analyzed {new Date(d.analyzedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            ) : null}
           </View>
         );
       })()}
     </Card>
   );
-}
+});

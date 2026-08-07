@@ -158,8 +158,7 @@ export function computeFamilyStats(
     expiredCount,
     manualCloseCount,
     invalidatedCount,
-    expiredRate:         total > 0 ? Math.round((expiredCount / total) * 1000) / 1000 : 0,
-  };
+    expiredRate:         total > 0 ? Math.round((expiredCount / total) * 1000) / 1000 : 0};
 }
 
 // ── Stats for every pattern family that has at least one resolved outcome ─────
@@ -226,8 +225,7 @@ function closeOutcomeWithReason(
     closeBar:         currentBar,
     closedPrice:      closePrice,
     barsToClose:      currentBar - outcome.confirmedAtBar,
-    realizedPnLPct:   computePnLPctLocal(outcome.entry, closePrice, outcome.direction),
-  };
+    realizedPnLPct:   computePnLPctLocal(outcome.entry, closePrice, outcome.direction)};
 }
 
 function computePnLPctLocal(

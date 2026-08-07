@@ -3,7 +3,6 @@
 // Other modules import FROM here; this file imports nothing from QUANTIS itself
 // (only the Candle primitive from indicators).
 // ─────────────────────────────────────────────────────────────────────────────
-import { Candle } from '../indicators';
 
 // ── Swing ─────────────────────────────────────────────────────────────────────
 export type SwingType = 'high' | 'low';

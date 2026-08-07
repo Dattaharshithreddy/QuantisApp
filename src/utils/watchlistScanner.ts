@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Asset } from '../api/assets';
 import { Candle } from '../utils/indicators';
 import { fetchBnKlines } from '../api/binance';
+import { fetchCdxCandles } from '../api/coindcx';
 import { aoCandles } from '../api/angelOne';
 import { fetchAVKlines } from '../api/alphaVantage';
 import { getCachedCandles, setCachedCandles, fetchCandlesWithCache } from './candleCache';
@@ -106,7 +107,8 @@ export async function fetchCandlesForAsset(asset: Asset, tf: string, aoSession: 
       asset.symbol, tf,
       async () => withRetry(async () => {
         if (asset.src === 'binance' && asset.bnSym) return fetchBnKlines(asset.bnSym, tf);
-        if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx)
+        if (asset.src === 'coindcx' && (asset as any).cdxSym) return fetchCdxCandles((asset as any).cdxSym, tf);
+        if ((asset.src === 'ao' || asset.src === 'ao_futures') && aoSession?.jwtToken && asset.aoToken && asset.aoEx)
           return aoCandles(asset.aoToken, asset.aoEx, tf, aoSession);
         if (asset.src === 'av' && asset.avSym && avKey) return fetchAVKlines(asset.avSym, tf, avKey);
         // Binance USDM Perpetuals — use futures klines endpoint (fapi)
@@ -164,8 +166,7 @@ export async function runScanCycle(
   const status: ScannerStatus = {
     lastScanTime: cycleStart, nextScanTime: cycleStart + config.pollingIntervalMs,
     currentlyScanning: assets.map(a => a.symbol), lastResults: { ...prevStatus.lastResults },
-    stats: { ...prevStatus.stats },
-  };
+    stats: { ...prevStatus.stats }};
   await saveScannerStatus(status);
 
   try {

@@ -33,6 +33,23 @@ const TTL = {
 
 const CACHE_KEY = (src: string) => `cryptoCtx_v1_${src}`;
 
+// FIX (Audit item #9): All external fetches now have a hard timeout.
+// Without this, a slow or non-responsive API endpoint caused fetchCryptoMarketContext
+// to hang indefinitely — blocking the entire prediction pipeline since
+// fetchUnifiedMarketContext awaits it (with only a try/catch, no timeout).
+// The prediction itself is wrapped in a 30s timeout, but a single stalled
+// network call could consume most of that budget before the context is even
+// fetched. Per-fetch 5s timeout ensures each individual call either returns
+// quickly or fails fast, letting the prediction proceed with stale cache data.
+const FETCH_TIMEOUT_MS = 5_000; // 5 seconds per individual network call
+
+function fetchWithTimeout(url: string, ms = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 async function readCtxCache<T>(src: string): Promise<{ data: T; fetchedAt: number } | null> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY(src));
@@ -67,7 +84,7 @@ async function fetchFearGreed(): Promise<FearGreedData | null> {
   if (cached && isFresh(cached.fetchedAt, TTL.FEAR_GREED)) return cached.data;
 
   try {
-    const res = await fetch('https://api.alternative.me/fng/?limit=2&format=json');
+    const res = await fetchWithTimeout('https://api.alternative.me/fng/?limit=2&format=json');
     if (!res.ok) throw new Error(`F&G HTTP ${res.status}`);
     const json = await res.json();
     const items: any[] = json?.data ?? [];
@@ -86,8 +103,7 @@ async function fetchFearGreed(): Promise<FearGreedData | null> {
       classification: classify(current),
       previousDay: previous,
       trend,
-      fetchedAt: Date.now(),
-    };
+      fetchedAt: Date.now()};
     await writeCtxCache('FEAR_GREED', data);
     logger.info('cryptoContext', `F&G: ${current} (${data.classification})`);
     return data;
@@ -111,7 +127,7 @@ async function fetchMarketCapAndStable(): Promise<{
   }
 
   try {
-    const res = await fetch('https://api.coingecko.com/api/v3/global');
+    const res = await fetchWithTimeout('https://api.coingecko.com/api/v3/global');
     if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
     const json = await res.json();
     const d = json?.data ?? {};
@@ -146,8 +162,7 @@ async function fetchMarketCapAndStable(): Promise<{
       totalChange24h: change24h,
       btcDominanceChange24h: 0,   // CoinGecko global doesn't expose BTC.D change directly
       regime,
-      fetchedAt: Date.now(),
-    };
+      fetchedAt: Date.now()};
 
     // Stablecoin dominance trend from cache comparison
     const prevSC = cachedSC?.data;
@@ -163,8 +178,7 @@ async function fetchMarketCapAndStable(): Promise<{
       totalStableDom: stableTotal,
       trend:          scTrend,
       signal:         scSignal,
-      fetchedAt:      Date.now(),
-    };
+      fetchedAt:      Date.now()};
 
     await writeCtxCache('MARKET_CAP', mcData);
     await writeCtxCache('STABLECOIN', scData);
@@ -204,8 +218,7 @@ async function fetchFundingRate(symbol: string): Promise<FundingRateData | null>
       annualized,
       sentiment: classify(rate),
       isOverheated: Math.abs(rate) > 0.0005,
-      fetchedAt: Date.now(),
-    };
+      fetchedAt: Date.now()};
     await writeCtxCache(cacheKey, data);
     logger.info('cryptoContext', `Funding ${fSym}: ${(rate * 100).toFixed(4)}% (${data.sentiment})`);
     return data;
@@ -258,8 +271,7 @@ async function fetchOpenInterest(symbol: string): Promise<OpenInterestData | nul
 
     const data: OpenInterestData = {
       symbol: fSym, openInterestUsd: currentOI,
-      change24h, trend, conviction, fetchedAt: Date.now(),
-    };
+      change24h, trend, conviction, fetchedAt: Date.now()};
     await writeCtxCache(cacheKey, data);
     logger.info('cryptoContext', `OI ${fSym}: $${(currentOI/1e9).toFixed(2)}B change=${change24h.toFixed(1)}%`);
     return data;
@@ -303,8 +315,7 @@ export async function fetchCryptoMarketContext(symbol: string): Promise<CryptoMa
     stablecoin,
     available,
     symbol,
-    fetchedAt: Date.now(),
-  };
+    fetchedAt: Date.now()};
 }
 
 // Fetch only specific sources (for performance-sensitive paths)

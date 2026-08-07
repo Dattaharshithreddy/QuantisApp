@@ -33,28 +33,16 @@
 //   🔲 Push notification deep-link handler
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  Linking, ActivityIndicator, RefreshControl, Animated,
-} from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Linking, ActivityIndicator, RefreshControl} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
-import { Card, Pill, SectionLabel } from '../components/Common';
+import { Card, SectionLabel } from '../components/Common';
 import { RADIUS, SPACING } from '../theme/colors';
 import { getPortfolio } from '../utils/paperPortfolio';
 import { getLivePortfolio } from '../utils/livePortfolio';
-import {
-  MarketEvent, EventRegion, ImpactRating, AffectedAsset,
-  WatchlistRelevance,
-  getMarketEvents, getEventsByFilter, getDailySummary, getCalendarIntelligenceScore,
-  formatCountdown, getCountdownUrgency, groupByTimeSlot,
-  getAIMarketImpactSummary, saveCachedEvents, loadCachedEvents,
-  scheduleEventReminder, cancelEventReminders, hasReminder,
-  getWatchlistRelevance, getWatchlistRelevantEvents,
-  RiskLevel, TimeSlot, CalendarFilter,
-} from '../utils/marketIntelligenceCalendar';
+import { MarketEvent, EventRegion, ImpactRating, AffectedAsset, WatchlistRelevance, getMarketEvents, getEventsByFilter, getDailySummary, getCalendarIntelligenceScore, formatCountdown, getCountdownUrgency, groupByTimeSlot, getAIMarketImpactSummary, saveCachedEvents, loadCachedEvents, scheduleEventReminder, cancelEventReminders, hasReminder, getWatchlistRelevance, RiskLevel, TimeSlot, CalendarFilter} from '../utils/marketIntelligenceCalendar';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -110,8 +98,7 @@ function ImpactChip({ impact, theme: T }: { impact: ImpactRating; theme: any }) 
   return (
     <View style={{
       paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.pill,
-      backgroundColor: color + '22', borderWidth: 1, borderColor: color + '55',
-    }}>
+      backgroundColor: color + '22', borderWidth: 1, borderColor: color + '55'}}>
       <Text style={{ color, fontSize: 9, fontWeight: '800', letterSpacing: 0.8 }}>{meta.label}</Text>
     </View>
   );
@@ -140,8 +127,7 @@ function CountdownBadge({ date, theme: T }: { date: Date; theme: any }) {
     <View style={{
       backgroundColor: color + '18', borderRadius: RADIUS.sm,
       borderWidth: 1, borderColor: color + '40',
-      paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', minWidth: 64,
-    }}>
+      paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', minWidth: 64}}>
       <Text style={{ color, fontSize: 14, fontWeight: '800' }}>{countdown}</Text>
       <Text style={{ color: T.textDim, fontSize: 8, marginTop: 1 }}>
         {date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
@@ -169,8 +155,7 @@ function VolatilityStats({ event, theme: T }: { event: MarketEvent; theme: any }
         {event.historicalVol.map(v => (
           <View key={v.asset} style={{
             backgroundColor: T.bg1, borderRadius: RADIUS.sm,
-            padding: 8, minWidth: 72, alignItems: 'center',
-          }}>
+            padding: 8, minWidth: 72, alignItems: 'center'}}>
             <Text style={{ fontSize: 14 }}>{ASSET_ICON[v.asset]}</Text>
             <Text style={{ color: T.amber, fontSize: 11, fontWeight: '800', marginTop: 2 }}>
               ±{v.avgMovePct}%
@@ -205,8 +190,7 @@ function WatchlistBanner({ relevance, theme: T }: { relevance: WatchlistRelevanc
       borderRadius: RADIUS.sm,
       borderWidth: 1,
       borderColor: color + '45',
-      padding: SPACING.sm,
-    }}>
+      padding: SPACING.sm}}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
         <Text style={{ fontSize: 12 }}>{icon}</Text>
         <Text style={{ color, fontSize: 11, fontWeight: '800' }}>{headline}</Text>
@@ -217,8 +201,7 @@ function WatchlistBanner({ relevance, theme: T }: { relevance: WatchlistRelevanc
             paddingHorizontal: 8, paddingVertical: 3,
             backgroundColor: color + '20',
             borderRadius: RADIUS.pill,
-            borderWidth: 1, borderColor: color + '50',
-          }}>
+            borderWidth: 1, borderColor: color + '50'}}>
             <Text style={{ color, fontSize: 10, fontWeight: '700' }}>{sym}</Text>
           </View>
         ))}
@@ -262,16 +245,14 @@ function WatchlistSummaryCard({
     <Card theme={T} style={{
       marginBottom: SPACING.lg,
       borderColor: hasOpenRisk ? T.red + '50' : T.amber + '40',
-      borderWidth: 1.5,
-    }}>
+      borderWidth: 1.5}}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: SPACING.sm }}>
         <Text style={{ fontSize: 16 }}>👤</Text>
         <Text style={{ color: T.text, fontWeight: '800', fontSize: 14 }}>Your Watchlist</Text>
         {hasOpenRisk && (
           <View style={{
             paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.pill,
-            backgroundColor: T.red + '20', borderWidth: 1, borderColor: T.red + '50',
-          }}>
+            backgroundColor: T.red + '20', borderWidth: 1, borderColor: T.red + '50'}}>
             <Text style={{ color: T.red, fontSize: 9, fontWeight: '800' }}>POSITION AT RISK</Text>
           </View>
         )}
@@ -288,8 +269,7 @@ function WatchlistSummaryCard({
               flexDirection: 'row', alignItems: 'flex-start',
               gap: 8, marginBottom: 10,
               paddingBottom: 10,
-              borderBottomWidth: 1, borderBottomColor: T.border,
-            }}
+              borderBottomWidth: 1, borderBottomColor: T.border}}
           >
             <Text style={{ fontSize: 12, marginTop: 1 }}>{posIcon}</Text>
             <View style={{ flex: 1 }}>
@@ -318,7 +298,7 @@ function WatchlistSummaryCard({
 
 // ── EventCard ─────────────────────────────────────────────────────────────────
 
-function EventCard({
+const EventCard = React.memo(function EventCard({
   event, expanded, onToggle,
   reminderSet, onScheduleReminder, onCancelReminder,
   relevance,
@@ -326,7 +306,7 @@ function EventCard({
 }: {
   event: MarketEvent;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (id: string) => void;
   reminderSet: boolean;
   onScheduleReminder: (id: string) => void;
   onCancelReminder:   (id: string) => void;
@@ -343,10 +323,9 @@ function EventCard({
       style={{
         marginBottom: 10,
         borderColor:  isCritical ? T.red + '50' : event.impact === 'HIGH' ? T.orange + '35' : T.cardBorder,
-        borderWidth:  isCritical ? 1.5 : 1,
-      }}
+        borderWidth:  isCritical ? 1.5 : 1}}
     >
-      <TouchableOpacity onPress={onToggle} activeOpacity={0.85}>
+      <TouchableOpacity onPress={() => onToggle(event.id)} activeOpacity={0.85}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm }}>
           <Text style={{ fontSize: 20, marginTop: 2 }}>{regionMeta.flag}</Text>
@@ -363,8 +342,7 @@ function EventCard({
               <ImpactChip impact={event.impact} theme={T} />
               <View style={{
                 paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.pill,
-                backgroundColor: T.teal + '18', borderWidth: 1, borderColor: T.teal + '40',
-              }}>
+                backgroundColor: T.teal + '18', borderWidth: 1, borderColor: T.teal + '40'}}>
                 <Text style={{ color: T.teal, fontSize: 9, fontWeight: '700' }}>
                   {regionMeta.flag} {regionMeta.label}
                 </Text>
@@ -401,8 +379,7 @@ function EventCard({
       {expanded && (
         <View style={{
           marginTop: SPACING.md, borderTopWidth: 1,
-          borderTopColor: T.border, paddingTop: SPACING.md,
-        }}>
+          borderTopColor: T.border, paddingTop: SPACING.md}}>
 
           <SectionLabel theme={T}>WHAT IS THIS EVENT</SectionLabel>
           <Text style={{ color: T.textSub, fontSize: 12, lineHeight: 18, marginBottom: SPACING.md }}>
@@ -431,8 +408,7 @@ function EventCard({
           <View style={{
             marginTop: SPACING.md, backgroundColor: T.blue + '10',
             borderRadius: RADIUS.md, padding: SPACING.md,
-            borderWidth: 1, borderColor: T.blue + '25',
-          }}>
+            borderWidth: 1, borderColor: T.blue + '25'}}>
             <SectionLabel theme={T}>🤖 AI MARKET IMPACT CONTEXT</SectionLabel>
             <Text style={{ color: T.textSub, fontSize: 11, lineHeight: 17 }}>
               {getAIMarketImpactSummary(event)}
@@ -454,8 +430,7 @@ function EventCard({
           {/* Reminders */}
           <View style={{
             marginTop: SPACING.md, borderTopWidth: 1,
-            borderTopColor: T.border, paddingTop: SPACING.md,
-          }}>
+            borderTopColor: T.border, paddingTop: SPACING.md}}>
             <SectionLabel theme={T}>SET REMINDER</SectionLabel>
             {reminderSet ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -464,8 +439,7 @@ function EventCard({
                   onPress={() => onCancelReminder(event.id)}
                   style={{
                     paddingHorizontal: 10, paddingVertical: 5,
-                    borderRadius: RADIUS.sm, borderWidth: 1, borderColor: T.red + '50',
-                  }}
+                    borderRadius: RADIUS.sm, borderWidth: 1, borderColor: T.red + '50'}}
                 >
                   <Text style={{ color: T.red, fontSize: 10 }}>Cancel</Text>
                 </TouchableOpacity>
@@ -484,8 +458,7 @@ function EventCard({
                       style={{
                         paddingHorizontal: 10, paddingVertical: 6,
                         borderRadius: RADIUS.sm, backgroundColor: T.bg1,
-                        borderWidth: 1, borderColor: T.border2,
-                      }}
+                        borderWidth: 1, borderColor: T.border2}}
                     >
                       <Text style={{ color: T.text, fontSize: 10, fontWeight: '600' }}>🔔 {label}</Text>
                     </TouchableOpacity>
@@ -498,12 +471,11 @@ function EventCard({
       )}
     </Card>
   );
-}
+});
 
 // ── TodaySummaryCard ──────────────────────────────────────────────────────────
 
-function TodaySummaryCard({ theme: T }: { theme: any }) {
-  const summary  = getDailySummary();
+function TodaySummaryCard({ summary, theme: T }: { summary: ReturnType<typeof getDailySummary>; theme: any }) {
   const riskMeta = RISK_LEVEL_META[summary.riskLevel];
   const color    = riskMeta.color(T);
 
@@ -513,8 +485,7 @@ function TodaySummaryCard({ theme: T }: { theme: any }) {
         <Text style={{ color: T.text, fontWeight: '800', fontSize: 14 }}>📅 Today's Events</Text>
         <View style={{
           paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.pill,
-          backgroundColor: riskMeta.bg(T), borderWidth: 1, borderColor: color + '50',
-        }}>
+          backgroundColor: riskMeta.bg(T), borderWidth: 1, borderColor: color + '50'}}>
           <Text style={{ color, fontSize: 10, fontWeight: '800' }}>{riskMeta.label.toUpperCase()}</Text>
         </View>
       </View>
@@ -548,8 +519,7 @@ function TodaySummaryCard({ theme: T }: { theme: any }) {
               <View key={a} style={{
                 flexDirection: 'row', alignItems: 'center', gap: 4,
                 backgroundColor: T.bg1, borderRadius: RADIUS.sm,
-                paddingHorizontal: 8, paddingVertical: 4,
-              }}>
+                paddingHorizontal: 8, paddingVertical: 4}}>
                 <Text style={{ fontSize: 12 }}>{ASSET_ICON[a]}</Text>
                 <Text style={{ color: T.text, fontSize: 10, fontWeight: '600' }}>{a}</Text>
               </View>
@@ -569,8 +539,7 @@ function TodaySummaryCard({ theme: T }: { theme: any }) {
 
 // ── IntelligenceBanner ────────────────────────────────────────────────────────
 
-function IntelligenceBanner({ theme: T }: { theme: any }) {
-  const score    = getCalendarIntelligenceScore(7);
+function IntelligenceBanner({ score, theme: T }: { score: ReturnType<typeof getCalendarIntelligenceScore>; theme: any }) {
   const riskMeta = RISK_LEVEL_META[score.riskLevel];
   const color    = riskMeta.color(T);
 
@@ -583,8 +552,7 @@ function IntelligenceBanner({ theme: T }: { theme: any }) {
       <View style={{ backgroundColor: T.bg1, borderRadius: RADIUS.pill, height: 6, overflow: 'hidden', marginBottom: 8 }}>
         <View style={{
           width: `${score.score}%` as any, height: 6,
-          backgroundColor: color, borderRadius: RADIUS.pill,
-        }} />
+          backgroundColor: color, borderRadius: RADIUS.pill}} />
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={{ color, fontSize: 11, fontWeight: '700' }}>{riskMeta.label}</Text>
@@ -621,8 +589,7 @@ function FilterBar({ filter, onChange, theme: T }: {
       <View style={{
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: T.bg1, borderRadius: RADIUS.md,
-        borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, marginBottom: SPACING.sm,
-      }}>
+        borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, marginBottom: SPACING.sm}}>
         <Text style={{ color: T.textDim, fontSize: 14, marginRight: 8 }}>🔍</Text>
         <TextInput
           value={searchText}
@@ -652,8 +619,7 @@ function FilterBar({ filter, onChange, theme: T }: {
                 paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.pill,
                 marginRight: 8,
                 backgroundColor: active ? T.teal + '20' : T.bg1,
-                borderWidth: 1, borderColor: active ? T.teal + '60' : T.border,
-              }}
+                borderWidth: 1, borderColor: active ? T.teal + '60' : T.border}}
             >
               <Text style={{ fontSize: 13 }}>{meta.flag}</Text>
               <Text style={{ color: active ? T.teal : T.textDim, fontSize: 11, fontWeight: '700' }}>
@@ -676,8 +642,7 @@ function FilterBar({ filter, onChange, theme: T }: {
               style={{
                 paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.pill, marginRight: 8,
                 backgroundColor: active ? color + '20' : T.bg1,
-                borderWidth: 1, borderColor: active ? color + '60' : T.border,
-              }}
+                borderWidth: 1, borderColor: active ? color + '60' : T.border}}
             >
               <Text style={{ color: active ? color : T.textDim, fontSize: 11, fontWeight: '700' }}>{i}</Text>
             </TouchableOpacity>
@@ -716,8 +681,7 @@ function TimelineSection({
         <Text style={{ color: T.textDim, fontSize: 10 }}>· {meta.timeRange}</Text>
         <View style={{
           marginLeft: 'auto', backgroundColor: T.bg1, borderRadius: RADIUS.pill,
-          paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: T.border,
-        }}>
+          paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: T.border}}>
           <Text style={{ color: T.textDim, fontSize: 9, fontWeight: '700' }}>{events.length}</Text>
         </View>
       </View>
@@ -726,7 +690,7 @@ function TimelineSection({
           key={e.id}
           event={e}
           expanded={expandedId === e.id}
-          onToggle={() => onToggle(e.id)}
+          onToggle={onToggle}
           reminderSet={reminders[e.id] ?? false}
           onScheduleReminder={onScheduleReminder}
           onCancelReminder={onCancelReminder}
@@ -821,8 +785,25 @@ export default function CalendarScreen() {
     setReminders(p => ({ ...p, [id]: false }));
   }, []);
 
-  const filteredEvents = getEventsByFilter(filter);
-  const grouped        = groupByTimeSlot(filteredEvents);
+  // FIX (lag): memoize filteredEvents and grouped so they only recompute when
+  // filter or events change — not on every re-render (60s tick, setState, etc.).
+  // Pass `events` state to avoid getEventsByFilter rebuilding 28 objects internally.
+  const filteredEvents = useMemo(
+    () => getEventsByFilter(filter, events),
+    [filter, events],
+  );
+
+  const grouped = useMemo(
+    () => groupByTimeSlot(filteredEvents),
+    [filteredEvents],
+  );
+
+  // Memoize summary cards — these call getMarketEvents() internally which is
+  // expensive. They only need to recompute when events change (not on every
+  // 60 s tick or viewMode toggle).
+  const dailySummary       = useMemo(() => getDailySummary(),               [events]); // eslint-disable-line react-hooks/exhaustive-deps
+  const intelligenceScore  = useMemo(() => getCalendarIntelligenceScore(7), [events]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const SLOT_ORDER: TimeSlot[] = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT', 'ALL_DAY'];
 
   return (
@@ -854,11 +835,10 @@ export default function CalendarScreen() {
               style={{
                 paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.pill,
                 backgroundColor: viewMode === mode ? T.accent : T.bg1,
-                borderWidth: 1, borderColor: viewMode === mode ? T.accent : T.border,
-              }}
+                borderWidth: 1, borderColor: viewMode === mode ? T.accent : T.border}}
             >
               <Text style={{ color: viewMode === mode ? '#fff' : T.textDim, fontSize: 11, fontWeight: '700' }}>
-                {mode === 'TIMELINE' ? '🕐 Timeline' : '📋 All Events'}
+                {mode === 'TIMELINE' ? '🕐 By Time of Day' : '📋 All Events'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -870,8 +850,8 @@ export default function CalendarScreen() {
         </View>
 
         {/* Summary + Score */}
-        <TodaySummaryCard theme={T} />
-        <IntelligenceBanner theme={T} />
+        <TodaySummaryCard summary={dailySummary} theme={T} />
+        <IntelligenceBanner score={intelligenceScore} theme={T} />
 
         {/* Watchlist Awareness — events affecting the user's assets / open positions */}
         <WatchlistSummaryCard
@@ -896,6 +876,8 @@ export default function CalendarScreen() {
             </TouchableOpacity>
           </Card>
         ) : viewMode === 'TIMELINE' ? (
+          // Timeline: groups all upcoming events by time-of-day (Morning/Afternoon/Evening/Night).
+          // Events from all upcoming dates are included, grouped by when in the day they occur.
           SLOT_ORDER.map(slot => (
             <TimelineSection
               key={slot}
@@ -911,12 +893,13 @@ export default function CalendarScreen() {
             />
           ))
         ) : (
-          filteredEvents.map(e => (
+          // List: flat chronological view, sorted by date ascending.
+          [...filteredEvents].sort((a, b) => a.date.getTime() - b.date.getTime()).map(e => (
             <EventCard
               key={e.id}
               event={e}
               expanded={expandedId === e.id}
-              onToggle={() => handleToggle(e.id)}
+              onToggle={handleToggle}
               reminderSet={reminders[e.id] ?? false}
               onScheduleReminder={handleScheduleReminder}
               onCancelReminder={handleCancelReminder}
@@ -927,8 +910,7 @@ export default function CalendarScreen() {
         )}
 
         <Text style={{
-          color: T.textDim, fontSize: 9, marginTop: 16, lineHeight: 14, textAlign: 'center',
-        }}>
+          color: T.textDim, fontSize: 9, marginTop: 16, lineHeight: 14, textAlign: 'center'}}>
           Event dates are computed estimates based on standard institutional cadences.{'\n'}
           Always confirm exact times via RBI, Federal Reserve, or ECB official calendars.{'\n'}
           This calendar provides educational context only — not financial advice.

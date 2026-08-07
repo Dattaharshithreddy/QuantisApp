@@ -77,8 +77,7 @@ export default function OrderConfirmationScreen({ route, navigation }: any) {
           topFeatures:       prediction.topFeatures,
           marketRegime:      prediction.marketRegime ?? 'UNKNOWN',
           orderBookSnapshot: prediction.orderBookSnapshot ?? null,
-          marketContext,
-        },
+          marketContext},
         signalSnapshot,
         // Live-specific fields
         liveOrderId:   fill.orderId,
@@ -93,8 +92,7 @@ export default function OrderConfirmationScreen({ route, navigation }: any) {
         marginBlocked: fill.marginBlocked,
         underlying:    fill.underlying,
         expiry:        fill.expiry,
-        expiryLabel:   fill.expiryLabel,
-      };
+        expiryLabel:   fill.expiryLabel};
 
       await addLivePosition(position);
 

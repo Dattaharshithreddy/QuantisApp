@@ -90,8 +90,7 @@ function detectClusters(
             clusterHigh: Math.max(...members.map(f => f.gapHigh)),
             clusterLow:  Math.min(...members.map(f => f.gapLow)),
             count,
-            strength:    str,
-          };
+            strength:    str};
           if (!best || str > best.strength) best = cand;
         }
         clStart = k;
@@ -101,8 +100,7 @@ function detectClusters(
   }
   return {
     bull: buildCluster(bullFVGs, 'bullish'),
-    bear: buildCluster(bearFVGs, 'bearish'),
-  };
+    bear: buildCluster(bearFVGs, 'bearish')};
 }
 
 // ── Main precompute ────────────────────────────────────────────────────────────
@@ -156,8 +154,7 @@ export function precomputeFVG(
         status:       'unfilled',
         fillPct:      0,
         age:          0,
-        prevFVGIndex: lastBullIdx,
-      };
+        prevFVGIndex: lastBullIdx};
       nextBull.push(fvg);
       lastBullIdx = i;
     }
@@ -173,8 +170,7 @@ export function precomputeFVG(
         status:       'unfilled',
         fillPct:      0,
         age:          0,
-        prevFVGIndex: lastBearIdx,
-      };
+        prevFVGIndex: lastBearIdx};
       nextBear.push(fvg);
       lastBearIdx = i;
     }

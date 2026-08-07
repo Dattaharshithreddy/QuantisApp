@@ -4,13 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { Card, PrimaryButton } from '../components/Common';
-import { Candle } from '../utils/indicators';
+import { Candle, pFmt } from '../utils/indicators';
 import { fetchBnKlines } from '../api/binance';
 import { aoCandles } from '../api/angelOne';
 import { fetchAVKlines } from '../api/alphaVantage';
 import { screenAssets, SIGNAL_META, ScreenResult } from '../utils/screener';
 import { speakSummary, stopSpeaking, buildMarketSummarySpeech } from '../utils/voice';
-import { pFmt } from '../utils/indicators';
 import { fetchCandlesWithCache } from '../utils/candleCache';
 
 export default function ScreenerScreen() {
@@ -20,6 +19,8 @@ export default function ScreenerScreen() {
   const [results, setResults] = useState<ScreenResult[]>([]);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [skippedCount, setSkippedCount] = useState(0);
+  const [totalEligible, setTotalEligible] = useState(0);
+  const SCAN_CAP = 14;
 
   // FIXED: previously skipped a real connection check and fabricated candles
   // for anything without one, then quietly counted that as "simulated" —
@@ -28,7 +29,9 @@ export default function ScreenerScreen() {
     setLoading(true);
     const candleMap: Record<string, Candle[]> = {};
     let skipped = 0;
-    const scannable = allAssets.filter(a => a.src === 'binance' || a.src === 'ao' || a.src === 'av').slice(0, 14);
+    const allEligible = allAssets.filter(a => a.src === 'binance' || a.src === 'coindcx' || a.src === 'ao' || a.src === 'ao_futures' || a.src === 'av');
+    setTotalEligible(allEligible.length);
+    const scannable = allEligible.slice(0, SCAN_CAP);
     const scanSet: typeof scannable = [];
     for (const a of scannable) {
       try {
@@ -36,7 +39,7 @@ export default function ScreenerScreen() {
           const bnSym = a.bnSym;
           candleMap[a.symbol] = await fetchCandlesWithCache(a.symbol, '1h',
             async () => fetchBnKlines(bnSym, '1h'), { skipApiIfFresh: true }); scanSet.push(a);
-        } else if (a.src === 'ao' && aoSession?.jwtToken && a.aoToken && a.aoEx) {
+        } else if ((a.src === 'ao' || a.src === 'ao_futures') && aoSession?.jwtToken && a.aoToken && a.aoEx) {
           const { aoToken, aoEx } = a; const sess = aoSession;
           candleMap[a.symbol] = await fetchCandlesWithCache(a.symbol, '1h',
             async () => aoCandles(aoToken, aoEx, '1h', sess), { skipApiIfFresh: true }); scanSet.push(a);
@@ -73,9 +76,13 @@ export default function ScreenerScreen() {
 
         <PrimaryButton theme={T} label={loading ? 'SCANNING...' : 'RUN SCREENER'} onPress={runScreener} disabled={loading} />
 
-        {!loading && skippedCount > 0 && (
-          <Text style={{ color: T.amber, fontSize: 9, marginTop: 8, lineHeight: 14 }}>
-            ⚠ {skippedCount} asset(s) skipped — no live connection available for them right now.
+        {/* Always show scan scope so the user knows exactly what is covered */}
+        {totalEligible > 0 && !loading && (
+          <Text style={{ color: T.textDim, fontSize: 9, marginTop: 6, lineHeight: 14, textAlign: 'center' }}>
+            {totalEligible > SCAN_CAP
+              ? `Scanning first ${SCAN_CAP} of ${totalEligible} eligible assets`
+              : `Scanning all ${totalEligible} eligible asset${totalEligible !== 1 ? 's' : ''}`}
+            {skippedCount > 0 ? ` · ${skippedCount} skipped (no live connection)` : ''}
           </Text>
         )}
 

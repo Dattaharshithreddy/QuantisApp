@@ -12,11 +12,12 @@ export type PriceAlert = {
 
 const KEY = 'priceAlerts';
 
+console.log('[QUANTIS_DIAG] M-alerts-A: alerts.ts top-level starting');
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false,
-  }),
+    shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false}),
 });
+console.log('[QUANTIS_DIAG] M-alerts-B: setNotificationHandler completed');
 
 export async function requestNotifPermission() {
   const { status } = await Notifications.requestPermissionsAsync();
@@ -61,10 +62,8 @@ export async function checkAlerts(symbol: string, currentPrice: number) {
           content: {
             title: `🔔 ${symbol} Alert Triggered`,
             body: `${symbol} is now ${a.condition === 'ABOVE' ? 'above' : 'below'} ${a.targetPrice} — current: ${currentPrice.toFixed(2)}`,
-            sound: true,
-          },
-          trigger: null,
-        });
+            sound: true},
+          trigger: null});
       }
     }
     if (changed) await AsyncStorage.setItem(KEY, JSON.stringify(alerts));
@@ -91,10 +90,8 @@ export async function notifyPatternConfirmed(
       content: {
         title: `${icon} Pattern Confirmed: ${symbol}`,
         body:  `${patternName} confirmed — ${direction.toUpperCase()} · Confidence ${confidence}/100`,
-        sound: true,
-      },
-      trigger: null,
-    });
+        sound: true},
+      trigger: null});
   } catch (e: any) {
     // Notification delivery failure is non-fatal — scanner continues normally
     console.warn('[alerts] notifyPatternConfirmed failed:', e?.message);

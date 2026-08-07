@@ -144,8 +144,7 @@ export function precomputeSMC(
       topLiquidity, sweep, pd,
       price, atr,
       mitigationBar: lastMitigationBar,
-      currentBar:    i,
-    });
+      currentBar:    i});
   }
 
   return { smcScoresArr };

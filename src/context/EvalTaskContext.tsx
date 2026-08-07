@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -125,8 +125,7 @@ async function notify(title: string, body: string, screen = 'ProductionEval') {
   try {
     await Notifications.scheduleNotificationAsync({
       content: { title, body, sound: true, data: { screen } },
-      trigger: null,
-    });
+      trigger: null});
   } catch { /* permission not granted */ }
 }
 
@@ -178,8 +177,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
           status: 'interrupted', steps: [], completed: 0, total: 0,
           startedAt: 0, elapsedMs: 0, etaMs: null,
           skipped: [], evalResults: [], optResults: [],
-          error: 'Task was interrupted — the app was closed while it was running. Tap Run again to restart.',
-        };
+          error: 'Task was interrupted — the app was closed while it was running. Tap Run again to restart.'};
       });
       setTasks(prev => ({ ...tombstones, ...prev })); // stale tasks behind any already-loaded state
       // Clear the stale list — they've been acknowledged
@@ -278,9 +276,16 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
         try {
           if (candles.length >= 120) {
             // onProgress streams partial results as each major step completes.
-            // Without this, nothing shows for 30+ min while the full evaluation runs.
-            // Partial results are deduplicated by symbol+timeframe key.
+            // Throttled to one UI update per second: the evaluation loop emits
+            // progress on every tick() (every ~0ms), and each setTasks call
+            // triggers a full React reconciliation. Without throttling, the JS
+            // thread spends more time on state updates than on training, making
+            // the UI visibly sluggish during the 18–20 min evaluation run.
+            let lastProgressUpdate = 0;
             const onProgress = (partial: any, meta?: { stage: string; percent: number }) => {
+              const now = Date.now();
+              if (now - lastProgressUpdate < 1000) return; // max 1 UI update/sec
+              lastProgressUpdate = now;
               setTasks(prev => {
                 const t = prev[id]; if (!t) return prev;
                 const key = `${partial.symbol}__${partial.timeframe}`;
@@ -509,8 +514,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
       status: 'running', steps: buildSteps('evaluation', combos),
       completed: 0, total: combos.length,
       startedAt: Date.now(), elapsedMs: 0, etaMs: null,
-      skipped: [], evalResults: [], optResults: [],
-    };
+      skipped: [], evalResults: [], optResults: []};
     setTasks(prev => ({ ...prev, [id]: task }));
     // InteractionManager.runAfterInteractions defers the loop until all
     // pending animations (screen push, tab switch) have completed. Without
@@ -536,8 +540,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
       status: 'running', steps: buildSteps('optimization', combos),
       completed: 0, total: combos.length,
       startedAt: Date.now(), elapsedMs: 0, etaMs: null,
-      skipped: [], evalResults: [], optResults: [],
-    };
+      skipped: [], evalResults: [], optResults: []};
     setTasks(prev => ({ ...prev, [id]: task }));
     InteractionManager.runAfterInteractions(() => {
       runOptimLoop(id, combos, session);
@@ -559,8 +562,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
       completed: 0, total: assets.length,
       startedAt: Date.now(), elapsedMs: 0, etaMs: null,
       skipped: [], evalResults: [], optResults: [],
-      scanSignalCount: 0, scanSymbolCount: 0,
-    };
+      scanSignalCount: 0, scanSymbolCount: 0};
     setTasks(prev => ({ ...prev, [id]: task }));
     InteractionManager.runAfterInteractions(() => {
       runScanLoop(id, assets, session);

@@ -116,16 +116,14 @@ export async function openFuturesPosition(params: {
   if (margin + fee > portfolio.cashBalance) {
     return {
       opened: false,
-      reason: `Insufficient margin. Required: ₹${(margin + fee).toFixed(0)}, Available: ₹${portfolio.cashBalance.toFixed(0)}.`,
-    };
+      reason: `Insufficient margin. Required: ₹${(margin + fee).toFixed(0)}, Available: ₹${portfolio.cashBalance.toFixed(0)}.`};
   }
   // Duplicate position guard
   const existing = portfolio.openPositions.find(p => p.underlying === params.underlying);
   if (existing) {
     return {
       opened: false,
-      reason: `Already have an open ${params.underlying} futures position. Close it before opening another.`,
-    };
+      reason: `Already have an open ${params.underlying} futures position. Close it before opening another.`};
   }
 
   const position: FuturesPosition = {
@@ -147,8 +145,7 @@ export async function openFuturesPosition(params: {
     mtmSettledPnL:  0,
     lastMtmPrice:   params.entryPrice,
     lastMtmAt:      Date.now(),
-    signalSnapshot: params.signalSnapshot ?? null,
-  };
+    signalSnapshot: params.signalSnapshot ?? null};
 
   portfolio.openPositions.push(position);
   portfolio.cashBalance -= (margin + fee);
@@ -230,8 +227,7 @@ export async function runMtmSettlement(
       settledAt:     Date.now(),
       settlePrice,
       pnlForDay,
-      cumulativeMtm: pos.mtmSettledPnL,
-    };
+      cumulativeMtm: pos.mtmSettledPnL};
     settlements.push(entry);
     await appendMtmEntry(entry);
 

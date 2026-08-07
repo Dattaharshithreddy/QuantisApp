@@ -22,8 +22,6 @@ import { getLiveTradingCredential } from '../utils/secureCredentials';
 import { logger } from '../utils/logger';
 import { getCrashSummary, clearCrashReports } from '../utils/crashReporter';
 import { SPACING } from '../theme/colors';
-import { OnboardingTooltip } from '../components/OnboardingTooltip';
-import { TOOLTIP_IDS } from '../utils/onboarding';
 
 type StatusLevel = 'ok' | 'warn' | 'error' | 'unknown';
 

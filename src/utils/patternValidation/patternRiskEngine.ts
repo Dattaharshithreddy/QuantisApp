@@ -13,9 +13,8 @@
 //   Target 3 = extended:     1.618× pattern height (Fibonacci extension)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { PatternRisk } from './patternValidationTypes';
+import { BreakoutState, PatternRisk } from './patternValidationTypes';
 import { PatternResult } from '../chartPatterns';
-import { BreakoutState } from './patternValidationTypes';
 
 const MIN_RISK_REWARD = 1.5;
 const FIBO_EXT = 1.618;
@@ -61,8 +60,7 @@ function computeTargets(
     t1:     entry + sign * height * 0.5,
     t2:     entry + sign * height,
     t3:     entry + sign * height * FIBO_EXT,
-    height,
-  };
+    height};
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -105,6 +103,5 @@ export function computePatternRisk(
     riskReward2: Math.round(rr2 * 100) / 100,
     riskReward3: Math.round(rr3 * 100) / 100,
     stopDistance,
-    atrMultiple: Math.round((stopDistance / atr) * 100) / 100,
-  };
+    atrMultiple: Math.round((stopDistance / atr) * 100) / 100};
 }

@@ -334,8 +334,7 @@ export function extractEpisodicContext(
       fundingSentiment: c.funding?.sentiment        ?? null,
       btcDominance:    c.marketCap?.btcDominance   ?? null,
       marketRegime:    c.marketCap?.regime          ?? null,
-      ...base,
-    };
+      ...base};
   }
 
   if (snap.kind === 'INDIAN') {
@@ -348,8 +347,7 @@ export function extractEpisodicContext(
       fiiConsecDays: c.fiidii?.fiiConsecBuys ?? null,
       pcr:          c.pcr?.current     ?? null,
       pcrSentiment: c.pcr?.sentiment   ?? null,
-      ...base,
-    };
+      ...base};
   }
 
   return { assetKind: 'NONE', ...base };

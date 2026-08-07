@@ -15,12 +15,8 @@
 //   • Market Breadth performance bands (Indian)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { PaperTradeRecord } from './paperTradeJournal';
-import { getPaperTrades } from './paperTradeJournal';
-import { summariseContext, isContextAvailable } from './marketContextSnapshot';
-import type { ContextSummary } from './marketContextSnapshot';
-
-// ── Shared bucket type ────────────────────────────────────────────────────────
+import { PaperTradeRecord, getPaperTrades } from './paperTradeJournal';
+import { ContextSummary, isContextAvailable, summariseContext } from './marketContextSnapshot';
 
 export type ContextBucket = {
   label:        string;
@@ -88,8 +84,7 @@ export function computeFearGreedAnalytics(trades: PaperTradeRecord[]): FearGreed
     fear:         bucket(25, 45,  'Fear (25–45)'),
     neutral:      bucket(45, 55,  'Neutral (45–55)'),
     greed:        bucket(55, 75,  'Greed (55–75)'),
-    extremeGreed: bucket(75, 101, 'Extreme Greed (75–100)'),
-  };
+    extremeGreed: bucket(75, 101, 'Extreme Greed (75–100)')};
 }
 
 // ── 2. Profit Factor by Funding Rate sentiment ─────────────────────────────
@@ -114,8 +109,7 @@ export function computeFundingAnalytics(trades: PaperTradeRecord[]): FundingRate
     shortBiased:  bucket('SHORT_BIASED',  'Short Biased'),
     neutral:      bucket('NEUTRAL',       'Neutral'),
     longBiased:   bucket('LONG_BIASED',   'Long Biased'),
-    extremeLong:  bucket('EXTREME_LONG',  'Extreme Long'),
-  };
+    extremeLong:  bucket('EXTREME_LONG',  'Extreme Long')};
 }
 
 // ── 3. Win rate by India VIX range ────────────────────────────────────────────
@@ -140,8 +134,7 @@ export function computeVIXAnalytics(trades: PaperTradeRecord[]): VIXBuckets {
     low:     bucket(0,   12,    'Low (<12)'),
     normal:  bucket(12,  20,    'Normal (12–20)'),
     high:    bucket(20,  30,    'High (20–30)'),
-    extreme: bucket(30, 999,    'Extreme (>30)'),
-  };
+    extreme: bucket(30, 999,    'Extreme (>30)')};
 }
 
 // ── 4. Performance by Overall Market Sentiment ────────────────────────────────
@@ -158,8 +151,7 @@ export type SentimentBuckets = {
 export function computeSentimentAnalytics(trades: PaperTradeRecord[]): SentimentBuckets {
   const all = trades.map(t => ({
     trade: t,
-    summary: summariseContext((t as any).marketContext ?? null),
-  }));
+    summary: summariseContext((t as any).marketContext ?? null)}));
   const bucket = (sentiment: string, label: string) =>
     computeBucket(label, all.filter(x => x.summary.overallSentiment === sentiment).map(x => x.trade));
 
@@ -167,8 +159,7 @@ export function computeSentimentAnalytics(trades: PaperTradeRecord[]): Sentiment
     bullish:     bucket('BULLISH',     'Bullish Market'),
     neutral:     bucket('NEUTRAL',     'Neutral Market'),
     bearish:     bucket('BEARISH',     'Bearish Market'),
-    unavailable: bucket('UNAVAILABLE', 'Context Unavailable'),
-  };
+    unavailable: bucket('UNAVAILABLE', 'Context Unavailable')};
 }
 
 // ── 5. BTC Dominance performance bands (Crypto) ───────────────────────────────
@@ -192,8 +183,7 @@ export function computeBTCDominanceAnalytics(trades: PaperTradeRecord[]): BTCDom
     altSeason:   bucket(0,  40, 'Alt Season (<40%)'),
     balanced:    bucket(40, 50, 'Balanced (40–50%)'),
     btcLead:     bucket(50, 60, 'BTC Lead (50–60%)'),
-    btcDominant: bucket(60, 100, 'BTC Dominant (>60%)'),
-  };
+    btcDominant: bucket(60, 100, 'BTC Dominant (>60%)')};
 }
 
 // ── 6. Market Breadth performance bands (Indian) ─────────────────────────────
@@ -215,8 +205,7 @@ export function computeBreadthAnalytics(trades: PaperTradeRecord[]): BreadthBuck
   return {
     bullish: bucket('BULLISH', 'Breadth Bullish'),
     neutral: bucket('NEUTRAL', 'Breadth Neutral'),
-    bearish: bucket('BEARISH', 'Breadth Bearish'),
-  };
+    bearish: bucket('BEARISH', 'Breadth Bearish')};
 }
 
 // ── Full analytics report ─────────────────────────────────────────────────────
@@ -262,6 +251,5 @@ export async function computeMarketContextAnalytics(): Promise<MarketContextAnal
     vix:     indianTrades.length ? computeVIXAnalytics(trades)     : null,
     breadth: indianTrades.length ? computeBreadthAnalytics(trades)  : null,
 
-    sentiment: computeSentimentAnalytics(trades),
-  };
+    sentiment: computeSentimentAnalytics(trades)};
 }

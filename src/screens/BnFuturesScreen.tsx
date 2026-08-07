@@ -129,8 +129,7 @@ export default function BnFuturesScreen({ navigation }: any) {
             setOpening(true);
             const result = await openBnFuturesPosition({
               symbol, direction, qty, entryPrice: livePrice,
-              leverage: lev, stopLoss: defaultSL, takeProfit: defaultTP,
-            });
+              leverage: lev, stopLoss: defaultSL, takeProfit: defaultTP});
             setOpening(false);
             if (result.opened) {
               const p = await getBnFuturesPortfolio();

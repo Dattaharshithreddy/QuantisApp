@@ -34,8 +34,7 @@ export function ConfirmDialog({
                 activeOpacity={0.75}
                 style={{
                   paddingVertical: 13, borderRadius: RADIUS.md, alignItems: 'center',
-                  backgroundColor: a.primary ? T.accent : a.destructive ? T.red + '15' : T.bg3,
-                }}
+                  backgroundColor: a.primary ? T.accent : a.destructive ? T.red + '15' : T.bg3}}
               >
                 <Text style={{ color: a.primary ? '#fff' : a.destructive ? T.red : T.text, fontWeight: '700', fontSize: 14 }}>{a.label}</Text>
               </TouchableOpacity>

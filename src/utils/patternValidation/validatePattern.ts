@@ -139,8 +139,7 @@ export function validatePattern(
     : {
         hasBreakout: false, breakoutBar: null, breakoutPrice: null,
         breakoutStrength: 0, isCloseBreakout: false,
-        volumeAtBreakout: null, falseBreakout: false,
-      };
+        volumeAtBreakout: null, falseBreakout: false};
 
   // ── Step 3: detect retest (only relevant post-breakout) ─────────────────
   const retest = (breakout.hasBreakout && breakoutLevel != null && breakout.breakoutBar != null)
@@ -181,16 +180,14 @@ export function validatePattern(
     momentum:       Math.round(breakdown.momentum.weightedScore),
     candlestick:    Math.round(breakdown.candlestick.weightedScore),
     supportResist:  Math.round(breakdown.supportResist.weightedScore),
-    patternQuality: Math.round(breakdown.patternQuality.weightedScore),
-  };
+    patternQuality: Math.round(breakdown.patternQuality.weightedScore)};
 
   // ── Step 6e: confidence snapshot (caller accumulates history) ────────────
   const currentSnapshot: ConfidenceSnapshot = {
     bar:        bar,
     confidence,
     status:     finalStatus,
-    timestamp:  Date.now(),
-  };
+    timestamp:  Date.now()};
 
   // ── Step 7: risk management ──────────────────────────────────────────────
   // Only compute risk when:
@@ -255,9 +252,7 @@ export function validatePattern(
               ? Math.min(...(geometry.keyPoints ?? []).map(p => p.barIndex))
               : bar
           ))
-        : null,
-    },
-  };
+        : null}};
 }
 
 // ── Batch validation: validate all detected patterns in a ChartPatternSummary ──

@@ -7,7 +7,10 @@ import { getLivePortfolio } from '../utils/livePortfolio';
 import { getOrderHistory } from './OrderHistoryScreen';
 import { SPACING } from '../theme/colors';
 
-function StatBox({ label, value, color, T }: any) {
+function StatBox({ label, value, color, theme: T }: any) {
+  // FIX: prop was named 'T' but all call sites pass 'theme={T}'.
+  // Destructured as { theme: T } to match the call sites without changing them.
+  // Previously T was undefined → T.card crashed on every render.
   return (
     <View style={{ flex: 1, backgroundColor: T.card, borderRadius: 8, padding: 12,
       borderWidth: 1, borderColor: T.border, margin: 3, alignItems: 'center' }}>
@@ -90,14 +93,14 @@ export default function LivePnLScreen() {
 
         {/* Stats grid */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          <StatBox label="TRADES"     value={filtered.length}                              T={T} />
+          <StatBox label="TRADES"     value={filtered.length}                              theme={T} />
           <StatBox label="WIN RATE"   value={`${winRate.toFixed(1)}%`}
-            color={winRate >= 55 ? T.green : winRate >= 45 ? T.textSub : T.red} T={T} />
-          <StatBox label="WINS"       value={wins}    color={T.green}  T={T} />
-          <StatBox label="LOSSES"     value={losses}  color={T.red}    T={T} />
+            color={winRate >= 55 ? T.green : winRate >= 45 ? T.textSub : T.red} theme={T} />
+          <StatBox label="WINS"       value={wins}    color={T.green}  theme={T} />
+          <StatBox label="LOSSES"     value={losses}  color={T.red}    theme={T} />
           <StatBox label="PROFIT FACTOR" value={pf === Infinity ? '∞' : pf.toFixed(2)}
-            color={pf > 1.5 ? T.green : pf >= 1 ? T.textSub : T.red} T={T} />
-          <StatBox label="TOTAL FEES" value={totalFees.toFixed(2)} color={T.textDim} T={T} />
+            color={pf > 1.5 ? T.green : pf >= 1 ? T.textSub : T.red} theme={T} />
+          <StatBox label="TOTAL FEES" value={totalFees.toFixed(2)} color={T.textDim} theme={T} />
         </View>
 
         {/* Open positions unrealised */}

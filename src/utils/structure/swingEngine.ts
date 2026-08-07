@@ -70,8 +70,7 @@ export function computeSwings(
       volumeScore,
       age,
       touches,
-      confirmationBars: config.lookback,
-    } satisfies Swing;
+      confirmationBars: config.lookback} satisfies Swing;
   });
 }
 

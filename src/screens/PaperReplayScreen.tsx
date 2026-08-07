@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text } from 'react-native';
 // RNGH ScrollView: chart inside uses GestureDetector — RN ScrollView crashes on Android
 import { ScrollView } from 'react-native-gesture-handler';
@@ -13,14 +13,12 @@ import { useData } from '../context/DataContext';
 import { getPricePrecisionSync } from '../utils/pricePrecision';
 import { OrderBookCard } from '../components/OrderBookCard';
 import { tradeEconomicsWarning } from '../utils/tradeEconomics';
-import { useEffect } from 'react';
 import { detectChartPatterns } from '../utils/chartPatterns';
 import { detectSwings } from '../utils/marketStructure';
 import { atr } from '../utils/technicalIndicators';
 import { validateAllPatterns } from '../utils/patternValidation/validatePattern';
 import { getOutcome, saveOutcome } from '../utils/patternValidation/patternOutcomeStore';
-import { createOutcome } from '../utils/patternValidation/patternOutcomeTracker';
-import { closeOutcome } from '../utils/patternValidation/patternOutcomeTracker';
+import { closeOutcome, createOutcome } from '../utils/patternValidation/patternOutcomeTracker';
 import { logger } from '../utils/logger';
 
 // Reuses the EXACT existing CandlestickChart component — no new chart
@@ -83,7 +81,20 @@ export default function PaperReplayScreen({ route }: any) {
   }, [trade?.symbol]);
 
   if (!trade) {
-    return <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }}><Text style={{ color: T.textDim, padding: 20 }}>No trade selected.</Text></SafeAreaView>;
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 40, marginBottom: 16 }}>📋</Text>
+          <Text style={{ color: T.text, fontSize: 18, fontWeight: '800', marginBottom: 8, textAlign: 'center' }}>
+            No Trade Selected
+          </Text>
+          <Text style={{ color: T.textDim, fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
+            Trade Replay is opened from your Journal.{'\n\n'}
+            Go to the Journal tab → tap a completed trade → tap "📊 Review on Chart".
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   const tradeAsset = allAssets.find(a => a.symbol === trade.symbol);
@@ -132,6 +143,16 @@ export default function PaperReplayScreen({ route }: any) {
           <Row label="Exit" value={pFmt(trade.exitPrice)} T={T} />
           <Row label="Exit Reason" value={trade.exitReason} T={T} />
           <Row label="Gross P&L" value={`${trade.grossPnl >= 0 ? '+' : ''}${pFmt(trade.grossPnl)}`} color={trade.grossPnl >= 0 ? T.green : T.red} T={T} />
+          {/* FIX (Audit item #3): display MFE/MAE/peak metrics from frozen trade record. */}
+          {trade.maxUnrealizedProfit != null && (
+            <Row label="Peak Profit (MFE)" value={`₹${pFmt(Math.max(0, trade.maxUnrealizedProfit))}`} color={T.green} T={T} />
+          )}
+          {trade.maxDrawdownDuringTrade != null && (
+            <Row label="Max Drawdown (MAE)" value={`₹${pFmt(trade.maxDrawdownDuringTrade)}`} color={T.red} T={T} />
+          )}
+          {(trade as any).maxProfitWithdrawn != null && (trade as any).maxProfitWithdrawn > 0 && (
+            <Row label="Max Profit Given Back" value={`₹${pFmt((trade as any).maxProfitWithdrawn)}`} color={T.amber} T={T} />
+          )}
           <Row label="Total Fees (entry + exit)" value={`-${pFmt(trade.totalFees)}`} color={T.red} T={T} />
           <Row label="Slippage Cost (est.)" value={pFmt(trade.slippageCost)} T={T} />
           <Row label="Result" value={`${trade.pnl >= 0 ? '+' : ''}${pFmt(trade.pnl)} (${trade.pnlPct.toFixed(2)}%)`} color={trade.pnl >= 0 ? T.green : T.red} T={T} />

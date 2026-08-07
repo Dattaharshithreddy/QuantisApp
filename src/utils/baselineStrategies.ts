@@ -1,6 +1,5 @@
-import { Candle } from './indicators';
+import { Candle, calcRSI } from './indicators';
 import { ema, sma, macd } from './technicalIndicators';
-import { calcRSI } from './indicators';
 import { simulateSignalStrategy, ExecConfig, ExecTrade, EquityPoint } from './strategyExecutor';
 import { createRNG } from './seededRandom';
 import { calculatePnLWithMultiplier, calculatePnLPct } from './pnlCalculator';
@@ -39,12 +38,10 @@ export function runBaseline(name: BaselineName, candles: Candle[], walkIndices: 
       entryTime: first.time, entryPrice, exitTime: last.time, exitPrice,
       stopLoss: 0, takeProfit: 0, qty, pnl, pnlPct: calculatePnLPct(pnl, entryPrice, qty),
       holdingBars: walkIndices.length - 1, holdingMs: last.time - first.time,
-      entryReason: 'Buy & Hold — single entry at window start', exitReason: 'END_OF_DATA',
-    };
+      entryReason: 'Buy & Hold — single entry at window start', exitReason: 'END_OF_DATA'};
     const equityCurve: EquityPoint[] = walkIndices.map(idx => ({
       time: candles[idx].time,
-      equity: config.startingCapital + (candles[idx].close - first.close) * qty,
-    }));
+      equity: config.startingCapital + (candles[idx].close - first.close) * qty}));
     return { name, trades: [trade], equityCurve };
   }
 
@@ -65,8 +62,7 @@ export function runBaseline(name: BaselineName, candles: Candle[], walkIndices: 
     const macdRes = macd(candles);
     getSignal = (idx) => ({
       enter: crossedUp(macdRes.macdLine[idx - 1], macdRes.macdLine[idx], macdRes.signal[idx - 1], macdRes.signal[idx]),
-      reason: 'MACD line crossed above signal line',
-    });
+      reason: 'MACD line crossed above signal line'});
   } else {
     // RANDOM_ENTRY — the null-hypothesis baseline. Seeded for reproducibility.
     // Probability calibrated so its trade frequency is roughly comparable to

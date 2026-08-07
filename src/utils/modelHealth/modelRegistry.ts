@@ -9,7 +9,6 @@
 // symbol+timeframe. Queries are O(versions) — always small (<100).
 // ─────────────────────────────────────────────────────────────────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MLP, MLPWeights } from '../neuralNet';
 import { ARCHITECTURE_VERSION } from '../modelConstants';
 
 // ── Registry record — one per accepted training run ──────────────────────────
@@ -93,14 +92,12 @@ export async function rollbackModel(
     ...previous,
     trainingDate:        Date.now(),
     reasonForReplacement:`Rollback from v${current.modelVersion} to v${previous.modelVersion}`,
-    modelVersion:        previous.modelVersion,
-  };
+    modelVersion:        previous.modelVersion};
   await registerModel(symbol, timeframe, rollbackEntry);
 
   return {
     success: true,
-    reason: `Rolled back from v${current.modelVersion} to v${previous.modelVersion}.`,
-  };
+    reason: `Rolled back from v${current.modelVersion} to v${previous.modelVersion}.`};
 }
 
 // ── Build a registry entry from a completed training run ─────────────────────
@@ -132,6 +129,5 @@ export function buildRegistryEntry(params: {
       : 'Initial model registration.',
     driftScoreAtTraining: params.driftScore,
     symbol:               params.symbol,
-    timeframe:            params.timeframe,
-  };
+    timeframe:            params.timeframe};
 }

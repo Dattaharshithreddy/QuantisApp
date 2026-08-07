@@ -41,8 +41,7 @@ export function generateExplanation(
     return {
       action: 'HOLD', confidence: prediction.confidence, supportingReasons: [], nonSupportingReasons: [], totalChecked: 0,
       riskLabel: prediction.riskScore <= 40 ? 'Low' : prediction.riskScore <= 70 ? 'Medium' : 'High',
-      expectedHoldingLabel: 'n/a — no position recommended', suggestedStopLoss: 0, suggestedTakeProfit: 0,
-    };
+      expectedHoldingLabel: 'n/a — no position recommended', suggestedStopLoss: 0, suggestedTakeProfit: 0};
   }
 
   const snapshot = getIndicatorSnapshot(candles);
@@ -77,6 +76,5 @@ export function generateExplanation(
     supportingReasons: checks.filter(c => c.supports), nonSupportingReasons: checks.filter(c => !c.supports), totalChecked: checks.length,
     riskLabel: prediction.riskScore <= 40 ? 'Low' : prediction.riskScore <= 70 ? 'Medium' : 'High',
     expectedHoldingLabel,
-    suggestedStopLoss: prediction.suggestedStopLoss, suggestedTakeProfit: prediction.suggestedTakeProfit,
-  };
+    suggestedStopLoss: prediction.suggestedStopLoss, suggestedTakeProfit: prediction.suggestedTakeProfit};
 }

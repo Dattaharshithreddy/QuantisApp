@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Theme, RADIUS, SPACING } from '../theme/colors';
 import { pFmt } from '../utils/indicators';
@@ -48,14 +48,18 @@ export function StatBox({ label, value, color, theme: T }: { label: string; valu
 
 export function Pill({ label, color, active, onPress }: { label: string; color: string; active?: boolean; onPress?: () => void }) {
   return (
-    <TouchableOpacity onPress={onPress} style={{
-      paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14, minHeight: 32,
-      backgroundColor: active ? color + '22' : 'transparent',
-      borderWidth: 1, borderColor: active ? color + '60' : color + '30',
-      justifyContent: 'center',
-    }}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      android_ripple={{ color: color + '40', borderless: false }}
+      style={({ pressed }) => ({
+        paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14, minHeight: 32,
+        backgroundColor: active ? color + '22' : 'transparent',
+        borderWidth: 1, borderColor: active ? color + '60' : color + '30',
+        justifyContent: 'center', opacity: pressed ? 0.7 : 1,
+      })}>
       <Text style={{ color, fontSize: 10, fontWeight: '700' }}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -64,12 +68,18 @@ export function Pill({ label, color, active, onPress }: { label: string; color: 
 // below is what new/redesigned screens should reach for instead.
 export function PrimaryButton({ label, onPress, color, disabled, theme: T }: { label: string; onPress: () => void; color?: string; disabled?: boolean; theme: Theme }) {
   return (
-    <TouchableOpacity onPress={onPress} disabled={disabled} style={{
-      backgroundColor: disabled ? T.bg3 : (color || T.accent), paddingVertical: 12, borderRadius: 8,
-      alignItems: 'center', opacity: disabled ? 0.6 : 1,
-    }}>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
+      style={({ pressed }) => ({
+        backgroundColor: disabled ? T.bg3 : (color || T.accent),
+        paddingVertical: 12, borderRadius: 8, alignItems: 'center',
+        opacity: disabled ? 0.6 : pressed ? 0.82 : 1,
+      })}>
       <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13, letterSpacing: 0.5 }}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -86,11 +96,15 @@ export function GradientButton({ label, onPress, disabled, theme: T, icon }: { l
     );
   }
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={12}
+      android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+      style={({ pressed }) => ({ opacity: pressed ? 0.82 : 1 })}>
       <LinearGradient colors={T.accentGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingVertical: 14, borderRadius: RADIUS.md, alignItems: 'center', ...T.elev2 }}>
         <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14, letterSpacing: 0.3 }}>{icon ? `${icon}  ${label}` : label}</Text>
       </LinearGradient>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -212,7 +226,7 @@ export function IconChip({ icon, text, color, bg, theme: T }: { icon: string; te
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7, backgroundColor: bg, borderRadius: bg ? RADIUS.sm : 0, paddingVertical: bg ? 7 : 0, paddingHorizontal: bg ? 10 : 0 }}>
       <Text style={{ color, fontSize: 11, fontWeight: '800' }}>{icon}</Text>
-      <Text style={{ color: T.text, fontSize: 11, flex: 1, lineHeight: 15 }}>{text}</Text>
+      <Text style={{ color: T.text, fontSize: 11, lineHeight: 15 }}>{text}</Text>
     </View>
   );
 }

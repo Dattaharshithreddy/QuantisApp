@@ -71,8 +71,7 @@ export async function checkRiskGate(
     maxExposurePerSymbolPct: extras.maxExposurePerSymbolPct,
     maxExposurePerAssetClassPct: extras.maxExposurePerAssetClassPct,
     currentSymbolExposurePct: (portfolio.openPositions.filter(p => p.symbol === symbol).reduce((s,p) => s+p.entryPrice*p.qty, 0) / portfolioValue * 100).toFixed(1),
-    currentClassExposurePct: (_dbgClassExp / portfolioValue * 100).toFixed(1),
-  }));
+    currentClassExposurePct: (_dbgClassExp / portfolioValue * 100).toFixed(1)}));
   const existingSymbolExposure = portfolio.openPositions.filter(p => p.symbol === symbol).reduce((s, p) => s + p.entryPrice * p.qty, 0);
   const symbolExposurePct = ((existingSymbolExposure + candidatePositionValue) / portfolioValue) * 100;
   if (symbolExposurePct > extras.maxExposurePerSymbolPct) {
@@ -132,6 +131,5 @@ export function computeAssetClassExposure(portfolio: PaperPortfolioState, portfo
     classes.set(p.assetClass, entry);
   });
   return Array.from(classes.entries()).map(([assetClass, { value, count }]) => ({
-    assetClass, exposureValue: value, exposurePct: portfolioValue > 0 ? (value / portfolioValue) * 100 : 0, positionCount: count,
-  }));
+    assetClass, exposureValue: value, exposurePct: portfolioValue > 0 ? (value / portfolioValue) * 100 : 0, positionCount: count}));
 }

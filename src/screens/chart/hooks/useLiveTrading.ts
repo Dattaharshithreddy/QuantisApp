@@ -180,8 +180,7 @@ export function useLiveTrading(
         underlying,
         currentPrice: prediction.suggestedEntry,
         stopLoss:     prediction.suggestedStopLoss,
-        availableMargin,
-      });
+        availableMargin});
 
       if (!sizing.ok) {
         // Reject before navigation — show error to user in handleLiveTrade
@@ -203,8 +202,7 @@ export function useLiveTrading(
         orderType,
         limitPrice,
         stopLoss:     prediction.suggestedStopLoss,
-        takeProfit:   prediction.suggestedTakeProfit,
-      };
+        takeProfit:   prediction.suggestedTakeProfit};
     }
 
     if (asset.src === 'binance_futures') {
@@ -257,8 +255,7 @@ export function useLiveTrading(
         orderType,
         limitPrice,
         stopLoss:    prediction.suggestedStopLoss,
-        takeProfit:  prediction.suggestedTakeProfit,
-      };
+        takeProfit:  prediction.suggestedTakeProfit};
     }
 
     return {
@@ -271,8 +268,7 @@ export function useLiveTrading(
       orderType,
       limitPrice,
       stopLoss:     prediction.suggestedStopLoss,
-      takeProfit:   prediction.suggestedTakeProfit,
-    };
+      takeProfit:   prediction.suggestedTakeProfit};
   }, [asset, liveSettings, aoSession, bnConfigured]);
 
   // ── Live trade handler — called from PredictionCard ───────────────────────
@@ -291,8 +287,7 @@ export function useLiveTrading(
         request:        liveReq,
         prediction:     req.prediction,
         signalSnapshot: req.signalSnapshot,
-        marketContext:  req.marketContext,
-      });
+        marketContext:  req.marketContext});
     } catch (err: any) {
       // buildRequest throws for token resolution failures and margin rejections.
       // Surface the message directly — it's already user-readable.
@@ -308,6 +303,5 @@ export function useLiveTrading(
     isLiveMode,
     liveSettings,
     handleLiveTrade,
-    validateLiveReady,
-  };
+    validateLiveReady};
 }

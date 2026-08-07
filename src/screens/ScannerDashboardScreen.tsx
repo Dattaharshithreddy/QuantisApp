@@ -8,14 +8,12 @@ import { useScannerService } from '../context/ScannerService';
 import { useEvalTasks, notifyRunningInBackground } from '../context/EvalTaskContext';
 import { Card, SectionLabel, Pill } from '../components/Common';
 import { pFmt } from '../utils/indicators';
-import { formatTradeQualityScore } from '../utils/tradeQuality';
-import { getPortfolio, setMode, PaperPortfolioState } from '../utils/paperPortfolio';
+import { formatTradeQualityScore, fromOpportunity } from '../utils/tradeQuality';
+import { PaperPortfolioState, computePortfolioValue, getPortfolio, setMode } from '../utils/paperPortfolio';
 import { getNamedWatchlists, getActiveWatchlistName, setActiveWatchlistName, resolveWatchlistAssets, DEFAULT_WATCHLIST_NAME, NamedWatchlist } from '../utils/multiWatchlist';
 import { getRegimeFilterMode, setRegimeFilterMode, RegimeFilterMode } from '../utils/regimeFilter';
 import { computeAssetClassExposure } from '../utils/paperRiskControls';
-import { computePortfolioValue } from '../utils/paperPortfolio';
 import { rankOpportunities, topOpportunities, topLongs, topShorts, highestConfidence, bestRiskReward, mostImproved, recentlyChangedSignals, OpportunitySignal } from '../utils/opportunityRanking';
-import { fromOpportunity } from '../utils/tradeQuality';
 import { RADIUS } from '../theme/colors';
 
 const REGIME_MODES: RegimeFilterMode[] = ['DISABLED', 'BULL_ONLY', 'TRENDING_ONLY', 'AVOID_LOW_VOL', 'AVOID_RANGING'];

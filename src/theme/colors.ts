@@ -17,8 +17,7 @@ function elevation(level: 1 | 2 | 3, shadowColor: string) {
   const map = {
     1: { shadowOpacity: 0.10, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
     2: { shadowOpacity: 0.14, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
-    3: { shadowOpacity: 0.20, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
-  };
+    3: { shadowOpacity: 0.20, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 10 }};
   return { shadowColor, ...map[level] };
 }
 
@@ -38,8 +37,7 @@ export const THEMES = {
     card: '#161922', cardBorder: '#252938',
     statusBar: 'light',
     shadowColor: '#000000',
-    elev1: elevation(1, '#000000'), elev2: elevation(2, '#000000'), elev3: elevation(3, '#000000'),
-  },
+    elev1: elevation(1, '#000000'), elev2: elevation(2, '#000000'), elev3: elevation(3, '#000000')},
   light: {
     bg0: '#fafbfd', bg1: '#f2f4f9', bg2: '#ffffff', bg3: '#eaedf4',
     border: '#e6e9f0', border2: '#d6dae5',
@@ -55,8 +53,7 @@ export const THEMES = {
     card: '#ffffff', cardBorder: '#eceff5',
     statusBar: 'dark',
     shadowColor: '#1a1d29',
-    elev1: elevation(1, '#1a1d29'), elev2: elevation(2, '#1a1d29'), elev3: elevation(3, '#1a1d29'),
-  },
+    elev1: elevation(1, '#1a1d29'), elev2: elevation(2, '#1a1d29'), elev3: elevation(3, '#1a1d29')},
 };
 
 export type Theme = typeof THEMES.dark;

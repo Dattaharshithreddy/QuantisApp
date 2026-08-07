@@ -96,8 +96,7 @@ export async function getCalibration(symbol: string, timeframe: string): Promise
       return {
         range: r.label, nominalProb: (r.min + Math.min(r.max, 1)) / 2 * 100,
         actualHitRate: inBucket.length ? (hits / inBucket.length) * 100 : 0,
-        sampleCount: inBucket.length,
-      };
+        sampleCount: inBucket.length};
     }).filter(b => b.sampleCount > 0);
 
     return { buckets, totalResolved: resolved.length, available: true };

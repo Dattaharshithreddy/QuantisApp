@@ -72,8 +72,7 @@ async function collectBuildInfo() {
     buildDate:    BUILD_DATE,
     buildNote:    BUILD_NOTE,
     platform:     Platform.OS,
-    platformVersion: Platform.Version,
-  };
+    platformVersion: Platform.Version};
 }
 
 async function collectCrashSummary() {
@@ -86,8 +85,7 @@ async function collectCrashSummary() {
       lastCrashScreen:  s.last?.screen ?? null,
       lastCrashMessage: s.last?.message?.slice(0, 200) ?? null,
       byType:    s.types,
-      byScreen:  s.screens,
-    };
+      byScreen:  s.screens};
   } catch {
     return { error: 'unavailable' };
   }
@@ -103,8 +101,7 @@ async function collectPerformanceMetrics() {
       p50Ms:   s.p50Ms,
       p95Ms:   s.p95Ms,
       p99Ms:   s.p99Ms,
-      lastMs:  s.lastMs,
-    }));
+      lastMs:  s.lastMs}));
   } catch {
     return { error: 'unavailable' };
   }
@@ -124,9 +121,7 @@ async function collectSecurityAudit() {
         title:    f.title,
         passed:   f.passed,
         // Description may contain details — sanitise it
-        description: sanitiseValue(f.description) as string,
-      })),
-    };
+        description: sanitiseValue(f.description) as string}))};
   } catch {
     return { error: 'unavailable' };
   }
@@ -146,13 +141,11 @@ async function collectAuditTrailSummary() {
       createdAt:    new Date(o.createdAt).toISOString(),
       filledPrice:  o.filledPrice,
       filledQty:    o.filledQty,
-      closedBy:     o.closedBy ?? null,
-    }));
+      closedBy:     o.closedBy ?? null}));
     return {
       totalOrders: log.length,
       byState,
-      recent5,
-    };
+      recent5};
   } catch {
     return { error: 'unavailable' };
   }
@@ -171,8 +164,7 @@ async function collectReconciliationSummary() {
       lastGhosts:     last.ghosts,
       lastPhantoms:   last.phantoms,
       lastErrors:     last.errors,
-      last10Clean:    allClean,
-    };
+      last10Clean:    allClean};
   } catch {
     return { error: 'unavailable' };
   }
@@ -192,8 +184,7 @@ async function collectPortfolioRiskSummary() {
       riskLevel:           r.riskLevel,
       openPositionCount:   r.positions.length,
       accountCount:        r.accounts.length,
-      riskFactors:         r.riskFactors,
-    };
+      riskFactors:         r.riskFactors};
   } catch {
     return { error: 'unavailable' };
   }
@@ -206,8 +197,7 @@ async function collectRecentLogs() {
     level:   e.level,
     tag:     e.tag,
     // Sanitise message — may contain partial request data
-    message: (sanitiseValue(e.message) as string).slice(0, 300),
-  }));
+    message: (sanitiseValue(e.message) as string).slice(0, 300)}));
 }
 
 // ── Master bundle generator ───────────────────────────────────────────────────
@@ -250,8 +240,7 @@ export async function generateSupportBundle(): Promise<SupportBundle> {
     auditTrail:     auditTrail.status     === 'fulfilled' ? auditTrail.value     : { error: 'failed' } as any,
     reconciliation: reconciliation.status === 'fulfilled' ? reconciliation.value : { error: 'failed' } as any,
     portfolioRisk:  portfolioRisk.status  === 'fulfilled' ? portfolioRisk.value  : { error: 'failed' } as any,
-    recentLogs:     recentLogs.status     === 'fulfilled' ? recentLogs.value     : [] as any,
-  };
+    recentLogs:     recentLogs.status     === 'fulfilled' ? recentLogs.value     : [] as any};
 
   // Final deep sanitisation pass over the entire bundle
   const sanitised = sanitiseValue(bundle) as SupportBundle;

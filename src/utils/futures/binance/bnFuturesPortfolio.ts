@@ -123,8 +123,7 @@ export async function openBnFuturesPosition(params: {
   if (isolatedMargin > portfolio.usdtBalance) {
     return {
       opened: false,
-      reason: `Insufficient balance. Need $${isolatedMargin.toFixed(2)}, have $${portfolio.usdtBalance.toFixed(2)} USDT.`,
-    };
+      reason: `Insufficient balance. Need $${isolatedMargin.toFixed(2)}, have $${portfolio.usdtBalance.toFixed(2)} USDT.`};
   }
 
   const position: BnFuturesPosition = {
@@ -143,8 +142,7 @@ export async function openBnFuturesPosition(params: {
     unrealisedPnL:   0,
     fundingAccrued:  0,
     lastFundingAt:   Date.now(),
-    signalSnapshot:  params.signalSnapshot ?? null,
-  };
+    signalSnapshot:  params.signalSnapshot ?? null};
 
   portfolio.openPositions.push(position);
   portfolio.usdtBalance -= isolatedMargin;
@@ -226,8 +224,7 @@ export async function applyFundingPayments(
       paidAt:      now,
       fundingRate: rate,
       payment,
-      direction:   pos.direction,
-    };
+      direction:   pos.direction};
     payments.push(entry);
     await appendFundingEntry(entry);
 

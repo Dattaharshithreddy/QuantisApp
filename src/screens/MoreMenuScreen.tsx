@@ -15,8 +15,7 @@ const SECTIONS: Section[] = [
       { route: 'FuturesContract',   icon: '📋', title: 'NSE Futures',            desc: 'F&O — lot sizing, margin, daily MTM' },
       { route: 'BnFutures',         icon: '⚡', title: 'Crypto Futures',          desc: 'Perpetuals — leverage, funding rate, liquidation' },
       { route: 'OptionsStrategy',   icon: '🎯', title: 'Options Strategy',        desc: 'Multi-leg payoffs and Greeks' },
-    ],
-  },
+    ]},
   {
     heading: 'REVIEW & ANALYTICS',
     items: [
@@ -29,8 +28,7 @@ const SECTIONS: Section[] = [
       { route: 'BnFuturesPositions',    icon: '📈', title: 'Crypto Futures Positions',desc: 'Perpetual positions with liquidation tracking' },
       { route: 'LivePnL',               icon: '💰', title: 'Live P&L',               desc: 'Real money performance — daily, weekly, all-time' },
       { route: 'OrderHistory',          icon: '📋', title: 'Order History',           desc: 'Every real order — fills, cancellations, P&L' },
-    ],
-  },
+    ]},
   {
     heading: 'RESEARCH TOOLS',
     items: [
@@ -39,9 +37,7 @@ const SECTIONS: Section[] = [
       { route: 'ProductionEval',  icon: '📡', title: 'Production Evaluation',    desc: 'Real data — honest 5-step edge check' },
       { route: 'Screener',        icon: '🔍', title: 'Strategy Screener',        desc: 'Scan for setups + voice summary' },
       { route: 'ScannerDashboard',icon: '📡', title: 'Scanner Dashboard',        desc: 'Auto-scan your whole watchlist' },
-      { route: 'PaperReplay',     icon: '⏮️', title: 'Trade Replay',             desc: 'Step through past trades bar by bar' },
-    ],
-  },
+    ]},
   {
     heading: 'MARKET TOOLS',
     items: [
@@ -49,8 +45,7 @@ const SECTIONS: Section[] = [
       { route: 'Correlation',  icon: '🔗', title: 'Correlation Matrix',        desc: 'Spot hidden concentration risk' },
       { route: 'Calendar',     icon: '📅', title: 'Economic Calendar',         desc: 'Upcoming macro events' },
       { route: 'Portfolio',    icon: '📁', title: 'Portfolio',                 desc: 'Real holdings from Angel One' },
-    ],
-  },
+    ]},
   {
     heading: 'SYSTEM',
     items: [
@@ -62,8 +57,7 @@ const SECTIONS: Section[] = [
       { route: 'FuturesSettings',     icon: '⚙️', title: 'Futures Settings',       desc: 'Paper capital, account reset for F&O + crypto' },
       { route: 'FAQ',                 icon: '❓', title: 'Help & FAQ',             desc: 'How QUANTIS works — common questions answered' },
       { route: 'Settings',            icon: '⚙️', title: 'Settings',              desc: 'API keys, theme, connections' },
-    ],
-  },
+    ]},
 ];
 
 export default function MoreMenuScreen({ navigation }: any) {

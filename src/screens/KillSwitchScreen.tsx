@@ -44,8 +44,7 @@ export default function KillSwitchScreen({ navigation }: any) {
           assetSrc:  pos.broker === 'ANGEL_ONE' ? 'ao' : 'binance',
           direction: pos.direction === 'LONG' ? 'SHORT' : 'LONG',
           qty:       pos.qty,
-          orderType: 'MARKET',
-        }, aoSession);
+          orderType: 'MARKET'}, aoSession);
         const pnl = (fill.filledPrice - pos.filledPrice) * pos.qty * (pos.direction === 'LONG' ? 1 : -1);
         await removeLivePosition(pos.id, pnl);
         addLog(`✅ ${pos.symbol} closed @ ${fill.filledPrice.toFixed(2)} · P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`);

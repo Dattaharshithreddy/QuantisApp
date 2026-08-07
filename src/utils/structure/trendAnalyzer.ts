@@ -38,6 +38,5 @@ export function trendToFeatures(trend: TrendState): {
     confidence:    trend.confidence,
     persistence:   trend.persistence,
     acceleration:  trend.acceleration,
-    normalizedAge: normalizeTrendAge(trend.age),
-  };
+    normalizedAge: normalizeTrendAge(trend.age)};
 }

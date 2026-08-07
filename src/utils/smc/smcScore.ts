@@ -13,12 +13,7 @@
 //   PD_SCORING_V1  — premium/discount bias encoding
 //
 // ─────────────────────────────────────────────────────────────────────────────
-import {
-  DetectedOB, DetectedBreaker, DetectedLiquidity, DetectedSweep, DetectedPD,
-  ScoredOB, ScoredBreaker, ScoredLiquidity, ScoredSweep, ScoredPD,
-  SMCConfig, SMCScores,
-} from './smcTypes';
-import { Candle } from '../indicators';
+import { DetectedOB, DetectedBreaker, DetectedLiquidity, DetectedSweep, DetectedPD, ScoredOB, ScoredBreaker, ScoredLiquidity, ScoredSweep, ScoredPD, SMCConfig, SMCScores} from './smcTypes';
 
 // ── OB_SCORING_V1 ─────────────────────────────────────────────────────────────
 // Version: OB_SCORING_V1
@@ -55,8 +50,7 @@ export function scoreOB(
     bosStrength,
     volumeScore,
     strength,
-    confidence,
-  };
+    confidence};
 }
 
 // ── BB_SCORING_V1 ─────────────────────────────────────────────────────────────
@@ -75,8 +69,7 @@ export function scoreBreaker(
     ...b,
     scoringVersion:  'BB_SCORING_V1',
     sourceStrength:  sourceOBStrength,
-    strength:        Math.min(1, sourceOBStrength * 0.80),
-  };
+    strength:        Math.min(1, sourceOBStrength * 0.80)};
 }
 
 // ── LIQ_SCORING_V1 ────────────────────────────────────────────────────────────
@@ -112,8 +105,7 @@ export function scoreLiquidityLevel(
   return {
     ...level,
     scoringVersion: 'LIQ_SCORING_V1',
-    strength: Math.min(1, level.touches / cfg.liqTouchSaturation),
-  };
+    strength: Math.min(1, level.touches / cfg.liqTouchSaturation)};
 }
 
 export function scoreSweep(
@@ -128,8 +120,7 @@ export function scoreSweep(
     ...sweep,
     scoringVersion: 'LIQ_SCORING_V1',
     stopHunt,
-    confidence: Math.min(1, confidence),
-  };
+    confidence: Math.min(1, confidence)};
 }
 
 // ── PD_SCORING_V1 ─────────────────────────────────────────────────────────────
@@ -202,6 +193,5 @@ export function toSMCScores(params: {
     obAge:             obAgeNorm,
     obFreshness:       nearestOB ? (nearestOB.status === 'fresh' ? 1 : 0) : 0,
     obConfidence:      nearestOB ? (nearestOB as ScoredOB).confidence ?? 0 : 0,
-    pdBias:            pd ? pd.pdBias : 0,
-  };
+    pdBias:            pd ? pd.pdBias : 0};
 }

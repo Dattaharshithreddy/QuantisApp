@@ -36,8 +36,7 @@ export function computeConsensus(signals: TimeframeSignal[]): ConsensusResult | 
   const weighted = signals.map(s => ({
     timeframe: s.timeframe, action: s.prediction.action, confidence: s.prediction.confidence,
     weight: TIMEFRAME_WEIGHTS[s.timeframe] ?? 1,
-    signedScore: signedScore(s.prediction.action, s.prediction.confidence),
-  }));
+    signedScore: signedScore(s.prediction.action, s.prediction.confidence)}));
 
   const totalWeight = weighted.reduce((s, w) => s + w.weight, 0);
   // The core consensus calculation: a WEIGHTED AVERAGE of each timeframe's
@@ -80,6 +79,5 @@ export function computeConsensus(signals: TimeframeSignal[]): ConsensusResult | 
     overallDirection, consensusScore, agreementPct,
     strongestTimeframe: strongest.timeframe, weakestTimeframe: weakest.timeframe,
     trendStrength, overallConfidence, conflictingTimeframes: conflicting,
-    perTimeframe: weighted.map(w => ({ timeframe: w.timeframe, action: w.action, confidence: w.confidence, signedScore: w.signedScore, weight: w.weight })),
-  };
+    perTimeframe: weighted.map(w => ({ timeframe: w.timeframe, action: w.action, confidence: w.confidence, signedScore: w.signedScore, weight: w.weight }))};
 }

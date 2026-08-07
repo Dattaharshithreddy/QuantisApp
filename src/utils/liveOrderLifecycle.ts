@@ -151,15 +151,13 @@ export async function updateOrderState(
       return order;
     }
     const transition: LiveOrderStateTransition = {
-      from: order.state, to, at: Date.now(), reason,
-    };
+      from: order.state, to, at: Date.now(), reason};
     log[idx] = {
       ...order,
       ...updates,
       state:     to,
       updatedAt: Date.now(),
-      history:   [...order.history, transition],
-    };
+      history:   [...order.history, transition]};
     await AsyncStorage.setItem(KEY, JSON.stringify(log));
     logger.info('orderLifecycle', `${localId} ${order.state} → ${to}${reason ? ` (${reason})` : ''}`);
     return log[idx];
@@ -195,6 +193,5 @@ export function createOrderRecord(params: {
     history:        [{ from: 'CREATED', to: 'CREATED', at: now, reason: 'Order object created' }],
     createdAt:      now,
     updatedAt:      now,
-    ...params,
-  };
+    ...params};
 }

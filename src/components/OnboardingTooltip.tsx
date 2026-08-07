@@ -1,3 +1,4 @@
+import React, { useEffect, useRef, useState } from 'react';
 // ─────────────────────────────────────────────────────────────────────────────
 // OnboardingTooltip  (v1.0.0)
 //
@@ -5,7 +6,6 @@
 // Stored via onboarding.dismissTooltip(id).
 // Zero render overhead when already dismissed.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { isTooltipDismissed, dismissTooltip, TooltipId } from '../utils/onboarding';
 import { RADIUS, SPACING } from '../theme/colors';
@@ -54,8 +54,7 @@ export function OnboardingTooltip({ id, title, body, T, position = 'below', chil
           marginTop: position === 'below' ? 6 : 0,
           marginBottom: position === 'above' ? 6 : 0,
           // Accessibility
-          accessibilityLiveRegion: 'polite',
-        }}>
+          accessibilityLiveRegion: 'polite'}}>
           {/* Arrow indicator */}
           {position === 'below' && (
             <View style={{
@@ -63,8 +62,7 @@ export function OnboardingTooltip({ id, title, body, T, position = 'below', chil
               width: 0, height: 0,
               borderLeftWidth: 6, borderRightWidth: 6, borderBottomWidth: 6,
               borderLeftColor: 'transparent', borderRightColor: 'transparent',
-              borderBottomColor: T.accent,
-            }} />
+              borderBottomColor: T.accent}} />
           )}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between',
             alignItems: 'flex-start' }}>

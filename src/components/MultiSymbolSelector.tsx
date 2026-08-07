@@ -93,8 +93,7 @@ export function MultiSymbolSelector({
                 flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
                 paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginBottom: 4,
                 backgroundColor: isSelected ? T.blue + '18' : 'transparent',
-                borderWidth: 1, borderColor: isSelected ? T.blue + '50' : T.border,
-              }}>
+                borderWidth: 1, borderColor: isSelected ? T.blue + '50' : T.border}}>
                 <View>
                   <Text style={{ color: T.text, fontSize: 13, fontWeight: '700' }}>{a.symbol}</Text>
                   <Text style={{ color: T.textDim, fontSize: 10 }}>{a.name} · {a.type}</Text>

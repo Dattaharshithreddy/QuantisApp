@@ -2,6 +2,13 @@ import { Candle } from '../utils/indicators';
 import { withRetry } from '../utils/retry';
 import { DepthLevel, OrderBookSnapshot } from '../utils/orderBook';
 
+// AbortSignal.timeout() polyfill for Hermes on older Android
+function timeoutSignal(ms: number): AbortSignal {
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), ms);
+  return ctrl.signal;
+}
+
 const TF_BN: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w' };
 
 // TASK 5 (Price Scale) — real exchange-defined precision, fetched from
@@ -39,8 +46,7 @@ export async function fetchBinanceDepth(bnSym: string, limit: 5 | 10 | 20 = 20):
     const toLevels = (rows: [string, string][]): DepthLevel[] => rows.map(([price, qty]) => ({ price: +price, qty: +qty }));
     return {
       source: 'binance', symbol: bnSym, timestamp: Date.now(),
-      buy: toLevels(json.bids || []), sell: toLevels(json.asks || []),
-    };
+      buy: toLevels(json.bids || []), sell: toLevels(json.asks || [])};
   }, { tag: 'binance-depth', retries: 2 });
 }
 
@@ -96,6 +102,45 @@ export function openBinanceStream(
   };
 }
 
+// Per-trade aggTrade stream for a single symbol — fires on every executed trade.
+// Used by the chart screen to show live price at trade-level frequency (~50-200ms
+// on liquid pairs like BTCUSDT/ETHUSDT), matching what pro apps like Binance/CoinDCX show.
+// Only opened for the currently viewed chart symbol — not for the full watchlist.
+// Returns open24hPrice so we can compute a live % change alongside the trade price.
+export function openBinanceAggTradeStream(
+  bnSym: string,
+  onTrade: (price: number) => void,
+): () => void {
+  const stream = `${bnSym.toLowerCase()}@aggTrade`;
+  let ws: WebSocket | null = null;
+  let retryT: any = null;
+  let closed = false;
+
+  function connect() {
+    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
+    ws.onmessage = (evt: any) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        // aggTrade payload: { p: "price", m: isBuyerMaker }
+        const price = parseFloat(msg.p);
+        if (price > 0) onTrade(price);
+      } catch (_) {}
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      if (closed) return;
+      retryT = setTimeout(connect, 3000);
+    };
+  }
+  connect();
+
+  return () => {
+    closed = true;
+    ws?.close();
+    clearTimeout(retryT);
+  };
+}
+
 // Subscribe to a Binance kline (candlestick) WebSocket stream for one symbol+interval.
 // Provides real-time OHLCV including cumulative interval volume and an isClosed flag
 // when the candle closes — far more accurate than miniTicker for candle data.
@@ -125,8 +170,7 @@ export function subscribeToBnKline(
           low:      parseFloat(k.l),
           close:    parseFloat(k.c),
           volume:   parseFloat(k.v),
-          isClosed: k.x === true,
-        });
+          isClosed: k.x === true});
       } catch (_) {}
     };
     ws.onerror = () => onStatus('error');
@@ -138,4 +182,32 @@ export function subscribeToBnKline(
   }
   connect();
   return () => { closed = true; ws?.close(); clearTimeout(retryT); };
+}
+
+// Phase 2: REST snapshot — get current prices for all symbols in one call
+// Returns within ~500ms, no WebSocket needed. Used on app startup before
+// the WebSocket connects.
+export async function fetchBnSpotSnapshot(
+  bnSymbols: string[],
+): Promise<Record<string, { price: number; chg: number }>> {
+  if (!bnSymbols.length) return {};
+  try {
+    const encoded = encodeURIComponent(JSON.stringify(bnSymbols));
+    const r = await fetch(
+      `https://api.binance.com/api/v3/ticker/24hr?symbols=${encoded}&type=MINI`,
+      { signal: timeoutSignal(8000) },
+    );
+    if (!r.ok) return {};
+    const data: any[] = await r.json();
+    const result: Record<string, { price: number; chg: number }> = {};
+    data.forEach(d => {
+      result[d.symbol] = {
+        price: parseFloat(d.lastPrice),
+        chg:   parseFloat(d.priceChangePercent),
+      };
+    });
+    return result;
+  } catch {
+    return {};
+  }
 }

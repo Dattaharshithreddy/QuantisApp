@@ -24,16 +24,13 @@ function fearGreedFeatures(fg: FearGreedData | null | undefined): Pick<CryptoCon
   if (!fg) return {
     fearGreedNorm:   NEUTRAL_CRYPTO_FEATURES.fearGreedNorm,
     fearGreedTrend:  NEUTRAL_CRYPTO_FEATURES.fearGreedTrend,
-    fearGreedRegime: NEUTRAL_CRYPTO_FEATURES.fearGreedRegime,
-  };
+    fearGreedRegime: NEUTRAL_CRYPTO_FEATURES.fearGreedRegime};
   const regimeMap: Record<string, number> = {
-    EXTREME_FEAR: 0, FEAR: 0.25, NEUTRAL: 0.5, GREED: 0.75, EXTREME_GREED: 1,
-  };
+    EXTREME_FEAR: 0, FEAR: 0.25, NEUTRAL: 0.5, GREED: 0.75, EXTREME_GREED: 1};
   return {
     fearGreedNorm:   clamp(fg.value / 100),
     fearGreedTrend:  fg.trend === 'FALLING' ? 0 : fg.trend === 'RISING' ? 1 : 0.5,
-    fearGreedRegime: regimeMap[fg.classification] ?? 0.5,
-  };
+    fearGreedRegime: regimeMap[fg.classification] ?? 0.5};
 }
 
 // ── Market cap / dominance features ──────────────────────────────────────────
@@ -44,20 +41,17 @@ function marketCapFeatures(mc: MarketCapData | null | undefined): Pick<CryptoCon
     altDominanceNorm: NEUTRAL_CRYPTO_FEATURES.altDominanceNorm,
     stableRatioNorm:  NEUTRAL_CRYPTO_FEATURES.stableRatioNorm,
     marketCapChange:  NEUTRAL_CRYPTO_FEATURES.marketCapChange,
-    marketRegime:     NEUTRAL_CRYPTO_FEATURES.marketRegime,
-  };
+    marketRegime:     NEUTRAL_CRYPTO_FEATURES.marketRegime};
   const regimeMap: Record<string, number> = {
     RISK_OFF: 0, NEUTRAL: 0.33, STABLE_DOMINANCE: 0.4,
-    BTC_SEASON: 0.5, ALT_SEASON: 0.75, RISK_ON: 1,
-  };
+    BTC_SEASON: 0.5, ALT_SEASON: 0.75, RISK_ON: 1};
   return {
     btcDominanceNorm: clamp(mc.btcDominance / 100),
     altDominanceNorm: clamp(mc.altcoinDominance / 100),
     stableRatioNorm:  clamp(mc.stablecoinRatio),
     // Normalise 24h change: -10%..+10% → 0..1
     marketCapChange:  clamp(mc.totalChange24h / 10 * 0.5 + 0.5),
-    marketRegime:     regimeMap[mc.regime] ?? 0.33,
-  };
+    marketRegime:     regimeMap[mc.regime] ?? 0.33};
 }
 
 // ── Funding rate features ─────────────────────────────────────────────────────
@@ -66,18 +60,15 @@ function fundingFeatures(fr: FundingRateData | null | undefined): Pick<CryptoCon
   if (!fr) return {
     fundingRateNorm: NEUTRAL_CRYPTO_FEATURES.fundingRateNorm,
     fundingBias:     NEUTRAL_CRYPTO_FEATURES.fundingBias,
-    fundingOverheat: NEUTRAL_CRYPTO_FEATURES.fundingOverheat,
-  };
+    fundingOverheat: NEUTRAL_CRYPTO_FEATURES.fundingOverheat};
   const sentMap: Record<string, number> = {
-    EXTREME_SHORT: 0, SHORT_BIASED: 0.25, NEUTRAL: 0.5, LONG_BIASED: 0.75, EXTREME_LONG: 1,
-  };
+    EXTREME_SHORT: 0, SHORT_BIASED: 0.25, NEUTRAL: 0.5, LONG_BIASED: 0.75, EXTREME_LONG: 1};
   // Funding rate: -0.1%..+0.1% per 8h normalised to 0..1
   const CAP = 0.001; // 0.1%
   return {
     fundingRateNorm: clamp(fr.fundingRate / CAP * 0.5 + 0.5),
     fundingBias:     sentMap[fr.sentiment] ?? 0.5,
-    fundingOverheat: fr.isOverheated ? 1 : 0,
-  };
+    fundingOverheat: fr.isOverheated ? 1 : 0};
 }
 
 // ── Open interest features ────────────────────────────────────────────────────
@@ -86,16 +77,13 @@ function oiFeatures(oi: OpenInterestData | null | undefined): Pick<CryptoContext
   if (!oi) return {
     oiTrend:      NEUTRAL_CRYPTO_FEATURES.oiTrend,
     oiChange24h:  NEUTRAL_CRYPTO_FEATURES.oiChange24h,
-    oiConviction: NEUTRAL_CRYPTO_FEATURES.oiConviction,
-  };
+    oiConviction: NEUTRAL_CRYPTO_FEATURES.oiConviction};
   const convMap: Record<string, number> = {
-    BEARISH: 0, WEAK: 0.25, NEUTRAL: 0.5, BULLISH: 1,
-  };
+    BEARISH: 0, WEAK: 0.25, NEUTRAL: 0.5, BULLISH: 1};
   return {
     oiTrend:      oi.trend === 'FALLING' ? 0 : oi.trend === 'RISING' ? 1 : 0.5,
     oiChange24h:  clamp(oi.change24h / 20 * 0.5 + 0.5),  // -20%..+20% → 0..1
-    oiConviction: convMap[oi.conviction] ?? 0.5,
-  };
+    oiConviction: convMap[oi.conviction] ?? 0.5};
 }
 
 // ── Stablecoin features ───────────────────────────────────────────────────────
@@ -104,14 +92,12 @@ function stablecoinFeatures(sc: StablecoinData | null | undefined): Pick<CryptoC
   if (!sc) return {
     stableDomNorm: NEUTRAL_CRYPTO_FEATURES.stableDomNorm,
     stableTrend:   NEUTRAL_CRYPTO_FEATURES.stableTrend,
-    stableSignal:  NEUTRAL_CRYPTO_FEATURES.stableSignal,
-  };
+    stableSignal:  NEUTRAL_CRYPTO_FEATURES.stableSignal};
   const signalMap: Record<string, number> = { RISK_OFF: 0, NEUTRAL: 0.5, RISK_ON: 1 };
   return {
     stableDomNorm: clamp(sc.totalStableDom / 20),  // cap at 20% dominance
     stableTrend:   sc.trend === 'FALLING' ? 0 : sc.trend === 'RISING' ? 1 : 0.5,
-    stableSignal:  signalMap[sc.signal] ?? 0.5,
-  };
+    stableSignal:  signalMap[sc.signal] ?? 0.5};
 }
 
 // ── Aggregate sentiment ───────────────────────────────────────────────────────
@@ -149,8 +135,7 @@ export function toCryptoContextFeatures(
     ...fundingFeatures(ctx.funding),
     ...oiFeatures(ctx.openInterest),
     ...stablecoinFeatures(ctx.stablecoin),
-    ...aggregateFeatures(ctx.fearGreed, ctx.funding, ctx.stablecoin, ctx.marketCap),
-  };
+    ...aggregateFeatures(ctx.fearGreed, ctx.funding, ctx.stablecoin, ctx.marketCap)};
 }
 
 export function hasCryptoContext(ctx: CryptoMarketContext | null | undefined): boolean {

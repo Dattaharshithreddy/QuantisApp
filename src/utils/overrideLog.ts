@@ -11,6 +11,7 @@ const KEY = 'quantis_override_log';
 export type OverrideLogEntry = {
   timestamp:          number;   // Date.now()
   symbol:             string;
+  timeframe:          string;   // '5m' | '15m' | '1h' | '4h' | '1D' — added v2
   tradeReadiness:     string;   // 'READY' | 'WAIT' | 'AVOID'
   blockerReason:      string;
   predictionDirection:string;   // 'UP' | 'DOWN' | 'NEUTRAL'
@@ -51,8 +52,7 @@ export function summariseOverrides(
 ): { total: number; forState: number } {
   return {
     total:    log.length,
-    forState: log.filter(e => e.tradeReadiness === forState).length,
-  };
+    forState: log.filter(e => e.tradeReadiness === forState).length};
 }
 
 // ── Outcome-aware summary ──────────────────────────────────────────────────────
@@ -74,13 +74,23 @@ export type OverrideOutcomeSummary = {
 export async function summariseOverrideOutcomes(
   log:      OverrideLogEntry[],
   forState: 'AVOID' | 'WAIT',
+  symbol?:  string,
+  timeframe?: string,
 ): Promise<OverrideOutcomeSummary> {
-  const forStateEntries = log.filter(e => e.tradeReadiness === forState);
+  // Filter to current symbol+timeframe if provided (backward-compat: old entries
+  // without timeframe field fall through the timeframe check gracefully)
+  const scoped = (symbol && timeframe)
+    ? log.filter(e =>
+        e.symbol === symbol &&
+        (e.timeframe === timeframe || !e.timeframe) // old entries have no timeframe
+      )
+    : log;
+
+  const forStateEntries = scoped.filter(e => e.tradeReadiness === forState);
   const base: OverrideOutcomeSummary = {
-    total:    log.length,
+    total:    scoped.length,
     forState: forStateEntries.length,
-    wins: 0, losses: 0, winRate: NaN, settled: 0,
-  };
+    wins: 0, losses: 0, winRate: NaN, settled: 0};
   if (!forStateEntries.length) return base;
 
   try {

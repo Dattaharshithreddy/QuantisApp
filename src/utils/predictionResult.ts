@@ -25,9 +25,13 @@ export type PredictionResult = 'CORRECT' | 'INCORRECT' | 'NEUTRAL';
 // A manually closed trade can have a CORRECT prediction (price moved right
 // direction before user exited) with a MANUAL_CLOSE management outcome.
 // 'TIME_EXIT' = position closed due to maxBarsHeld limit from strategy profile.
+// 'TRAILING_STOP' = trailing stop moved above entry was hit at a profit.
+// 'BREAK_EVEN_STOP' = break-even stop (at entry price) was hit at ~zero P&L.
 export type TradeManagementOutcome =
   | 'TAKE_PROFIT'    // SL/TP engine hit take-profit level
-  | 'STOP_LOSS'      // SL/TP engine hit stop-loss level
+  | 'STOP_LOSS'      // SL/TP engine hit stop-loss level (at a loss)
+  | 'TRAILING_STOP'  // trailing stop hit while position was in profit
+  | 'BREAK_EVEN_STOP'// break-even stop hit (near-zero P&L)
   | 'MANUAL_CLOSE'   // user manually closed position
   | 'TIME_EXIT'      // maxBarsHeld limit reached (strategy profile)
   | 'AI_EXIT'        // AI Copilot exit signal
@@ -47,24 +51,28 @@ export function classifyPredictionResult(
 // Handles both old 'MANUAL_EXIT' (legacy) and new 'MANUAL_CLOSE'.
 export function classifyManagementOutcome(exitReason: string): TradeManagementOutcome {
   switch (exitReason) {
-    case 'TAKE_PROFIT':   return 'TAKE_PROFIT';
-    case 'STOP_LOSS':     return 'STOP_LOSS';
-    case 'MANUAL_CLOSE':  return 'MANUAL_CLOSE';
-    case 'MANUAL_EXIT':   return 'MANUAL_CLOSE'; // legacy value → canonical name
-    case 'TIME_EXIT':     return 'TIME_EXIT';
-    case 'AI_EXIT_SIGNAL':return 'AI_EXIT';
-    default:              return 'UNKNOWN';
+    case 'TAKE_PROFIT':    return 'TAKE_PROFIT';
+    case 'TRAILING_STOP':  return 'TRAILING_STOP';
+    case 'BREAK_EVEN_STOP':return 'BREAK_EVEN_STOP';
+    case 'STOP_LOSS':      return 'STOP_LOSS';
+    case 'MANUAL_CLOSE':   return 'MANUAL_CLOSE';
+    case 'MANUAL_EXIT':    return 'MANUAL_CLOSE'; // legacy value → canonical name
+    case 'TIME_EXIT':      return 'TIME_EXIT';
+    case 'AI_EXIT_SIGNAL': return 'AI_EXIT';
+    default:               return 'UNKNOWN';
   }
 }
 
 // Human-readable label for TradeManagementOutcome — used in journal UI.
 export function managementOutcomeLabel(outcome: TradeManagementOutcome): string {
   switch (outcome) {
-    case 'TAKE_PROFIT':  return '✅ Take Profit';
-    case 'STOP_LOSS':    return '🛑 Stop Loss';
-    case 'MANUAL_CLOSE': return '🤚 Manual Close';
-    case 'TIME_EXIT':    return '⏱ Time Exit';
-    case 'AI_EXIT':      return '🤖 AI Signal Exit';
-    case 'UNKNOWN':      return 'Exit';
+    case 'TAKE_PROFIT':   return '✅ Take Profit';
+    case 'TRAILING_STOP': return '📈 Trailing Stop (profit)';
+    case 'BREAK_EVEN_STOP':return '⚖️ Break-Even Stop';
+    case 'STOP_LOSS':     return '🛑 Stop Loss';
+    case 'MANUAL_CLOSE':  return '🤚 Manual Close';
+    case 'TIME_EXIT':     return '⏱ Time Exit';
+    case 'AI_EXIT':       return '🤖 AI Signal Exit';
+    case 'UNKNOWN':       return 'Exit';
   }
 }

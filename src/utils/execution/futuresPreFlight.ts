@@ -16,10 +16,8 @@
 // Each failure returns a typed code + user-readable reason with no internal jargon.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { aoGetRMS, aoLTP, AORMSData }  from '../../api/angelOne';
-import { getLastThursday }             from '../futures/futuresTypes';
-import type { AOSession }              from '../../api/angelOne';
-import { logger }                      from '../logger';
+import { AORMSData, AOSession, aoGetRMS, aoLTP } from '../../api/angelOne';
+import { logger } from '../logger';
 
 // ── Market hours ──────────────────────────────────────────────────────────────
 // NSE NFO: Monday–Friday 09:15–15:30 IST = 03:45–10:00 UTC
@@ -101,8 +99,7 @@ export async function runFuturesPreFlight(input: PreFlightInput): Promise<PreFli
     quoteAvailable:     null, instrumentTradable: null,
     withinCircuit:      null, marginOk:         null,
     ltp: null,           availableMargin: null,
-    marginNeeded,        result: 'FAIL', failCode: null,
-  };
+    marginNeeded,        result: 'FAIL', failCode: null};
 
   function fail(code: PreFlightFailCode, reason: string): PreFlightResult {
     log.result   = 'FAIL';

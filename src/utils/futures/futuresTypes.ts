@@ -20,7 +20,7 @@ export type ContractMonth = 'current' | 'next' | 'far';
 
 export type FuturesContract = {
   underlying:         FuturesUnderlying;
-  symbol:             string;   // full NFO symbol e.g. "NIFTY26JUL75FUT"
+  symbol:             string;   // full NFO symbol e.g. "NIFTY26JULFUT"
   aoToken:            string;   // Angel One instrument token
   exchange:           'NFO';
   lotSize:            number;   // units per lot

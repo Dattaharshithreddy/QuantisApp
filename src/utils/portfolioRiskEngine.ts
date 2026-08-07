@@ -91,8 +91,7 @@ export const DEFAULT_PORTFOLIO_RISK_CONFIG: PortfolioRiskConfig = {
     BREAKOUT:           0.90,
     HIGH_VOLATILITY:    0.70,
     LOW_VOLATILITY:     1.00,
-    UNKNOWN:            0.90,
-  },
+    UNKNOWN:            0.90},
   atrVolatilityScaling:  true,
   atrBaselinePct:        0.015,
   corrAdjustmentFactor:  0.5,
@@ -271,8 +270,7 @@ export function evaluatePortfolioRisk(
     effectiveRisk: effectiveNewPortfolioRisk.toFixed(2),
     portfolioRiskPct: portfolioRiskPct.toFixed(2) + '%',
     maxAllowedRisk: cfg.maxPortfolioRiskPct + '%',
-    portfolioValue: portfolioValue.toFixed(2),
-  }));
+    portfolioValue: portfolioValue.toFixed(2)}));
 
   if (portfolioRiskPct > cfg.maxPortfolioRiskPct) {
     const excess = portfolioRiskPct - cfg.maxPortfolioRiskPct;
@@ -335,8 +333,7 @@ export function evaluatePortfolioRisk(
     confidenceScore: Math.round(confidenceScore),
     volatilityScore: Math.round(volatilityScore),
     correlationScore: Math.round(corrScore),
-    drawdownScore: Math.round(drawdownScore),
-  };
+    drawdownScore: Math.round(drawdownScore)};
 
   // ── 9. Decision ────────────────────────────────────────────────────────────
   const decision: PortfolioRiskDecision = input.confidence < cfg.reduceSizeThreshold
@@ -361,8 +358,7 @@ export function evaluatePortfolioRisk(
     atrMultiplier,
     correlationAdjustment,
     portfolioRiskScore,
-    riskComponents,
-  };
+    riskComponents};
 }
 
 // ── Helper: build a BLOCK result ───────────────────────────────────────────────
@@ -379,6 +375,5 @@ function block(
     regimeMultiplier: 0, atrMultiplier: 0,
     correlationAdjustment: corrAdj,
     portfolioRiskScore: 100,
-    riskComponents: { exposureScore: 100, concentrationScore: 0, confidenceScore: 100, volatilityScore: 0, correlationScore: 0, drawdownScore: 0 },
-  };
+    riskComponents: { exposureScore: 100, concentrationScore: 0, confidenceScore: 100, volatilityScore: 0, correlationScore: 0, drawdownScore: 0 }};
 }

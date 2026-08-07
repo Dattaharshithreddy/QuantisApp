@@ -29,8 +29,7 @@
 import type { TFSignal, MTFScores, Timeframe } from '../mtf/mtfTypes';
 import type { ValidatedPattern }               from '../patternValidation/patternValidationTypes';
 import type { SignalType }                     from '../regimeFilter';
-import type { StrategyProfile, StrategyFilterResult } from './strategyTypes';
-import { MTF_ALIGN_MIN, SMC_OB_MIN }           from './strategyTypes';
+import { MTF_ALIGN_MIN, SMC_OB_MIN, StrategyFilterResult, StrategyProfile } from './strategyTypes';
 
 // ── Input bag — all pre-computed engine outputs, passed in read-only ──────────
 // No field here is produced by this module. Every field was computed upstream.
@@ -90,15 +89,13 @@ function gateRegime(
       passed: false,
       blockSource: 'REGIME',
       blockReason: `${profile.name} strategy requires regime in [${profile.allowedRegimes.join(', ')}]. ` +
-                   `Current regime: ${regimeLabel}.`,
-    };
+                   `Current regime: ${regimeLabel}.`};
   }
   if (profile.blockRegimes.includes(regimeLabel as any)) {
     return {
       passed: false,
       blockSource: 'REGIME',
-      blockReason: `${profile.name} strategy blocks ${regimeLabel} regime.`,
-    };
+      blockReason: `${profile.name} strategy blocks ${regimeLabel} regime.`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -112,8 +109,7 @@ function gateSignalType(
       passed: false,
       blockSource: 'SIGNAL_TYPE',
       blockReason: `${profile.name} strategy blocks ${signalType} signals. ` +
-                   `Allowed signal types: ${profile.requireSignalTypes.join(', ') || 'any'}.`,
-    };
+                   `Allowed signal types: ${profile.requireSignalTypes.join(', ') || 'any'}.`};
   }
   if (
     profile.requireSignalTypes.length > 0 &&
@@ -123,8 +119,7 @@ function gateSignalType(
       passed: false,
       blockSource: 'SIGNAL_TYPE',
       blockReason: `${profile.name} strategy requires signal type in [${profile.requireSignalTypes.join(', ')}]. ` +
-                   `Current signal type: ${signalType}.`,
-    };
+                   `Current signal type: ${signalType}.`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -138,8 +133,7 @@ function gateConfidence(
       passed: false,
       blockSource: 'CONFIDENCE',
       blockReason: `${profile.name} strategy requires confidence ≥ ${profile.minConfidence}. ` +
-                   `Current confidence: ${confidence.toFixed(0)}/100.`,
-    };
+                   `Current confidence: ${confidence.toFixed(0)}/100.`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -166,8 +160,7 @@ function gateBOS(
       passed: false,
       blockSource: 'BOS',
       blockReason: `${profile.name} strategy requires a Break of Structure (BOS) on the current timeframe. ` +
-                   `No confirmed BOS detected.`,
-    };
+                   `No confirmed BOS detected.`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -183,8 +176,7 @@ function gateMTFAlignment(
     return {
       passed: false,
       blockSource: 'MTF',
-      blockReason: `${profile.name} strategy requires multi-timeframe alignment. MTF data unavailable.`,
-    };
+      blockReason: `${profile.name} strategy requires multi-timeframe alignment. MTF data unavailable.`};
   }
   const alignmentScore = Math.abs(mtfSnap.overallMTFScore);
   if (alignmentScore < MTF_ALIGN_MIN) {
@@ -192,8 +184,7 @@ function gateMTFAlignment(
       passed: false,
       blockSource: 'MTF',
       blockReason: `${profile.name} strategy requires MTF alignment > ${MTF_ALIGN_MIN}. ` +
-                   `Current alignment: ${alignmentScore.toFixed(2)} (too weak).`,
-    };
+                   `Current alignment: ${alignmentScore.toFixed(2)} (too weak).`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -215,8 +206,7 @@ function gatePattern(
       passed: false,
       blockSource: 'PATTERN',
       blockReason: `${profile.name} strategy requires a CONFIRMED chart pattern. ` +
-                   `No confirmed pattern found.`,
-    };
+                   `No confirmed pattern found.`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -243,8 +233,7 @@ function gateSMC(
       passed: false,
       blockSource: 'SMC',
       blockReason: `${profile.name} strategy requires an Order Block (${dirLabel} OB strength ≥ ${SMC_OB_MIN}). ` +
-                   `Current ${dirLabel} OB strength: ${relevantStrength.toFixed(2)}.`,
-    };
+                   `Current ${dirLabel} OB strength: ${relevantStrength.toFixed(2)}.`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -264,8 +253,7 @@ function gateRiskReward(
       passed: false,
       blockSource: 'RR',
       blockReason: `${profile.name} strategy requires R:R ≥ ${profile.minRiskReward}. ` +
-                   `Current R:R: ${rr.toFixed(2)}.`,
-    };
+                   `Current R:R: ${rr.toFixed(2)}.`};
   }
   return { passed: true, blockReason: '', blockSource: undefined };
 }
@@ -358,17 +346,14 @@ export function applyStrategyFilter(
       breakEvenAtR:         profile.breakEvenAtR,
       tp:                   profile.tp,
       atrStopMultiplier:    profile.atrStopMultiplier,
-      atrTargetMultiplier:  profile.atrTargetMultiplier,
-    },
+      atrTargetMultiplier:  profile.atrTargetMultiplier},
     riskPerTradePctOverride: profile.riskPerTradePct,
 
     strategyContext: {
       id:              profile.id,
       name:            profile.name,
       icon:            profile.icon,
-      readinessContext: profile.readinessContext,
-    },
-  };
+      readinessContext: profile.readinessContext}};
 }
 
 // ── Helper: build a blocked result ────────────────────────────────────────────
@@ -388,17 +373,14 @@ function blocked(gate: GateResult, profile: StrategyProfile): StrategyFilterResu
       breakEvenAtR:         profile.breakEvenAtR,
       tp:                   profile.tp,
       atrStopMultiplier:    profile.atrStopMultiplier,
-      atrTargetMultiplier:  profile.atrTargetMultiplier,
-    },
+      atrTargetMultiplier:  profile.atrTargetMultiplier},
     riskPerTradePctOverride: profile.riskPerTradePct,
 
     strategyContext: {
       id:              profile.id,
       name:            profile.name,
       icon:            profile.icon,
-      readinessContext: profile.readinessContext,
-    },
-  };
+      readinessContext: profile.readinessContext}};
 }
 
 // ── Null-strategy pass-through ────────────────────────────────────────────────

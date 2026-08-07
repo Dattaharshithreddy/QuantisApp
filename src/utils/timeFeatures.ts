@@ -20,6 +20,5 @@ export function timeFeaturesAt(time: number) {
     dayOfWeek: d.getUTCDay(), // 0 = Sunday
     month: d.getUTCMonth() + 1,
     isWeekend: d.getUTCDay() === 0 || d.getUTCDay() === 6,
-    session: getTradingSession(d),
-  };
+    session: getTradingSession(d)};
 }

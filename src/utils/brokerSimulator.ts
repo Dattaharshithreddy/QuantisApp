@@ -156,8 +156,7 @@ class BrokerSimulator {
       requestedPrice: params.price,
       filledQty:      0,
       filledPrice:    0,
-      status:         'NEW',
-    };
+      status:         'NEW'};
     this.orders.set(orderId, order);
     this.log('aoPlaceOrder', p, 'success');
 
@@ -195,8 +194,7 @@ class BrokerSimulator {
       unfilledQty:     order.qty - order.filledQty,
       avgFillPrice:    order.filledPrice,
       orderType:       'MARKET',
-      transactionType: order.side,
-    };
+      transactionType: order.side};
   }
 
   async aoCancelOrder(orderId: string, _variety: string, _session: AOSession): Promise<void> {
@@ -216,8 +214,7 @@ class BrokerSimulator {
       unfilledQty:     order.qty - order.filledQty,
       avgFillPrice:    order.filledPrice,
       orderType:       'MARKET',
-      transactionType: order.side,
-    };
+      transactionType: order.side};
   }
 
   async aoGetPositions(_session: AOSession): Promise<AOPosition[]> {
@@ -263,8 +260,7 @@ class BrokerSimulator {
       requestedPrice: params.price ?? this.config.fillPrice,
       filledQty:      0,
       filledPrice:    0,
-      status:         'NEW',
-    };
+      status:         'NEW'};
     this.orders.set(String(orderId), order);
 
     if (this.config.scenario === 'NETWORK_ERROR') {
@@ -290,9 +286,7 @@ class BrokerSimulator {
       fills:               order.filledQty > 0 ? [{
         price:      String(order.filledPrice),
         qty:        String(order.filledQty),
-        commission: String(order.filledQty * order.filledPrice * 0.001),
-      }] : [],
-    };
+        commission: String(order.filledQty * order.filledPrice * 0.001)}] : []};
   }
 
   async bnWaitForFill(symbol: string, orderId: number, _ak: string, _sec: string, timeoutMs = 30_000): Promise<BinanceOrderStatus> {
@@ -324,8 +318,7 @@ class BrokerSimulator {
       executedQty:  order.filledQty,
       avgFillPrice: order.filledPrice,
       side:         order.side as any,
-      type:         'MARKET',
-    };
+      type:         'MARKET'};
   }
 
   async bnCancelOrder(_sym: string, orderId: number, _ak: string, _sec: string): Promise<void> {
@@ -341,8 +334,7 @@ class BrokerSimulator {
     return this.config.openPositions.map(p => ({
       asset:  p.tradingsymbol.replace(/USDT$|BUSD$/, ''),
       free:   Math.abs(p.netqty),
-      locked: 0,
-    }));
+      locked: 0}));
   }
 
   async bnCancelAllOrders(_sym: string, _ak: string, _sec: string): Promise<void> {

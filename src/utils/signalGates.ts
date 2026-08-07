@@ -120,8 +120,7 @@ export function evaluateSignalGates(inputs: SignalGateInputs): SignalGateResult 
     baseTF = '15m',
     smcBullOBStrength = 0,
     smcBearOBStrength = 0,
-    validatedPatterns = [],
-  } = inputs;
+    validatedPatterns = []} = inputs;
 
   // ── Baseline: MTF-based state from Phase 1 (Trade Readiness) ─────────────
   // When the chart engine already computed a readiness state (htfBias, CHoCH,
@@ -146,8 +145,7 @@ export function evaluateSignalGates(inputs: SignalGateInputs): SignalGateResult 
       state:       'AVOID',
       reason:      regimeGate.reason,
       blockSource: 'REGIME',
-      signalType,
-    };
+      signalType};
   }
 
   // ── 3. Strategy profile gates ─────────────────────────────────────────────
@@ -166,8 +164,7 @@ export function evaluateSignalGates(inputs: SignalGateInputs): SignalGateResult 
       smcBearOBStrength,
       validatedPatterns,
       signalType,
-      tradeDirection:       direction,
-    };
+      tradeDirection:       direction};
 
     const sfResult = applyStrategyFilter(strategyProfile, sfInputs);
     if (!sfResult.allowed) {
@@ -193,8 +190,7 @@ export function evaluateSignalGates(inputs: SignalGateInputs): SignalGateResult 
         state:       raised,
         reason:      sfResult.blockReason ?? `${strategyProfile.name} strategy gate blocked`,
         blockSource,
-        signalType,
-      };
+        signalType};
     }
   }
 
@@ -211,6 +207,5 @@ export function evaluateSignalGates(inputs: SignalGateInputs): SignalGateResult 
       ? 'Higher timeframe structure is opposing this trade direction.'
       : '',
     blockSource: allowed ? null : 'REGIME',
-    signalType,
-  };
+    signalType};
 }

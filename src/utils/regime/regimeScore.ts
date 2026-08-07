@@ -105,8 +105,7 @@ export function scoreRegime(inp: RegimeInputs, cfg: RegimeConfig): RegimeResult 
     sidewaysScore:   Math.min(1, sidewaysScore),
     breakoutScore:   Math.min(1, breakoutScore),
     meanRevScore:    Math.min(1, meanRevScore),
-    volatilityScore: Math.min(1, volatilityScore),
-  };
+    volatilityScore: Math.min(1, volatilityScore)};
 }
 
 export function toRegimeScores(r: RegimeResult): RegimeScores {
@@ -119,6 +118,5 @@ export function toRegimeScores(r: RegimeResult): RegimeScores {
     breakoutScore:    r.breakoutScore,
     meanRevScore:     r.meanRevScore,
     volatilityScore:  r.volatilityScore,
-    regimeConfidence: r.confidence,
-  };
+    regimeConfidence: r.confidence};
 }

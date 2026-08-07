@@ -3,8 +3,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Candle } from '../../../utils/indicators';
-import { getTrainingHistory } from '../../../utils/trainingHistory';
-import { trainAndPredict, MLPrediction, PRIMARY_HORIZON, predictRetrainDecision, loadModelMetadata } from '../../../utils/mlSignal';
+import { getLatestTrainingStatus } from '../../../utils/trainingHistory';
+import { trainAndPredict, MLPrediction, predictRetrainDecision, loadModelMetadata, warmPrecomputeCache, clearPrecomputeCache, setForegroundPredicting } from '../../../utils/mlSignal';
+import { scheduleBackgroundTrain, cancelBackgroundTrain } from '../../../utils/backgroundTraining';
 import { getOptimalConfig } from '../../../utils/modelOptimization';
 import { fromSinglePrediction } from '../../../utils/tradeQuality';
 import { getIndicatorSnapshot } from '../../../utils/liveIndicatorSnapshot';
@@ -32,6 +33,11 @@ export function usePrediction(
   candlesRef.current = candles;
 
   const { prices } = useData();
+  // Keep a ref so runMLPrediction's useCallback doesn't need prices in its deps
+  // (which would recreate the callback — and trigger React.memo checks — on every
+  // price tick from aggTrade at 50-200ms frequency).
+  const pricesRef = useRef(prices);
+  pricesRef.current = prices;
   const [ml, setMl] = useState<PredictionState>({ status: 'idle', data: null, err: null });
   const [retrainDecision, setRetrainDecision] = useState<{ willRetrain: boolean; reason: string; newCandles: number | null } | null>(null);
   const [postPredictionMsg, setPostPredictionMsg] = useState<string | null>(null);
@@ -46,10 +52,13 @@ export function usePrediction(
     if (symbol !== prevSymbolRef.current || tf !== prevTfRef.current) {
       prevSymbolRef.current = symbol;
       prevTfRef.current = tf;
-      ++mlRequestRef.current; // cancel in-flight request
+      ++mlRequestRef.current;
       setMl({ status: 'idle', data: null, err: null });
       setRetrainDecision(null);
       setPostPredictionMsg(null);
+      // Clear precompute cache so previous symbol/tf series is never reused
+      clearPrecomputeCache();
+      cancelBackgroundTrain(symbol, tf);
     }
   }, [symbol, tf]);
 
@@ -62,42 +71,88 @@ export function usePrediction(
     return () => { cancelled = true; };
   }, [symbol, tf, candles.length]);
 
+  // FIX (Audit items #1, #2, UI level): Reference to whether a prediction is
+  // currently running in this hook instance. The engine-level dedup in mlSignal.ts
+  // handles concurrent calls across the whole app; this ref handles the case where
+  // the same component re-renders and tries to start a second call while the first
+  // is still awaiting. It also enables the "already running" check before setting
+  // the spinner — without it, a double-tap would show two consecutive spinners.
+  const isRunningRef = useRef(false);
+
   const runMLPrediction = useCallback(async (forceRetrain = false) => {
-    setMl({ status: 'training', data: null, err: null });
+    // Drop duplicate calls while one is already in-flight for this component.
+    if (isRunningRef.current) return;
+    isRunningRef.current = true;
+    // ── PERF PROBE (remove after profiling) ─────────────────────────────────
+    // Filter logcat: adb logcat -s ReactNativeJS | grep "\[PERF\]"
+    const _p0 = Date.now();
+    // ────────────────────────────────────────────────────────────────────────
+    // FIX C-1 (race condition): grab the request ID BEFORE the 32ms yield.
+    // Previously myRequestId was assigned AFTER the setTimeout. If the user
+    // switches symbol/TF during those 32ms, the useEffect at line 51 fires
+    // synchronously and increments mlRequestRef to N. The timer then fires
+    // and does ++mlRequestRef = N+1, making myRequestId = N+1. The stale
+    // check at line 125 sees myRequestId === mlRequestRef.current (both N+1)
+    // and INCORRECTLY continues, writing the old symbol's prediction to state.
+    // By grabbing myRequestId here (before the await), any useEffect increment
+    // during the 32ms will produce a HIGHER value than myRequestId, so the
+    // stale check correctly fires and the prediction is cleanly dropped.
     const myRequestId = ++mlRequestRef.current;
+    // Set loading state immediately so button responds at tap time
+    setMl({ status: 'training', data: null, err: null });
+    // Yield 2 frames so the spinner paints before heavy work starts.
+    // Previously used InteractionManager.runAfterInteractions — but on Android
+    // that NEVER resolves when there are continuous state updates (aggTrade stream
+    // fires setCandles every 50-200ms, which counts as an "interaction").
+    // Result: trainAndPredict was never called, spinner showed forever.
+    // setTimeout(32) = ~2 frames at 60fps — always resolves, achieves the same goal.
+    await new Promise<void>(resolve => setTimeout(resolve, 32));
+    setForegroundPredicting(true); // Phase 4: yield to foreground over background training
     try {
-      const optimalConfig = await getOptimalConfig(symbol, tf);
-      const cp = prices[symbol];
+      const cp = pricesRef.current[symbol];
       const obSnapshot = cp?.depth
         ? { source: 'binance' as const, symbol, buy: cp.depth.buy, sell: cp.depth.sell, timestamp: cp.lastUpdated ?? Date.now() }
         : null;
 
-      // Module 1: Fetch market context BEFORE trainAndPredict so it can be
-      // fed into the feature vector (contextSnapshot parameter).
-      // Best-effort: context fetch failure never blocks prediction.
-      let contextSnap: import('../../../utils/marketContextSnapshot').MarketContextSnapshot | null = null;
-      try {
-        const unified = await fetchUnifiedMarketContext(symbol, symbol, assetType);
-        contextSnap = captureSnapshot(unified);
-      } catch { /* non-fatal */ }
+      // Run getOptimalConfig and fetchUnifiedMarketContext in PARALLEL with
+      // each other, and start trainAndPredict immediately with a context
+      // promise that resolves when context is ready.
+      // Previously these ran sequentially BEFORE trainAndPredict — fetchUnifiedMarketContext
+      // alone could take 200ms-2s (4 network calls) before ML even started.
+      // Now trainAndPredict starts in the same tick, context is injected if it
+      // arrives before the ML finishes (warm path ~1s), otherwise null is used.
+      const contextPromise = fetchUnifiedMarketContext(symbol, symbol, assetType)
+        .then(unified => captureSnapshot(unified))
+        .catch(() => null);
 
-      const result = await trainAndPredict(
-        symbol, tf, candlesRef.current,
-        optimalConfig?.bestHorizon, optimalConfig?.bestThreshold,
-        forceRetrain, assetType, obSnapshot,
-        contextSnap,  // Module 1: pass context into ML feature vector
-      );
+      const _p1 = Date.now();
+      const optimalConfig = await getOptimalConfig(symbol, tf);
+
+      // trainAndPredict starts NOW — context injected from promise
+      const _p2 = Date.now();
+      const [result, contextSnap] = await Promise.all([
+        trainAndPredict(
+          symbol, tf, candlesRef.current,
+          optimalConfig?.bestHorizon, optimalConfig?.bestThreshold,
+          forceRetrain, assetType, obSnapshot,
+          null,  // context injected below after both settle
+        ),
+        contextPromise,
+      ]);
       if (myRequestId !== mlRequestRef.current) return;
       if (!result) {
         // trainAndPredict returns null for two reasons:
-        //   1. Intentional skip (insufficient candlesRef.current, etc.) → type:'skipped' recorded
-        //   2. Caught exception → type:'failed' recorded
-        // Read the latest training status to show the actual reason.
+        //   1. Intentional skip (insufficient candles, dedup, etc.) → type:'skipped' recorded
+        //   2. Caught exception or timeout → type:'failed' recorded
+        // Use getLatestTrainingStatus (reads a single dedicated key) rather than
+        // getTrainingHistory (reads full array) — faster and avoids the index bug
+        // where history[history.length-1] was the OLDEST entry (history is newest-first).
         try {
-          const history = await getTrainingHistory(symbol, tf);
-          const latest = history?.[history.length - 1];
+          const latest = await getLatestTrainingStatus(symbol, tf);
           if (latest?.type === 'skipped' && latest?.skipReason) {
             setMl({ status: 'error', data: null, err: `Skipped: ${latest.skipReason}` });
+          } else if (latest?.type === 'failed' && latest?.explanation) {
+            setMl({ status: 'error', data: null, err: latest.explanation });
           } else if (latest?.type === 'failed' && latest?.errorMessage) {
             setMl({ status: 'error', data: null, err: latest.errorMessage });
           } else {
@@ -124,8 +179,12 @@ export function usePrediction(
     } catch (e: any) {
       if (myRequestId !== mlRequestRef.current) return;
       setMl({ status: 'error', data: null, err: e.message ?? 'Prediction failed' });
+    } finally {
+      // Always clear the running flag — even on error or cancellation.
+      isRunningRef.current = false;
+      setForegroundPredicting(false); // Phase 4: background training may resume
     }
-  }, [symbol, tf, assetType, prices]);
+  }, [symbol, tf, assetType]);
 
   // Trade quality — memoized separately from prediction runner
   const tradeQualityResult = useMemo(() => {
@@ -135,8 +194,20 @@ export function usePrediction(
     return fromSinglePrediction(ml.data, candlesRef.current, snapshot, symbol, assetType, regimeLabel);
   }, [ml.data, symbol, assetType]);
 
+  // Cancel any pending background train on symbol/tf change
+  useEffect(() => {
+    return () => { cancelBackgroundTrain(symbol, tf); };
+  }, [symbol, tf]);
+
+  // Stable callback — passed to useChartData's onCandleClose to:
+  // 1. Warm the precomputeSeries cache (immediate, synchronous kick-off)
+  // 2. Schedule background training (debounced 5s) so next Predict tap is instant
+  const onCandleClose = useCallback((closedCandles: Candle[]) => {
+    warmPrecomputeCache(closedCandles);
+    scheduleBackgroundTrain(symbol, tf, closedCandles, assetType);
+  }, [symbol, tf, assetType]);
+
   return {
     ml, retrainDecision, postPredictionMsg,
-    runMLPrediction, tradeQualityResult,
-  };
+    runMLPrediction, tradeQualityResult, onCandleClose};
 }

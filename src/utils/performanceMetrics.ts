@@ -128,8 +128,7 @@ export async function getMetricStats(label: MetricLabel): Promise<MetricStats | 
     minMs:   durations[0],
     maxMs:   durations[n - 1],
     lastMs:  last.durationMs,
-    lastAt:  last.recordedAt,
-  };
+    lastAt:  last.recordedAt};
 }
 
 export async function getAllMetricStats(): Promise<MetricStats[]> {

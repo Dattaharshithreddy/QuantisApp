@@ -107,8 +107,7 @@ export async function getAIPerformanceForSymbol(symbol: string, timeframe: strin
     walkForwardAccuracy: metadata?.walkForwardAccuracy ?? null,
     validationAccuracy: metadata?.primaryValidationAccuracy ?? null,
     previousValidationAccuracy: metadata?.previousValidationAccuracy ?? null,
-    daysSinceRetrained, calibrationSampleCount: calibration.totalResolved,
-  });
+    daysSinceRetrained, calibrationSampleCount: calibration.totalResolved});
 
   return {
     symbol, timeframe,
@@ -127,8 +126,7 @@ export async function getAIPerformanceForSymbol(symbol: string, timeframe: strin
     calibrationSampleCount: calibration.totalResolved,
     calibrationScore, predictionAccuracy,
     mostImportantFeatures: aggregateTopFeatures(symbolTrades),
-    modelStatus: status, modelStatusReason: reason,
-  };
+    modelStatus: status, modelStatusReason: reason};
 }
 
 // Finds the best-performing symbol/timeframe/horizon across ALL paper
@@ -149,6 +147,5 @@ export async function getBestPerformers(): Promise<{ bestSymbol: string | null; 
   return {
     bestSymbol: bestBy(t => t.symbol),
     bestTimeframe: bestBy(t => t.timeframe),
-    bestHorizon: bestBy(t => t.predictionHorizon),
-  };
+    bestHorizon: bestBy(t => t.predictionHorizon)};
 }

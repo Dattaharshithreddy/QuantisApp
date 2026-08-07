@@ -229,8 +229,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'RBI Monetary Policy', url: 'https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx' },
       isCritical: true,
       isRecurring: true,
-      tags: ['rbi', 'rates', 'repo', 'banknifty', 'monetary policy', 'india'],
-    },
+      tags: ['rbi', 'rates', 'repo', 'banknifty', 'monetary policy', 'india']},
 
     {
       id: 'rbi-speech',
@@ -252,8 +251,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'RBI Speeches', url: 'https://www.rbi.org.in/Scripts/BS_SpeechesView.aspx' },
       isCritical: false,
       isRecurring: false,
-      tags: ['rbi', 'governor', 'speech', 'guidance'],
-    },
+      tags: ['rbi', 'governor', 'speech', 'guidance']},
 
     {
       id: 'in-cpi',
@@ -276,8 +274,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'MoSPI CPI', url: 'https://mospi.gov.in/consumer-price-index' },
       isCritical: false,
       isRecurring: true,
-      tags: ['india', 'cpi', 'inflation', 'mospi', 'rbi'],
-    },
+      tags: ['india', 'cpi', 'inflation', 'mospi', 'rbi']},
 
     {
       id: 'in-wpi',
@@ -298,8 +295,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'DPIIT WPI', url: 'https://eaindustry.nic.in/' },
       isCritical: false,
       isRecurring: true,
-      tags: ['india', 'wpi', 'wholesale', 'inflation', 'commodity'],
-    },
+      tags: ['india', 'wpi', 'wholesale', 'inflation', 'commodity']},
 
     {
       id: 'in-gdp',
@@ -322,8 +318,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'MoSPI GDP', url: 'https://mospi.gov.in/gdp' },
       isCritical: false,
       isRecurring: true,
-      tags: ['india', 'gdp', 'growth', 'quarterly', 'fii'],
-    },
+      tags: ['india', 'gdp', 'growth', 'quarterly', 'fii']},
 
     {
       id: 'in-iip',
@@ -344,8 +339,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'MoSPI IIP', url: 'https://mospi.gov.in/index-industrial-production' },
       isCritical: false,
       isRecurring: true,
-      tags: ['india', 'iip', 'industrial', 'manufacturing'],
-    },
+      tags: ['india', 'iip', 'industrial', 'manufacturing']},
 
     {
       id: 'in-budget',
@@ -370,8 +364,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'India Budget', url: 'https://www.indiabudget.gov.in/' },
       isCritical: true,
       isRecurring: true,
-      tags: ['budget', 'fiscal', 'finance minister', 'annual', 'india'],
-    },
+      tags: ['budget', 'fiscal', 'finance minister', 'annual', 'india']},
 
     {
       id: 'nse-holiday',
@@ -393,8 +386,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'NSE Holiday List', url: 'https://www.nseindia.com/products-services/trading-holiday-calendar' },
       isCritical: false,
       isRecurring: false,
-      tags: ['holiday', 'nse', 'bse', 'closure'],
-    },
+      tags: ['holiday', 'nse', 'bse', 'closure']},
 
     {
       id: 'in-earnings',
@@ -416,8 +408,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'NSE Earnings', url: 'https://www.nseindia.com/get-quotes/equity' },
       isCritical: false,
       isRecurring: true,
-      tags: ['earnings', 'results', 'quarterly', 'nifty50', 'india'],
-    },
+      tags: ['earnings', 'results', 'quarterly', 'nifty50', 'india']},
 
     // ── 🇺🇸 US ─────────────────────────────────────────────────────────────────
 
@@ -445,8 +436,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Federal Reserve', url: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm' },
       isCritical: true,
       isRecurring: true,
-      tags: ['fomc', 'fed', 'us', 'rates', 'dollar', 'global'],
-    },
+      tags: ['fomc', 'fed', 'us', 'rates', 'dollar', 'global']},
 
     {
       id: 'fed-speech',
@@ -469,8 +459,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Fed Speeches', url: 'https://www.federalreserve.gov/newsevents/speech.htm' },
       isCritical: false,
       isRecurring: false,
-      tags: ['fed', 'chair', 'speech', 'powell', 'guidance'],
-    },
+      tags: ['fed', 'chair', 'speech', 'powell', 'guidance']},
 
     {
       id: 'us-cpi',
@@ -495,8 +484,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'BLS CPI', url: 'https://www.bls.gov/cpi/' },
       isCritical: true,
       isRecurring: true,
-      tags: ['us', 'cpi', 'inflation', 'bls', 'fed', 'global'],
-    },
+      tags: ['us', 'cpi', 'inflation', 'bls', 'fed', 'global']},
 
     {
       id: 'us-ppi',
@@ -518,8 +506,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'BLS PPI', url: 'https://www.bls.gov/ppi/' },
       isCritical: false,
       isRecurring: true,
-      tags: ['us', 'ppi', 'producer', 'inflation', 'bls'],
-    },
+      tags: ['us', 'ppi', 'producer', 'inflation', 'bls']},
 
     {
       id: 'us-pce',
@@ -542,8 +529,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'BEA PCE', url: 'https://www.bea.gov/data/personal-consumption-expenditures-price-index' },
       isCritical: false,
       isRecurring: true,
-      tags: ['us', 'pce', 'fed target', 'inflation', 'bea'],
-    },
+      tags: ['us', 'pce', 'fed target', 'inflation', 'bea']},
 
     {
       id: 'us-nfp',
@@ -567,8 +553,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'BLS Employment Situation', url: 'https://www.bls.gov/news.release/empsit.nr0.htm' },
       isCritical: true,
       isRecurring: true,
-      tags: ['us', 'nfp', 'jobs', 'employment', 'bls', 'fed'],
-    },
+      tags: ['us', 'nfp', 'jobs', 'employment', 'bls', 'fed']},
 
     {
       id: 'us-gdp',
@@ -591,8 +576,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'BEA GDP', url: 'https://www.bea.gov/data/gdp/gross-domestic-product' },
       isCritical: false,
       isRecurring: true,
-      tags: ['us', 'gdp', 'growth', 'recession', 'bea', 'quarterly'],
-    },
+      tags: ['us', 'gdp', 'growth', 'recession', 'bea', 'quarterly']},
 
     {
       id: 'us-retail',
@@ -614,8 +598,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Census Retail Sales', url: 'https://www.census.gov/retail/index.html' },
       isCritical: false,
       isRecurring: true,
-      tags: ['us', 'retail', 'consumer', 'spending', 'census'],
-    },
+      tags: ['us', 'retail', 'consumer', 'spending', 'census']},
 
     {
       id: 'us-ism-pmi',
@@ -637,8 +620,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'ISM Report', url: 'https://www.ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/' },
       isCritical: false,
       isRecurring: true,
-      tags: ['us', 'pmi', 'ism', 'manufacturing', 'leading indicator'],
-    },
+      tags: ['us', 'pmi', 'ism', 'manufacturing', 'leading indicator']},
 
     // ── 🌍 GLOBAL ───────────────────────────────────────────────────────────────
 
@@ -663,8 +645,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'ECB Monetary Policy', url: 'https://www.ecb.europa.eu/press/govcdec/mopo/' },
       isCritical: false,
       isRecurring: true,
-      tags: ['ecb', 'europe', 'rates', 'euro', 'lagarde'],
-    },
+      tags: ['ecb', 'europe', 'rates', 'euro', 'lagarde']},
 
     {
       id: 'boe',
@@ -686,8 +667,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Bank of England', url: 'https://www.bankofengland.co.uk/monetary-policy' },
       isCritical: false,
       isRecurring: true,
-      tags: ['boe', 'uk', 'rates', 'sterling', 'bank of england'],
-    },
+      tags: ['boe', 'uk', 'rates', 'sterling', 'bank of england']},
 
     {
       id: 'boj',
@@ -710,8 +690,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Bank of Japan', url: 'https://www.boj.or.jp/en/mopo/index.htm' },
       isCritical: false,
       isRecurring: true,
-      tags: ['boj', 'japan', 'yen', 'carry trade', 'ycc'],
-    },
+      tags: ['boj', 'japan', 'yen', 'carry trade', 'ycc']},
 
     {
       id: 'cn-pmi',
@@ -733,8 +712,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'NBS PMI', url: 'https://www.stats.gov.cn/english/' },
       isCritical: false,
       isRecurring: true,
-      tags: ['china', 'pmi', 'manufacturing', 'emerging markets', 'commodities'],
-    },
+      tags: ['china', 'pmi', 'manufacturing', 'emerging markets', 'commodities']},
 
     {
       id: 'opec',
@@ -757,8 +735,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'OPEC', url: 'https://www.opec.org/opec_web/en/press_room/calendar.htm' },
       isCritical: false,
       isRecurring: true,
-      tags: ['opec', 'crude', 'oil', 'energy', 'production'],
-    },
+      tags: ['opec', 'crude', 'oil', 'energy', 'production']},
 
     {
       id: 'eia-oil',
@@ -781,8 +758,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'EIA Weekly Petroleum', url: 'https://www.eia.gov/petroleum/supply/weekly/' },
       isCritical: false,
       isRecurring: true,
-      tags: ['eia', 'crude', 'oil', 'inventories', 'weekly', 'wednesday'],
-    },
+      tags: ['eia', 'crude', 'oil', 'inventories', 'weekly', 'wednesday']},
 
     // ── ₿ CRYPTO ────────────────────────────────────────────────────────────────
 
@@ -807,8 +783,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Bitcoin Halving Info', url: 'https://bitcoin.org/en/' },
       isCritical: true,
       isRecurring: true,
-      tags: ['bitcoin', 'halving', 'supply', 'mining', 'crypto', 'btc'],
-    },
+      tags: ['bitcoin', 'halving', 'supply', 'mining', 'crypto', 'btc']},
 
     {
       id: 'eth-upgrade',
@@ -830,8 +805,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Ethereum.org', url: 'https://ethereum.org/en/upgrades/' },
       isCritical: false,
       isRecurring: false,
-      tags: ['ethereum', 'upgrade', 'hardfork', 'eip', 'staking', 'crypto'],
-    },
+      tags: ['ethereum', 'upgrade', 'hardfork', 'eip', 'staking', 'crypto']},
 
     {
       id: 'btc-etf',
@@ -854,8 +828,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'SEC Filings', url: 'https://www.sec.gov/cgi-bin/browse-edgar' },
       isCritical: false,
       isRecurring: false,
-      tags: ['bitcoin', 'etf', 'sec', 'institutional', 'approval', 'crypto'],
-    },
+      tags: ['bitcoin', 'etf', 'sec', 'institutional', 'approval', 'crypto']},
 
     {
       id: 'token-unlock',
@@ -877,8 +850,7 @@ export function getMarketEvents(): MarketEvent[] {
       officialSource: { label: 'Token Unlocks', url: 'https://token.unlocks.app/' },
       isCritical: false,
       isRecurring: false,
-      tags: ['token', 'unlock', 'vesting', 'supply', 'altcoins', 'crypto'],
-    },
+      tags: ['token', 'unlock', 'vesting', 'supply', 'altcoins', 'crypto']},
   ];
 
   return events.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -886,8 +858,11 @@ export function getMarketEvents(): MarketEvent[] {
 
 // ── Filtering ──────────────────────────────────────────────────────────────────
 
-export function getEventsByFilter(filter: CalendarFilter): MarketEvent[] {
-  let events = getMarketEvents();
+export function getEventsByFilter(filter: CalendarFilter, sourceEvents?: MarketEvent[]): MarketEvent[] {
+  // Accept pre-built events to avoid calling getMarketEvents() on every render.
+  // CalendarScreen passes its `events` state so the 28-object rebuild only
+  // happens once (in loadEvents), not on every filter change or timer tick.
+  let events = sourceEvents ?? getMarketEvents();
 
   if (filter.regions?.length) {
     events = events.filter(e => filter.regions!.includes(e.region));
@@ -1021,8 +996,7 @@ export function getCountdownUrgency(date: Date): 'CRITICAL' | 'HIGH' | 'MEDIUM' 
 
 export function groupByTimeSlot(events: MarketEvent[]): Record<TimeSlot, MarketEvent[]> {
   const slots: Record<TimeSlot, MarketEvent[]> = {
-    MORNING: [], AFTERNOON: [], EVENING: [], NIGHT: [], ALL_DAY: [],
-  };
+    MORNING: [], AFTERNOON: [], EVENING: [], NIGHT: [], ALL_DAY: []};
   events.forEach(e => slots[e.timeSlot].push(e));
   return slots;
 }
@@ -1037,8 +1011,7 @@ export async function saveCachedEvents(events: MarketEvent[]): Promise<void> {
     // Serialize dates to ISO strings for JSON storage
     const payload = {
       timestamp: Date.now(),
-      events: events.map(e => ({ ...e, date: e.date.toISOString() })),
-    };
+      events: events.map(e => ({ ...e, date: e.date.toISOString() }))};
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(payload));
   } catch (_) { /* Graceful degradation — cache failure is non-fatal */ }
 }
@@ -1077,13 +1050,11 @@ export async function scheduleEventReminder(
   const offsetMs: Record<ReminderOffset, number> = {
     DAY_BEFORE: 24 * 60 * 60 * 1000,
     HOUR_BEFORE: 60 * 60 * 1000,
-    FIFTEEN_BEFORE: 15 * 60 * 1000,
-  };
+    FIFTEEN_BEFORE: 15 * 60 * 1000};
   const offsetLabel: Record<ReminderOffset, string> = {
     DAY_BEFORE: '1 day before',
     HOUR_BEFORE: '1 hour before',
-    FIFTEEN_BEFORE: '15 min before',
-  };
+    FIFTEEN_BEFORE: '15 min before'};
 
   const triggerDate = new Date(event.date.getTime() - offsetMs[offset]);
   if (triggerDate <= new Date()) return false; // Already past
@@ -1094,10 +1065,8 @@ export async function scheduleEventReminder(
         title: `📅 ${event.title}`,
         body: `${offsetLabel[offset]} — ${event.impact} impact event. ${event.tradingGuidance[0] ?? ''}`,
         sound: true,
-        data: { eventId: event.id, screen: 'Calendar' },
-      },
-      trigger: { date: triggerDate } as any,
-    });
+        data: { eventId: event.id, screen: 'Calendar' }},
+      trigger: { date: triggerDate } as any});
 
     const ids = await loadReminderIds();
     ids[event.id] = [...(ids[event.id] ?? []), notifId];
@@ -1129,8 +1098,7 @@ export function getAIMarketImpactSummary(event: MarketEvent): string {
     CRITICAL: 'one of the highest-impact macro events in the calendar',
     HIGH: 'a significant market-moving event',
     MEDIUM: 'a moderately important economic release',
-    LOW: 'a low-impact informational release',
-  }[event.impact];
+    LOW: 'a low-impact informational release'}[event.impact];
 
   const volNote = event.historicalVol
     ? `Historically, ${event.historicalVol.map(v => `${v.asset} has moved ±${v.avgMovePct.toFixed(1)}% on average`).join(', ')} around this event (n=${event.historicalVol[0].sampleSize} samples).`
@@ -1275,8 +1243,7 @@ export function getWatchlistRelevance(
     matches.push({
       assetCategory: affectedCat,
       matchedSymbols: symbols,
-      hasOpenPosition,
-    });
+      hasOpenPosition});
   }
 
   const allMatchedSymbols = Array.from(

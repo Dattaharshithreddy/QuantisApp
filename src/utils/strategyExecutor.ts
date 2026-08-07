@@ -87,8 +87,7 @@ export function simulateSignalStrategy(
           entryTime: candles[entryIdx].time, entryPrice, exitTime: bar.time, exitPrice,
           stopLoss, takeProfit, qty, pnl, pnlPct,
           holdingBars: barsHeld, holdingMs: bar.time - candles[entryIdx].time,
-          entryReason, exitReason, direction,
-        });
+          entryReason, exitReason, direction});
         inPosition = false;
       } else {
         const markedPnl = calculatePnLWithMultiplier(entryPrice, bar.close, qty, directionMultiplier(direction));
@@ -221,8 +220,7 @@ export function simulateAIStrategyWithDiagnostics(
           stopLoss, takeProfit, qty, pnl, pnlPct,
           holdingBars: barsHeld, holdingMs: bar.time - candles[entryIdx].time,
           entryReason: `Ensemble P(up)=${(entryConfidence).toFixed(1)}% confidence`, exitReason,
-          entryConfidence, exitConfidence: sig.confidence, direction,
-        });
+          entryConfidence, exitConfidence: sig.confidence, direction});
         inPosition = false;
         barDecisions.push({ time: bar.time, action, confidence: sig.confidence, executed: true });
         equityCurve.push({ time: bar.time, equity });

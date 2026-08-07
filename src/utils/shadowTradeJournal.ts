@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from './logger';
-import { getPortfolio } from './paperPortfolio';
-import type { PaperPosition } from './paperPortfolio';
+import { PaperPosition, getPortfolio } from './paperPortfolio';
 
 // DUPLICATE kept for backward compat with records stored before v1.0.2.
 // New code uses DUPLICATE_POSITION (more descriptive) and POSITION_SIZING.
@@ -138,8 +137,7 @@ export async function recordShadowTrade(params: {
       blockGate: params.blockGate,  // typed directly — no string parsing
       outcome: 'OPEN', ticksElapsed: 0,
       signal: params.signal, gateDetails: params.gateDetails, rr, signalId: params.signalId,
-      marketContext: params.marketContext ?? null,
-    });
+      marketContext: params.marketContext ?? null});
     await saveShadowTrades(trades);
     logger.info('shadow', `Recorded shadow: ${params.symbol} ${params.direction} gate=${classifyGate(params.blockReason)}`);
   } catch (e: any) { logger.warn('shadow', e?.message); }
@@ -228,7 +226,6 @@ export function computeGateAnalytics(trades: ShadowTrade[]): GateStats[] {
       gate, blocked: g.length, tpHit, slHit, expired: g.filter(t=>t.outcome==='EXPIRED').length,
       stillOpen: g.filter(t=>t.outcome==='OPEN').length,
       winRate: +wr.toFixed(1), profitFactor: +pf.toFixed(2),
-      avgPnlPct: +avg.toFixed(2), netExpectedPnl: +(avg*closed.length).toFixed(2),
-    };
+      avgPnlPct: +avg.toFixed(2), netExpectedPnl: +(avg*closed.length).toFixed(2)};
   }).filter(g => g.blocked > 0);
 }

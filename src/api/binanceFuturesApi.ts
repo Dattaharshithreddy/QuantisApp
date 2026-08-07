@@ -96,8 +96,7 @@ export async function bnFuturesGetBalance(
       unrealizedProfit: parseFloat(usdt.crossUnPnl),
       marginBalance:    parseFloat(usdt.balance) + parseFloat(usdt.crossUnPnl),
       availableBalance: parseFloat(usdt.availableBalance),
-      crossUnPnl:       parseFloat(usdt.crossUnPnl),
-    };
+      crossUnPnl:       parseFloat(usdt.crossUnPnl)};
   } catch { return null; }
 }
 
@@ -134,8 +133,7 @@ export async function bnFuturesGetPositions(
       liquidationPrice: parseFloat(p.liquidationPrice),
       leverage:         parseInt(p.leverage, 10),
       isolatedMargin:   parseFloat(p.isolatedMargin),
-      marginType:       p.marginType,
-    }));
+      marginType:       p.marginType}));
 }
 
 // ── Pre-trade setup ───────────────────────────────────────────────────────────
@@ -201,8 +199,7 @@ export async function bnFuturesPlaceOrder(
     side:         params.side,
     type:         params.type,
     quantity:     params.quantity,
-    positionSide: params.positionSide ?? 'BOTH',
-  };
+    positionSide: params.positionSide ?? 'BOTH'};
   if (params.type === 'LIMIT') {
     reqParams.price       = params.price!;
     reqParams.timeInForce = params.timeInForce ?? 'GTC';
@@ -229,8 +226,7 @@ export async function bnFuturesPlaceOrder(
     cumQuote:    parseFloat(r.cumQuote ?? '0'),
     side:        r.side,
     type:        r.type,
-    reduceOnly:  r.reduceOnly ?? false,
-  };
+    reduceOnly:  r.reduceOnly ?? false};
 }
 
 /**
@@ -255,8 +251,7 @@ export async function bnFuturesWaitForFill(
         cumQuote:    parseFloat(r.cumQuote),
         side:        r.side,
         type:        r.type,
-        reduceOnly:  r.reduceOnly ?? false,
-      };
+        reduceOnly:  r.reduceOnly ?? false};
     }
     if (r.status === 'CANCELED' || r.status === 'REJECTED' || r.status === 'EXPIRED') {
       throw new Error(`Futures order ${orderId} ended with status ${r.status}.`);
@@ -287,8 +282,7 @@ export async function bnFuturesClosePosition(
   const closeSide: 'BUY' | 'SELL' = direction === 'LONG' ? 'SELL' : 'BUY';
   logger.info('bnFuturesApi', `Closing ${direction} ${qty} ${symbol} with ${closeSide} reduceOnly`);
   return bnFuturesPlaceOrder({
-    symbol, side: closeSide, type: 'MARKET', quantity: qty, reduceOnly: true,
-  }, apiKey, secret);
+    symbol, side: closeSide, type: 'MARKET', quantity: qty, reduceOnly: true}, apiKey, secret);
 }
 
 // ── Market data ───────────────────────────────────────────────────────────────
@@ -314,8 +308,7 @@ export async function bnFuturesGetTicker(
     priceChange:    parseFloat(d.priceChange),
     priceChangePct: parseFloat(d.priceChangePercent),
     volume:         parseFloat(d.volume),
-    quoteVolume:    parseFloat(d.quoteVolume),
-  };
+    quoteVolume:    parseFloat(d.quoteVolume)};
 }
 
 /**
@@ -336,7 +329,6 @@ export async function bnFuturesGetSymbolInfo(symbol: string): Promise<{
     return {
       pricePrecision:    sym.pricePrecision,
       quantityPrecision: sym.quantityPrecision,
-      status:            sym.status,
-    };
+      status:            sym.status};
   } catch { return null; }
 }

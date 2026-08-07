@@ -72,3 +72,55 @@ export function pnlSign(pnl: number): 'profit' | 'loss' | 'breakeven' {
   if (pnl < 0) return 'loss';
   return 'breakeven';
 }
+
+/**
+ * Canonical unrealized P&L for an open position given a live price.
+ * Use this instead of inline (exitPrice - entryPrice) * qty * multiplier
+ * wherever an open position's current value is displayed.
+ *
+ * No fees are deducted — this is the mark-to-market unrealized figure.
+ * The entry fee was debited at open (cash-accounting) and the exit fee
+ * will be deducted at close; neither belongs in the live display P&L.
+ */
+export function computeUnrealizedPnL(params: {
+  entryPrice: number;
+  currentPrice: number;
+  qty: number;
+  direction: TradeDirection;
+}): number {
+  return calculatePnLWithMultiplier(
+    params.entryPrice, params.currentPrice, params.qty,
+    directionMultiplier(params.direction),
+    0, // no fees for unrealized display
+  );
+}
+
+/**
+ * Peak-profit withdrawal metrics — computed from accumulated position tracking fields.
+ * Used by analytics and journal screens to display these consistently.
+ *
+ * All inputs come from the frozen PaperTradeRecord (for closed trades) or the live
+ * PaperPosition (for open trades). Never recomputed from prices.
+ */
+export type PeakProfitMetrics = {
+  peakProfit:         number;  // highest unrealized P&L seen during the trade
+  maxProfitWithdrawn: number;  // largest (peakProfit - unrealizedPnL) seen during the trade
+  mfe:                number;  // Maximum Favorable Excursion (= peakProfit when > 0, else 0)
+  mae:                number;  // Maximum Adverse Excursion (always <= 0)
+  tradeEfficiency:    number;  // pnl / peakProfit when peakProfit > 0, else 0 (0..1)
+};
+
+export function extractPeakProfitMetrics(trade: {
+  pnl: number;
+  maxUnrealizedProfit: number;
+  maxDrawdownDuringTrade: number;
+  peakProfit?: number;
+  maxProfitWithdrawn?: number;
+}): PeakProfitMetrics {
+  const peakProfit         = trade.peakProfit ?? Math.max(0, trade.maxUnrealizedProfit ?? 0);
+  const maxProfitWithdrawn = trade.maxProfitWithdrawn ?? 0;
+  const mfe                = Math.max(0, trade.maxUnrealizedProfit ?? 0);
+  const mae                = Math.min(0, trade.maxDrawdownDuringTrade ?? 0);
+  const tradeEfficiency    = peakProfit > 0 ? Math.min(1, trade.pnl / peakProfit) : 0;
+  return { peakProfit, maxProfitWithdrawn, mfe, mae, tradeEfficiency };
+}

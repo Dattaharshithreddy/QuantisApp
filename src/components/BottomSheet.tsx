@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Modal, Pressable, Animated, Easing, Dimensions } from 'react-native';
 import { Theme, RADIUS, SPACING } from '../theme/colors';
 
@@ -44,8 +44,7 @@ export function BottomSheet({
           position: 'absolute', left: 0, right: 0, bottom: 0,
           backgroundColor: T.bg1, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
           paddingBottom: SPACING.xxl, maxHeight: SCREEN_H * 0.85,
-          transform: [{ translateY }], ...T.elev3,
-        }}
+          transform: [{ translateY }], ...T.elev3}}
       >
         <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: T.border2 }} />

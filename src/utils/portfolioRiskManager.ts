@@ -156,8 +156,7 @@ export async function computePortfolioRisk(
       positions.push({
         id: pos.id, symbol: pos.symbol, account: 'Paper Equity',
         direction: pos.direction, notionalInr: posNotional,
-        unrealisedInr: pnl, weight: 0, leverage: 1,
-      });
+        unrealisedInr: pnl, weight: 0, leverage: 1});
     }
     accounts.push({
       name: 'Paper Equity', currency: 'INR',
@@ -166,8 +165,7 @@ export async function computePortfolioRisk(
       notionalInr: notional, unrealisedInr: unrealised, unrealised,
       realisedPnL: paper.realizedPnL ?? 0,
       marginUsed: notional,
-      hasData: true,
-    });
+      hasData: true});
   } catch (e: any) { logger.warn('portfolioRisk', `Paper equity read failed: ${e.message}`); }
 
   // ── 2. Live equity ────────────────────────────────────────────────────────
@@ -183,8 +181,7 @@ export async function computePortfolioRisk(
       positions.push({
         id: pos.id, symbol: pos.symbol, account: 'Live Equity',
         direction: pos.direction, notionalInr: posNotional,
-        unrealisedInr: pnl, weight: 0, leverage: 1,
-      });
+        unrealisedInr: pnl, weight: 0, leverage: 1});
     }
     accounts.push({
       name: 'Live Equity', currency: 'INR',
@@ -193,8 +190,7 @@ export async function computePortfolioRisk(
       notionalInr: notional, unrealisedInr: unrealised, unrealised,
       realisedPnL: live.totalRealizedPnL,
       marginUsed: notional,
-      hasData: true,
-    });
+      hasData: true});
   } catch (e: any) { logger.warn('portfolioRisk', `Live equity read failed: ${e.message}`); }
 
   // ── 3. NSE Futures ────────────────────────────────────────────────────────
@@ -212,8 +208,7 @@ export async function computePortfolioRisk(
         id: pos.id, symbol: pos.underlying, account: 'NSE Futures',
         direction: pos.direction, notionalInr: posNotional,
         unrealisedInr: pnl, weight: 0,
-        leverage: pos.marginBlocked > 0 ? posNotional / pos.marginBlocked : 1,
-      });
+        leverage: pos.marginBlocked > 0 ? posNotional / pos.marginBlocked : 1});
     }
     accounts.push({
       name: 'NSE Futures', currency: 'INR',
@@ -222,16 +217,14 @@ export async function computePortfolioRisk(
       notionalInr: notional, unrealisedInr: unrealised, unrealised,
       realisedPnL: nse.totalRealizedPnL,
       marginUsed,
-      hasData: true,
-    });
+      hasData: true});
   } catch (e: any) { logger.warn('portfolioRisk', `NSE futures read failed: ${e.message}`); }
 
   // ── 4. Binance Futures ────────────────────────────────────────────────────
   const BN_PRICE_MAP: Record<string, string> = {
     BTCUSDT: 'BTCUSD', ETHUSDT: 'ETHUSD', BNBUSDT: 'BNBUSD', SOLUSDT: 'SOLUSD',
     XRPUSDT: 'XRPUSD', ADAUSDT: 'ADAUSD', DOGEUSDT: 'DOGEUSD',
-    AVAXUSDT: 'AVAXUSD', DOTUSDT: 'DOTUSD', MATICUSDT: 'MATICUSD',
-  };
+    AVAXUSDT: 'AVAXUSD', DOTUSDT: 'DOTUSD', MATICUSDT: 'MATICUSD'};
   try {
     const bn = await getBnFuturesPortfolio();
     let notionalUsd = 0; let unrealisedUsd = 0; let marginUsd = 0;
@@ -249,8 +242,7 @@ export async function computePortfolioRisk(
         notionalInr:   usdToInr(posNotionalUsd),
         unrealisedInr: usdToInr(pnl),
         weight: 0,
-        leverage: pos.leverage,
-      });
+        leverage: pos.leverage});
     }
     accounts.push({
       name: 'Binance Futures', currency: 'USDT',
@@ -260,8 +252,7 @@ export async function computePortfolioRisk(
       unrealisedInr: usdToInr(unrealisedUsd), unrealised: unrealisedUsd,
       realisedPnL: bn.totalRealizedPnL,
       marginUsed: usdToInr(marginUsd),
-      hasData: true,
-    });
+      hasData: true});
   } catch (e: any) { logger.warn('portfolioRisk', `Binance futures read failed: ${e.message}`); }
 
   // ── Aggregate totals ──────────────────────────────────────────────────────
@@ -375,6 +366,5 @@ export async function computePortfolioRisk(
     riskLevel,
     riskFactors,
     recommendations,
-    positions: sorted,
-  };
+    positions: sorted};
 }

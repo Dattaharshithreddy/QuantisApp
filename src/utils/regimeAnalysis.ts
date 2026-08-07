@@ -22,8 +22,8 @@ export type RegimeLabel = 'TRENDING_BULL' | 'TRENDING_BEAR' | 'RANGING' | 'HIGH_
 
 export type RegimeBucket = { label: RegimeLabel; trades: ExecTrade[]; metrics: BacktestMetrics; barCount: number };
 
-export function classifyRegimePerBar(candles: Candle[], walkIndices: number[]): Map<number, RegimeLabel> {
-  const S = precomputeSeries(candles);
+export async function classifyRegimePerBar(candles: Candle[], walkIndices: number[]): Promise<Map<number, RegimeLabel>> {
+  const S = await precomputeSeries(candles);
   const labels = new Map<number, RegimeLabel>();
 
   // Average historical volatility across the walk window, used as the

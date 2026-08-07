@@ -20,8 +20,7 @@ export const BinanceSpotExecutor: ExecutionProvider = {
     orders:    { market: true, limit: true, stopLoss: false, bracket: false },
     position:  { overnight: true, lotBased: false, partialClose: true, maxLotsPerOrder: 0 },
     risk:      { marginRequired: false, leverage: false, preFlight: false },
-    display:   { currency: '$', exchangeLabel: 'Binance Spot', priceDecimals: 4, qtyLabel: 'units' },
-  },
+    display:   { currency: '$', exchangeLabel: 'Binance Spot', priceDecimals: 4, qtyLabel: 'units' }},
   async execute(req: ExecutionOrderRequest, ctx: ExecutionContext): Promise<ExecutionFill> {
     if (!ctx.binanceApiKey || !ctx.binanceSecret) {
       throw new Error('Binance API keys not configured. Go to More → Broker Connection.');
@@ -37,8 +36,7 @@ export const BinanceSpotExecutor: ExecutionProvider = {
       ...(req.orderType === 'LIMIT' && req.limitPrice
         ? { price: req.limitPrice, timeInForce: 'GTC' }
         : {}),
-      newClientOrderId: req.clientOrderId,
-    };
+      newClientOrderId: req.clientOrderId};
 
     logger.info('BinanceSpotExecutor', `Placing ${side} ${req.qty}×${req.symbol} Binance Spot`);
     const placed = await bnPlaceOrder(params, ctx.binanceApiKey, ctx.binanceSecret);
@@ -56,8 +54,7 @@ export const BinanceSpotExecutor: ExecutionProvider = {
         filledQty:   placed.executedQty,
         filledPrice: avgPrice,
         filledAt:    Date.now(),
-        fees,
-      };
+        fees};
     }
 
     const filled = await bnWaitForFill(req.symbol, placed.orderId, ctx.binanceApiKey, ctx.binanceSecret);
@@ -69,8 +66,7 @@ export const BinanceSpotExecutor: ExecutionProvider = {
       filledQty:   filled.executedQty,
       filledPrice: filled.avgFillPrice,
       filledAt:    Date.now(),
-      fees:        estimateBinanceFees(filled.avgFillPrice * filled.executedQty),
-    };
+      fees:        estimateBinanceFees(filled.avgFillPrice * filled.executedQty)};
   },
 
   async cancel(orderId: string, symbol: string, ctx: ExecutionContext): Promise<void> {

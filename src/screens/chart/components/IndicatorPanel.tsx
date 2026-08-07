@@ -19,7 +19,7 @@ type TechSummary = {
 
 type Props = { techSummary: TechSummary; T: any };
 
-export function IndicatorPanel({ techSummary, T }: Props) {
+export const IndicatorPanel = React.memo(function IndicatorPanel({ techSummary, T }: Props) {
   const s = techSummary.snapshot;
   const rsiZone = s.rsi >= 70
     ? { label: 'Overbought', color: T.red }
@@ -75,4 +75,4 @@ export function IndicatorPanel({ techSummary, T }: Props) {
       </View>
     </Card>
   );
-}
+});

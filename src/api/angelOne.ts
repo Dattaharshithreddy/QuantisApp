@@ -25,8 +25,7 @@ function headers(session: AOSession) {
     'X-ClientPublicIP': '1.1.1.1',
     'X-MACAddress': 'fe80::1',
     'X-PrivateKey': session.apiKey,
-    Authorization: `Bearer ${session.jwtToken}`,
-  };
+    Authorization: `Bearer ${session.jwtToken}`};
 }
 
 export async function aoLogin(apiKey: string, clientCode: string, password: string, totp: string): Promise<AOSession> {
@@ -36,10 +35,8 @@ export async function aoLogin(apiKey: string, clientCode: string, password: stri
       'Content-Type': 'application/json', Accept: 'application/json',
       'X-UserType': 'USER', 'X-SourceID': 'WEB',
       'X-ClientLocalIP': '192.168.1.1', 'X-ClientPublicIP': '1.1.1.1',
-      'X-MACAddress': 'fe80::1', 'X-PrivateKey': apiKey,
-    },
-    body: JSON.stringify({ clientcode: clientCode, password, totp }),
-  });
+      'X-MACAddress': 'fe80::1', 'X-PrivateKey': apiKey},
+    body: JSON.stringify({ clientcode: clientCode, password, totp })});
   if (!r.ok) throw new Error(`Angel One HTTP ${r.status}`);
   const json = await r.json();
   if (!json.status || !json.data?.jwtToken) throw new Error(json.message || 'Angel One auth failed');
@@ -59,8 +56,7 @@ async function aoCandlesRange(token: string, exchange: string, tf: string, from:
   const interval = TF_AO[tf] || 'FIFTEEN_MINUTE';
   const r = await fetch(`${AO_BASE}/rest/secure/angelbroking/historical/v1/getCandleData`, {
     method: 'POST', headers: headers(session),
-    body: JSON.stringify({ exchange, symboltoken: token, interval, fromdate: fmtAODate(from), todate: fmtAODate(to) }),
-  });
+    body: JSON.stringify({ exchange, symboltoken: token, interval, fromdate: fmtAODate(from), todate: fmtAODate(to) })});
   if (!r.ok) throw new Error(`AO candles HTTP ${r.status}`);
   const json = await r.json();
   if (!json.status) throw new Error(json.message || 'AO candles failed');
@@ -128,8 +124,7 @@ export async function aoLTP(items: { symbol: string; token: string; ex: string }
   if (!Object.keys(exchangeTokens).length) return {};
   const r = await fetch(`${AO_BASE}/rest/secure/angelbroking/market/v1/quote/`, {
     method: 'POST', headers: headers(session),
-    body: JSON.stringify({ mode: 'FULL', exchangeTokens }),
-  });
+    body: JSON.stringify({ mode: 'FULL', exchangeTokens })});
   if (!r.ok) throw new Error(`AO LTP HTTP ${r.status}`);
   const json = await r.json();
   if (!json.status) throw new Error(json.message);
@@ -144,9 +139,7 @@ export async function aoLTP(items: { symbol: string; token: string; ex: string }
       lowerCircuit: q.lowerCircuit  ? parseFloat(q.lowerCircuit)  : undefined,
       depth: q.depth ? {
         buy: (q.depth.buy || []).map((d: any) => ({ price: d.price, qty: d.quantity, orders: d.orders })),
-        sell: (q.depth.sell || []).map((d: any) => ({ price: d.price, qty: d.quantity, orders: d.orders })),
-      } : null,
-    };
+        sell: (q.depth.sell || []).map((d: any) => ({ price: d.price, qty: d.quantity, orders: d.orders }))} : null};
   });
   return result;
 }
@@ -159,16 +152,14 @@ export type Holding = {
 
 export async function aoHoldings(session: AOSession): Promise<Holding[]> {
   const r = await fetch(`${AO_BASE}/rest/secure/angelbroking/portfolio/v1/getHolding`, {
-    method: 'GET', headers: headers(session),
-  });
+    method: 'GET', headers: headers(session)});
   if (!r.ok) throw new Error(`AO holdings HTTP ${r.status}`);
   const json = await r.json();
   if (!json.status) throw new Error(json.message || 'AO holdings failed');
   return (json.data || []).map((h: any) => ({
     symbol: h.tradingsymbol, quantity: h.quantity, avgPrice: h.averageprice,
     ltp: h.ltp, pnl: calculatePnLWithMultiplier(h.averageprice, h.ltp, h.quantity, 1),
-    pnlPct: calculatePnLPct(calculatePnLWithMultiplier(h.averageprice, h.ltp, h.quantity, 1), h.averageprice, h.quantity), product: h.product,
-  }));
+    pnlPct: calculatePnLPct(calculatePnLWithMultiplier(h.averageprice, h.ltp, h.quantity, 1), h.averageprice, h.quantity), product: h.product}));
 }
 
 // ─────────────────────────────────────────────────
@@ -215,8 +206,7 @@ export type AORMSData = {
 export async function aoGetRMS(session: AOSession): Promise<AORMSData | null> {
   try {
     const r = await fetch(`${AO_BASE}/rest/secure/angelbroking/user/v1/getRMS`, {
-      headers: headers(session),
-    });
+      headers: headers(session)});
     if (!r.ok) return null;
     const json = await r.json();
     if (json.status !== true || !json.data) return null;
@@ -228,9 +218,188 @@ export async function aoGetRMS(session: AOSession): Promise<AORMSData | null> {
       collateral:          parseFloat(d.collateral        ?? '0'),
       m2munrealisedmtom:  parseFloat(d.m2munrealisedmtom ?? '0'),
       m2mrealisedmtom:    parseFloat(d.m2mrealisedmtom   ?? '0'),
-      utilisedpayout:      parseFloat(d.utilisedpayout    ?? '0'),
-    };
+      utilisedpayout:      parseFloat(d.utilisedpayout    ?? '0')};
   } catch {
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMARTAPI MARKET FEED WEBSOCKET
+// ─────────────────────────────────────────────────────────────────────────────
+// Angel One SmartAPI provides a binary WebSocket feed for tick-by-tick LTP.
+// URL: wss://smartapisocket.angelone.in/smart-stream
+// Auth: JWT token + feedToken from aoLogin response.
+// Protocol: JSON auth/subscribe messages, binary tick responses (51 bytes).
+//
+// Modes:
+//   LTP_MODE   (1) — last traded price only. Fastest, lowest bandwidth.
+//   QUOTE_MODE (2) — LTP + OHLC + volume. Used for chart candle updates.
+//   SNAP_MODE  (3) — full market depth. Heavy — not used here.
+//
+// Exchange type map (SmartAPI internal):
+//   NSE cash  → 1
+//   NSE F&O   → 2
+//   BSE cash  → 3
+//   MCX       → 5
+//
+// Binary tick packet layout (51 bytes, little-endian):
+//   [0]      uint8  subscription mode (1/2/3)
+//   [1]      uint8  exchange type
+//   [2..25]  char   token (zero-padded ASCII)
+//   [26..33] int64  sequence number
+//   [34..41] int64  exchange timestamp (ms since epoch)
+//   [42..49] int32  LTP × 100 (divide by 100 for actual price)
+//   [50]     uint8  (reserved)
+//   Mode 2 adds 28 more bytes: last trade qty, avg price, volume, total buy qty,
+//   total sell qty, open, high, low, close — all int32 × 100, little-endian.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AO_WS_URL = 'wss://smartapisocket.angelone.in/smart-stream';
+
+// SmartAPI exchange type codes
+const AO_EXCH_TYPE: Record<string, number> = {
+  NSE: 1, NFO: 2, BSE: 3, MCX: 5,
+};
+
+export type AOTickCallback = (symbol: string, ltp: number, ohlcv?: {
+  open: number; high: number; low: number; close: number; volume: number;
+}) => void;
+
+export type AOWSStatus = 'connecting' | 'live' | 'reconnecting' | 'error' | 'closed';
+
+/**
+ * Opens a SmartAPI Market Feed WebSocket for the given list of tokens.
+ * Streams LTP (and optionally OHLCV) ticks for NSE/NFO/BSE symbols.
+ *
+ * @param items     List of { symbol, token, aoEx } to subscribe to.
+ * @param session   AOSession with jwtToken and feedToken from aoLogin.
+ * @param onTick    Called on every price tick with symbol + ltp.
+ * @param onStatus  Called when connection state changes.
+ * @param mode      1=LTP only (default), 2=LTP+OHLCV (chart screen).
+ * @returns         Cleanup function — call to close the WebSocket.
+ */
+export function openAOMarketFeed(
+  items: { symbol: string; token: string; aoEx: string }[],
+  session: AOSession,
+  onTick: AOTickCallback,
+  onStatus: (s: AOWSStatus) => void,
+  mode: 1 | 2 = 1,
+): () => void {
+  let ws: WebSocket | null = null;
+  let retryT: any = null;
+  let closed = false;
+  let pingT: any = null;
+
+  // Token → symbol reverse map for decoding binary ticks
+  const tokenToSymbol: Record<string, string> = {};
+  items.forEach(it => { tokenToSymbol[it.token] = it.symbol; });
+
+  // Build subscription list grouped by exchange type
+  const tokenList = Object.entries(
+    items.reduce((acc, it) => {
+      const exType = AO_EXCH_TYPE[it.aoEx] ?? 1;
+      (acc[exType] ||= []).push(it.token);
+      return acc;
+    }, {} as Record<number, string[]>)
+  ).map(([exchangeType, tokens]) => ({ exchangeType: Number(exchangeType), tokens }));
+
+  function parseTick(buf: ArrayBuffer): void {
+    const view = new DataView(buf);
+    if (view.byteLength < 51) return;
+
+    const tickMode = view.getUint8(0);
+
+    // Token: bytes 2-26 (25 bytes), null-terminated ASCII
+    let token = '';
+    for (let i = 2; i < 27; i++) {
+      const b = view.getUint8(i);
+      if (b === 0) break;
+      token += String.fromCharCode(b);
+    }
+    const symbol = tokenToSymbol[token];
+    if (!symbol) return;
+
+    // LTP: bytes 43-46, int32 LE, divide by 100
+    const ltp = view.getInt32(43, true) / 100;
+    if (ltp <= 0) return;
+
+    // Mode 2 (Quote): 87 bytes total
+    // Bytes 51-54: last_traded_qty
+    // Bytes 55-58: avg_traded_price × 100
+    // Bytes 59-62: volume_traded
+    // Bytes 63-66: total_buy_qty
+    // Bytes 67-70: total_sell_qty
+    // Bytes 71-74: open × 100
+    // Bytes 75-78: high × 100
+    // Bytes 79-82: low × 100
+    // Bytes 83-86: close × 100
+    if (tickMode === 2 && view.byteLength >= 87) {
+      const volume = view.getInt32(59, true);
+      const open   = view.getInt32(71, true) / 100;
+      const high   = view.getInt32(75, true) / 100;
+      const low    = view.getInt32(79, true) / 100;
+      const close  = view.getInt32(83, true) / 100;
+      onTick(symbol, ltp, { open, high, low, close, volume });
+    } else {
+      onTick(symbol, ltp);
+    }
+  }
+
+  function connect() {
+    onStatus('connecting');
+    ws = new WebSocket(AO_WS_URL);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      // SmartAPI v3: authenticate immediately on connect
+      // Field names are camelCase in v3 protocol
+      ws!.send(JSON.stringify({
+        feedToken:  session.feedToken ?? '',
+        clientCode: session.clientCode,
+      }));
+    };
+
+    ws.onmessage = (evt: any) => {
+      if (typeof evt.data === 'string') {
+        try {
+          const msg = JSON.parse(evt.data);
+          // 'cn' = connection acknowledged; subscribe now
+          if (msg.type === 'cn') {
+            ws!.send(JSON.stringify({
+              action:    1,
+              params:    { mode, tokenList },
+              correlationID: 'quantis_chart',
+            }));
+            onStatus('live');
+            // Heartbeat: SmartAPI expects the string 'ping' every 25s
+            clearInterval(pingT);
+            pingT = setInterval(() => {
+              if (ws?.readyState === WebSocket.OPEN) ws.send('ping');
+            }, 25_000);
+          }
+        } catch (_) {}
+        return;
+      }
+      if (evt.data instanceof ArrayBuffer) parseTick(evt.data);
+    };
+
+    ws.onerror = () => onStatus('error');
+
+    ws.onclose = () => {
+      clearInterval(pingT);
+      if (closed) return;
+      onStatus('reconnecting');
+      retryT = setTimeout(connect, 5_000);
+    };
+  }
+
+  connect();
+
+  return () => {
+    closed = true;
+    clearInterval(pingT);
+    clearTimeout(retryT);
+    ws?.close();
+  };
 }

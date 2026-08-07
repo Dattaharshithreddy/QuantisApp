@@ -51,8 +51,7 @@ export function detectPDAt(
     fib236: fibLevel(swingLow, swingHigh, 0.236),
     fib382: fibLevel(swingLow, swingHigh, 0.382),
     fib618: fibLevel(swingLow, swingHigh, 0.618),
-    fib786: fibLevel(swingLow, swingHigh, 0.786),
-  };
+    fib786: fibLevel(swingLow, swingHigh, 0.786)};
 }
 
 // ── Precompute for all bars — O(n + s) with monotonic pointers ───────────────
@@ -98,8 +97,7 @@ export function computeDetectedPD(
       fib236: fibLevel(swingLow, swingHigh, 0.236),
       fib382: fibLevel(swingLow, swingHigh, 0.382),
       fib618: fibLevel(swingLow, swingHigh, 0.618),
-      fib786: fibLevel(swingLow, swingHigh, 0.786),
-    };
+      fib786: fibLevel(swingLow, swingHigh, 0.786)};
   }
   return result;
 }

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { useData } from '../context/DataContext';
 import { Card, SectionLabel, StatBox, PrimaryButton, Pill } from '../components/Common';
 import { BottomSheet } from '../components/BottomSheet';
 import { Trade, getTrades, addTrade, closeTrade, deleteTrade, computeStats, pnlOf } from '../utils/journal';
@@ -12,8 +13,20 @@ import { pFmt } from '../utils/indicators';
 const DIRECTIONS = ['LONG', 'SHORT', 'BUY_CE', 'BUY_PE', 'SELL_CE', 'SELL_PE'];
 const SETUP_TAGS = ['AI Signal', 'Breakout', 'Reversal', 'Trend Follow', 'Scalp', 'News Play'];
 
+// Locale-aware timestamp — uses the device's own locale so Indian users see
+// "29 Jul, 10:30 AM" and US users see "Jul 29, 10:30 AM" automatically.
+const DATE_FMT = new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short' });
+const TIME_FMT = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
+
+function formatTs(ms: number | null | undefined): string {
+  if (!ms) return '';
+  const d = new Date(ms);
+  return `${DATE_FMT.format(d)}, ${TIME_FMT.format(d)}`;
+}
+
 export default function JournalScreen() {
   const { theme: T } = useTheme();
+  const { allAssets } = useData();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => { setRefreshing(true); try { load(); } finally { setRefreshing(false); } }, [load]);
@@ -23,6 +36,7 @@ export default function JournalScreen() {
 
   // New trade form
   const [symbol, setSymbol] = useState('NIFTY50');
+  const [symbolSearch, setSymbolSearch] = useState('');
   const [direction, setDirection] = useState<Trade['direction']>('LONG');
   const [entry, setEntry] = useState('');
   const [qty, setQty] = useState('');
@@ -34,12 +48,29 @@ export default function JournalScreen() {
 
   const stats = computeStats(trades);
 
+  // Symbol picker — two-tier validated lookup:
+  // Tier 1: user's current watchlist (allAssets) — shown first, these are always valid.
+  // Tier 2: master ASSETS list fallback — symbols the user hasn't added to their
+  //         watchlist yet but are known-good entries with full metadata.
+  // No free-text arbitrary symbols allowed — prevents trades against typos like
+  // "BTCUSDTT" or "ETHUS" that would silently corrupt analytics.
+  const q = symbolSearch.trim().toUpperCase();
+  const watchlistMatches = allAssets.filter(
+    a => !q || a.symbol.includes(q) || (a.name ?? '').toUpperCase().includes(q),
+  );
+  const watchlistSymbols = new Set(allAssets.map(a => a.symbol));
+  const masterFallback = q.length >= 2
+    ? ASSETS.filter(a => !watchlistSymbols.has(a.symbol) && (a.symbol.includes(q) || a.name.toUpperCase().includes(q)))
+    : [];
+  // Merge: watchlist first, then master-list extras
+  const symbolList = [...watchlistMatches, ...masterFallback];
+
   async function handleAdd() {
     if (!entry || !qty) return;
     const updated = await addTrade({ symbol, direction, entry: parseFloat(entry), exit: null, qty: parseFloat(qty), setupTag, notes, closedAt: null });
     setTrades(updated);
     setShowAdd(false);
-    setEntry(''); setQty(''); setNotes('');
+    setEntry(''); setQty(''); setNotes(''); setSymbolSearch('');
   }
 
   async function handleClose(id: string) {
@@ -54,8 +85,15 @@ export default function JournalScreen() {
     setClosingId(null); setExitPrice('');
   }
 
-  async function handleDelete(id: string) {
-    setTrades(await deleteTrade(id));
+  function confirmDelete(id: string) {
+    Alert.alert(
+      'Delete trade?',
+      'This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => setTrades(await deleteTrade(id)) },
+      ],
+    );
   }
 
   return (
@@ -94,21 +132,26 @@ export default function JournalScreen() {
           return (
             <Card key={t.id} theme={T} style={{ marginBottom: 10 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={{ color: T.text, fontWeight: '700', fontSize: 14 }}>{t.symbol}</Text>
                     <Pill label={t.direction} color={['LONG', 'BUY_CE', 'BUY_PE'].includes(t.direction) ? T.green : T.red} active />
                   </View>
                   <Text style={{ color: T.textDim, fontSize: 10, marginTop: 4 }}>{t.setupTag} · Entry ₹{pFmt(t.entry)} · Qty {t.qty}</Text>
-                  {t.notes && <Text style={{ color: T.textSub, fontSize: 10, marginTop: 4 }}>{t.notes}</Text>}
+                  {/* Timestamps */}
+                  <Text style={{ color: T.textDim, fontSize: 9, marginTop: 3 }}>
+                    {formatTs(t.openedAt)}{t.closedAt ? ` → ${formatTs(t.closedAt)}` : ' · Open'}
+                  </Text>
+                  {t.notes ? <Text style={{ color: T.textSub, fontSize: 10, marginTop: 4 }}>{t.notes}</Text> : null}
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
+                <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
                   {isOpen ? (
                     <Pill label="OPEN" color={T.amber} active onPress={() => setClosingId(t.id)} />
                   ) : (
                     <Text style={{ color: pnl >= 0 ? T.green : T.red, fontWeight: '800', fontSize: 14 }}>{pnl >= 0 ? '+' : ''}₹{pnl.toFixed(0)}</Text>
                   )}
-                  <TouchableOpacity onPress={() => handleDelete(t.id)} style={{ marginTop: 8 }}>
+                  {/* Delete — now shows confirm dialog */}
+                  <TouchableOpacity onPress={() => confirmDelete(t.id)} style={{ marginTop: 8 }}>
                     <Text style={{ color: T.textDim, fontSize: 10 }}>Delete</Text>
                   </TouchableOpacity>
                 </View>
@@ -130,12 +173,29 @@ export default function JournalScreen() {
       </ScrollView>
 
       {/* Add Trade Modal */}
-      <BottomSheet visible={showAdd} onClose={() => setShowAdd(false)} title="Log New Trade" theme={T}>
+      <BottomSheet visible={showAdd} onClose={() => { setShowAdd(false); setSymbolSearch(''); }} title="Log New Trade" theme={T}>
         <ScrollView>
+          {/* Symbol — searchable, shows all watchlist assets */}
           <Text style={{ color: T.textDim, fontSize: 10, marginBottom: 6 }}>SYMBOL</Text>
+          <TextInput
+            value={symbolSearch}
+            onChangeText={setSymbolSearch}
+            placeholder={`Search watchlist or known assets — selected: ${symbol}`}
+            placeholderTextColor={T.textDim}
+            autoCapitalize="characters"
+            style={[inputStyle(T), { marginBottom: 8 }]}
+          />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              {ASSETS.slice(0, 10).map(a => <Pill key={a.symbol} label={a.symbol} color={T.blue} active={symbol === a.symbol} onPress={() => setSymbol(a.symbol)} />)}
+              {symbolList.slice(0, 40).map(a => (
+                <Pill key={a.symbol + a.src} label={a.symbol} color={T.blue} active={symbol === a.symbol}
+                  onPress={() => { setSymbol(a.symbol); setSymbolSearch(''); }} />
+              ))}
+              {q.length >= 2 && symbolList.length === 0 && (
+                <Text style={{ color: T.textDim, fontSize: 11, alignSelf: 'center', fontStyle: 'italic' }}>
+                  No matching assets — add via Markets → Add Symbol first.
+                </Text>
+              )}
             </View>
           </ScrollView>
 
@@ -168,7 +228,7 @@ export default function JournalScreen() {
           <TextInput value={notes} onChangeText={setNotes} multiline style={[inputStyle(T), { height: 60, marginBottom: 16 }]} />
 
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity onPress={() => setShowAdd(false)} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: T.bg3, alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => { setShowAdd(false); setSymbolSearch(''); }} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: T.bg3, alignItems: 'center' }}>
               <Text style={{ color: T.textSub, fontWeight: '700' }}>Cancel</Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }}><PrimaryButton theme={T} label="Save Trade" onPress={handleAdd} /></View>

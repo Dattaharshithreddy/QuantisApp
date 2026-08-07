@@ -3,6 +3,7 @@
 // + paper trading state that feeds the chart directly
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { AppState } from 'react-native';
 import { Candle } from '../../../utils/indicators';
 import { MLPrediction } from '../../../utils/mlSignal';
 import { getPortfolio, PaperPosition } from '../../../utils/paperPortfolio';
@@ -46,7 +47,12 @@ export function useChartOverlays(
   const refreshTradeData = useCallback(async () => {
     const portfolio = await getPortfolio();
     if (!mountedRef.current) return;
-    setOpenPosition(portfolio.openPositions.find(p => p.symbol === symbol) ?? null);
+    // Find open position for this exact symbol+timeframe.
+    // A position is timeframe-specific — ETH/15m position should NOT show
+    // "Manage Position" on ETH/1H or ETH/4H chart views.
+    setOpenPosition(portfolio.openPositions.find(
+      p => p.symbol === symbol && p.timeframe === tf
+    ) ?? null);
     const trades = await getPaperTrades();
     if (!mountedRef.current) return;
     setSymbolTrades(trades.filter(t => t.symbol === symbol && t.timeframe === tf));
@@ -54,6 +60,24 @@ export function useChartOverlays(
 
   useEffect(() => {
     refreshTradeData();
+  }, [refreshTradeData]);
+
+  // FIX: when a trade is closed from PaperTradingScreen (or any other screen),
+  // the chart's openPosition state is stale — Entry/SL/TP lines stay visible
+  // indefinitely. Fix with two mechanisms:
+  //  1. Poll every 3s while a position is open — clears overlays within 3s of close
+  //  2. Re-sync immediately when app returns to foreground (user switches screens)
+  useEffect(() => {
+    if (!openPosition) return; // no polling when no open position
+    const interval = setInterval(refreshTradeData, 3000);
+    return () => clearInterval(interval);
+  }, [openPosition, refreshTradeData]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshTradeData();
+    });
+    return () => sub.remove();
   }, [refreshTradeData]);
 
   const handlePaperTrade = useCallback(async (prediction: MLPrediction, bypassGates: boolean = false, mtfReadinessState?: 'READY' | 'WAIT' | 'AVOID' | null) => {
@@ -125,13 +149,12 @@ export function useChartOverlays(
     if (!candles.length) return [];
     const firstTime = candles[0].time;
     const result: any[] = [];
-    symbolTrades.forEach(t => {
-      if (t.entryTime >= firstTime) result.push({ time: t.entryTime, type: 'ENTRY', price: t.entryPrice, label: 'Entry' });
-      if (t.exitTime  >= firstTime) {
-        const exitType = t.exitReason === 'STOP_LOSS' ? 'SL_HIT' : t.exitReason === 'TAKE_PROFIT' ? 'TP_HIT' : 'EXIT';
-        result.push({ time: t.exitTime, type: exitType, price: t.exitPrice, label: exitType });
-      }
-    });
+    // Normal chart: show ONLY the current active open position entry marker.
+    // Closed trade history is intentionally excluded — it becomes visual noise
+    // at scale and distracts from current decision-making.
+    // Historical trades are available in: Paper Journal, Shadow Journal, Trade Review.
+    if (openPosition && openPosition.entryTime >= firstTime)
+      result.push({ time: openPosition.entryTime, type: 'ENTRY', price: openPosition.entryPrice, label: 'Entry' });
     if (openPosition && openPosition.entryTime >= firstTime)
       result.push({ time: openPosition.entryTime, type: 'ENTRY', price: openPosition.entryPrice, label: 'Entry' });
     if (mlData && mlData.action !== 'HOLD') {
@@ -147,11 +170,10 @@ export function useChartOverlays(
       result.push({
         time: last.time, type: mlData.action as 'BUY'|'SELL',
         price: last.close, label: mlData.action,
-        confQuality,
-      });
+        confQuality});
     }
     return result;
-  }, [candles, symbolTrades, openPosition, mlData, tradeQualityResult]);
+  }, [candles, openPosition, mlData, tradeQualityResult]);
 
   // Overlay toggle state
   const [showMA, setShowMA] = useState(true);
@@ -177,6 +199,5 @@ export function useChartOverlays(
     showMA, setShowMA, showVP, setShowVP,
     overlayToggles, toggleOverlay,
     showQualityBreakdown, setShowQualityBreakdown,
-    showConfidenceBreakdown, setShowConfidenceBreakdown,
-  };
+    showConfidenceBreakdown, setShowConfidenceBreakdown};
 }

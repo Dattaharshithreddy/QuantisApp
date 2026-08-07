@@ -27,8 +27,7 @@ function headers(session: AOSession) {
     'X-ClientPublicIP': '1.1.1.1',
     'X-MACAddress':     'fe80::1',
     'X-PrivateKey':     session.apiKey,
-    Authorization:      `Bearer ${session.jwtToken}`,
-  };
+    Authorization:      `Bearer ${session.jwtToken}`};
 }
 
 // ── Order types ───────────────────────────────────────────────────────────────
@@ -102,8 +101,7 @@ export async function aoPlaceOrder(
   const r = await withRetry(() => fetch(`${AO_BASE}/rest/secure/angelbroking/order/v1/placeOrder`, {
     method: 'POST',
     headers: headers(session),
-    body: JSON.stringify(params),
-  }), 2);
+    body: JSON.stringify(params)}), 2);
 
   if (!r.ok) throw new Error(`Angel One placeOrder HTTP ${r.status}`);
   const json = await r.json();
@@ -115,8 +113,7 @@ export async function aoPlaceOrder(
   return {
     orderId:       json.data.orderid,
     uniqueOrderId: json.data.uniqueorderid ?? json.data.orderid,
-    script:        params.tradingsymbol,
-  };
+    script:        params.tradingsymbol};
 }
 
 // ── Modify order ──────────────────────────────────────────────────────────────
@@ -132,8 +129,7 @@ export async function aoModifyOrder(
   const r = await withRetry(() => fetch(`${AO_BASE}/rest/secure/angelbroking/order/v1/modifyOrder`, {
     method: 'POST',
     headers: headers(session),
-    body: JSON.stringify({ variety, orderid: orderId, ...changes }),
-  }), 2);
+    body: JSON.stringify({ variety, orderid: orderId, ...changes })}), 2);
 
   if (!r.ok) throw new Error(`Angel One modifyOrder HTTP ${r.status}`);
   const json = await r.json();
@@ -153,8 +149,7 @@ export async function aoCancelOrder(
   const r = await withRetry(() => fetch(`${AO_BASE}/rest/secure/angelbroking/order/v1/cancelOrder`, {
     method: 'POST',
     headers: headers(session),
-    body: JSON.stringify({ variety, orderid: orderId }),
-  }), 2);
+    body: JSON.stringify({ variety, orderid: orderId })}), 2);
 
   if (!r.ok) throw new Error(`Angel One cancelOrder HTTP ${r.status}`);
   const json = await r.json();
@@ -170,8 +165,7 @@ export async function aoGetOrderStatus(
 ): Promise<AOOrderStatus | null> {
   const r = await fetch(`${AO_BASE}/rest/secure/angelbroking/order/v1/getOrderBook`, {
     method: 'GET',
-    headers: headers(session),
-  });
+    headers: headers(session)});
 
   if (!r.ok) throw new Error(`Angel One getOrderBook HTTP ${r.status}`);
   const json = await r.json();
@@ -188,8 +182,7 @@ export async function aoGetOrderStatus(
     avgFillPrice:    Number(order.averageprice ?? 0),
     orderType:       order.ordertype,
     transactionType: order.transactiontype,
-    rejectedReason:  order.text,
-  };
+    rejectedReason:  order.text};
 }
 
 // ── Poll until filled or terminal ─────────────────────────────────────────────
@@ -217,8 +210,7 @@ export async function aoWaitForFill(
 export async function aoGetPositions(session: AOSession): Promise<AOPosition[]> {
   const r = await fetch(`${AO_BASE}/rest/secure/angelbroking/order/v1/getPosition`, {
     method: 'GET',
-    headers: headers(session),
-  });
+    headers: headers(session)});
 
   if (!r.ok) throw new Error(`Angel One getPosition HTTP ${r.status}`);
   const json = await r.json();
@@ -235,6 +227,5 @@ export async function aoGetPositions(session: AOSession): Promise<AOPosition[]> 
     ltp:            Number(p.ltp ?? 0),
     pnl:            Number(p.pnl ?? 0),
     realisedpnl:    Number(p.realisedpnl ?? 0),
-    unrealisedpnl:  Number(p.unrealisedpnl ?? 0),
-  }));
+    unrealisedpnl:  Number(p.unrealisedpnl ?? 0)}));
 }

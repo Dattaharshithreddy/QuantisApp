@@ -51,7 +51,7 @@ export default function BacktestScreen() {
         candles = await fetchCandlesWithCache(asset.symbol, tf,
           async () => fetchMaxHistory(bnSym, tf, 5000),
           { maxCandles: 5000, forceRefresh: true });
-      } else if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
+      } else if ((asset.src === 'ao' || asset.src === 'ao_futures') && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
         const { aoToken, aoEx } = asset; const sess = aoSession;
         candles = await fetchCandlesWithCache(asset.symbol, tf,
           async () => aoCandles(aoToken, aoEx, tf, sess),
@@ -71,8 +71,7 @@ export default function BacktestScreen() {
         startingCapital: parseFloat(capital) || 100000,
         feePct: parseFloat(feePct) || 0,
         slippagePct: parseFloat(slippagePct) || 0,
-        riskPerTradePct: parseFloat(riskPct) || 2,
-      });
+        riskPerTradePct: parseFloat(riskPct) || 2});
       if (!res) { setErr('Not enough valid samples to backtest after feature warmup.'); setLoading(false); return; }
       setResult(res);
     } catch (e: any) {
@@ -91,8 +90,7 @@ export default function BacktestScreen() {
         slippagePct: parseFloat(slippagePct) || 0,
         riskPerTradePct: parseFloat(riskPct) || 2,
         useVolatilityFilter: true,
-        maxConsecutiveLosses: 5,
-      });
+        maxConsecutiveLosses: 5});
       setDiagnostics(diag);
     } catch (e: any) {
       setErr(e.message);
@@ -234,8 +232,7 @@ export default function BacktestScreen() {
                 candles and config as the backtest above; trains a fresh
                 fitted model via the same fitEnsemble used everywhere else. */}
             <TouchableOpacity onPress={runDiagnostics} disabled={loadingDiagnostics} style={{
-              backgroundColor: T.purple, padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 16, opacity: loadingDiagnostics ? 0.6 : 1,
-            }}>
+              backgroundColor: T.purple, padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 16, opacity: loadingDiagnostics ? 0.6 : 1}}>
               {loadingDiagnostics ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>RUN ADVANCED DIAGNOSTICS</Text>}
             </TouchableOpacity>
 

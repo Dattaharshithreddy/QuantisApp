@@ -35,7 +35,7 @@ export default function MultiChartScreen({ navigation }: any) {
           const bnSym = asset.bnSym;
           next[sym] = await fetchCandlesWithCache(sym, '15m',
             async () => fetchBnKlines(bnSym, '15m'), { skipApiIfFresh: true }); status[sym] = 'live';
-        } else if (asset.src === 'ao' && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
+        } else if ((asset.src === 'ao' || asset.src === 'ao_futures') && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
           const { aoToken, aoEx } = asset; const sess = aoSession;
           next[sym] = await fetchCandlesWithCache(sym, '15m',
             async () => aoCandles(aoToken, aoEx, '15m', sess), { skipApiIfFresh: true }); status[sym] = 'live';

@@ -264,8 +264,7 @@ async function repairGhosts(
           'X-ClientLocalIP': '192.168.1.1', 'X-ClientPublicIP': '1.1.1.1',
           'X-MACAddress': 'fe80::1',
           'X-PrivateKey': aoSession.apiKey,
-          Authorization: `Bearer ${aoSession.jwtToken}`,
-        }}
+          Authorization: `Bearer ${aoSession.jwtToken}`}}
       );
       if (r.ok) {
         const json = await r.json();
@@ -334,8 +333,7 @@ async function repairGhosts(
         closedAt:    Date.now(),
         closedPrice: exitPrice,
         realizedPnL: pnl,
-        closedBy:    'RECONCILIATION',
-      }, `Ghost detected — price source: ${priceSource}`);
+        closedBy:    'RECONCILIATION'}, `Ghost detected — price source: ${priceSource}`);
     }
   }
 
@@ -409,8 +407,7 @@ export async function reconcileLivePositions(
     phantoms:   allPhantoms,
     ghosts:     allGhosts,
     matched:    totalMatched,
-    errors:     allErrors,
-  };
+    errors:     allErrors};
 
   // Record system performance metric
   await recordMetric('reconciliation', result.durationMs).catch(() => {});

@@ -6,7 +6,10 @@ export type AIAnalysis = {
   riskReward: number; confidence: number; volatility: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
   patternDetected: string; technicalSetup: string; trendAnalysis: string; keyLevels: string;
   momentumReading: string; smartMoney: string; macroContext: string; marketPsychology: string;
-  riskFactors: string; invalidation: string; suggestedPosition: string; executiveSummary: string;
+  riskFactors: string; invalidation: string; suggestedPosition: string;
+  priorCallUpdate: string;  // tracks continuity: is prior call playing out?
+  executiveSummary: string;
+  analyzedAt: number;       // Unix ms — when this analysis was generated
 };
 
 // FIXED: this previously had NO authentication header at all. That worked only
@@ -21,10 +24,8 @@ export async function analyzeWithClaude(prompt: string, apiKey: string): Promise
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2400, messages: [{ role: 'user', content: prompt }] }),
-  });
+      'anthropic-version': '2023-06-01'},
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 3200, messages: [{ role: 'user', content: prompt }] })});
   if (!res.ok) {
     const errBody = await res.text().catch(() => '');
     if (res.status === 401) throw new Error('Invalid Anthropic API key — check it in Settings.');
@@ -107,32 +108,55 @@ function normalizeAnalysis(d: any): AIAnalysis {
     riskFactors:      pick('riskFactors',       'risk_factors',    'risks')               ?? '',
     invalidation:     pick('invalidation',      'invalidationLevel','invalidation_level')  ?? '',
     suggestedPosition:pick('suggestedPosition', 'suggested_position','positionSize')       ?? '',
-    executiveSummary: pick('executiveSummary',  'executive_summary','summary')            ?? '',
-  };
+    priorCallUpdate:  pick('priorCallUpdate',   'prior_call_update', 'priorCall')          ?? '',
+    analyzedAt:       Date.now(),
+    executiveSummary: pick('executiveSummary',  'executive_summary','summary')            ?? ''};
 }
 
 export function buildAnalysisPrompt(opts: {
   assetName: string; symbol: string; type: string; tf: string; srcLabel: string;
   price: number; ch5: string; rsi: number; ma20: number | null; ma50: number | null;
+  atr?: number | null;
   high10: number; low10: number; ohlc: string; recentNews?: string;
-  obLine?: string; pocLine?: string; volSpikeLine?: string; mlLine?: string;
+  obLine?: string; obDepthLines?: string; pocLine?: string; volSpikeLine?: string; mlLine?: string;
+  priorAnalysis?: string; // last analysis summary for continuity
 }) {
-  const { assetName, symbol, type, tf, srcLabel, price, ch5, rsi, ma20, ma50, high10, low10, ohlc, recentNews, obLine, pocLine, volSpikeLine, mlLine } = opts;
-  return `You are a top-1% institutional trader and quant analyst with 20+ years at elite hedge funds. Respond ONLY with a valid JSON object, no markdown, no text outside JSON.
+  const {
+    assetName, symbol, type, tf, srcLabel, price, ch5, rsi, ma20, ma50, atr,
+    high10, low10, ohlc, recentNews, obLine, obDepthLines, pocLine, volSpikeLine, mlLine,
+    priorAnalysis,
+  } = opts;
 
-ASSET: ${assetName} (${symbol}) | ${type} | TF:${tf} | DATA:${srcLabel}
-PRICE:${price} | 5-BAR CHG:${ch5}% | RSI≈${rsi} | MA20:${ma20 ?? '—'} | MA50:${ma50 ?? '—'}
-HIGH(10):${high10} | LOW(10):${low10}
+  const priorSection = priorAnalysis
+    ? `\nPRIOR ANALYSIS (your last call on this symbol — use for continuity, not as bias):\n${priorAnalysis}\n`
+    : '';
+
+  return `You are a top-1% institutional trader and quant analyst with 20+ years at elite hedge funds.
+Respond ONLY with a valid JSON object — no markdown, no text outside JSON.
+
+ASSET: ${assetName} (${symbol}) | Type:${type} | TF:${tf} | Source:${srcLabel}
+PRICE:${price} | 5-BAR CHG:${ch5}% | RSI(14):${Math.round(rsi)} | MA20:${ma20 ?? '—'} | MA50:${ma50 ?? '—'}${atr != null ? ` | ATR:${atr.toFixed(2)}` : ''}
+10-BAR RANGE: High:${high10} | Low:${low10} | Range:${(high10 - low10).toFixed(2)}
 ${volSpikeLine || ''}
 ${pocLine || ''}
 ${obLine || ''}
+${obDepthLines || ''}
 ${mlLine || ''}
-LAST 10 BARS:\n${ohlc}
-${recentNews ? `\nLIVE NEWS:\n${recentNews}` : ''}
+${priorSection}
+RECENT ${ohlc.split('\n').length} BARS (O/H/L/C/Vol):
+${ohlc}
+${recentNews ? `\nLIVE NEWS (most recent first):\n${recentNews}` : ''}
 
-Use order book imbalance and volume profile POC as direct evidence in "smartMoney" — cite actual numbers. The neural net signal (if present) is a minor, low-sample-size quant input — weigh it lightly and explicitly say so if it's used, never present it as decisive on its own.
+ANALYSIS RULES:
+1. Order book: cite specific bid/ask walls and spread — "83% buy pressure with ${(high10 * 0.001).toFixed(2)} spread" not just percentages
+2. ATR context: use ATR for stop sizing — stops < 0.5×ATR are too tight and will be hunted
+3. ML Signal: treat as one of many inputs. If it conflicts with price action, explain why
+4. Prior analysis: if provided, reference whether the prior call is playing out or has been invalidated
+5. Invalidation: must be a specific price level, not vague language
+6. Risk:Reward: only recommend trades with R:R ≥ 1.5
 
-Return ONLY: {"tradeType":"LONG|SHORT|BUY_CE|BUY_PE|SELL_CE|SELL_PE|NO_TRADE","style":"SCALP|INTRADAY|SWING","marketRegime":"TRENDING_BULL|TRENDING_BEAR|RANGING|BREAKOUT|REVERSAL|VOLATILE","entry":<n>,"stopLoss":<n>,"target1":<n>,"target2":<n>,"target3":<n>,"riskReward":<n>,"confidence":<0-100>,"volatility":"LOW|MEDIUM|HIGH|EXTREME","patternDetected":"<or NONE>","technicalSetup":"<2-3 sentences>","trendAnalysis":"<multi-tf>","keyLevels":"<S/R>","momentumReading":"<RSI vol>","smartMoney":"<institutional footprint citing order book + volume profile>","macroContext":"<macro & news impact>","marketPsychology":"<sentiment>","riskFactors":"<top risks>","invalidation":"<what invalidates>","suggestedPosition":"<% portfolio>","executiveSummary":"<2-3 sentences>"}`;
+Return ONLY valid JSON:
+{"tradeType":"LONG|SHORT|BUY_CE|BUY_PE|SELL_CE|SELL_PE|NO_TRADE","style":"SCALP|INTRADAY|SWING","marketRegime":"TRENDING_BULL|TRENDING_BEAR|RANGING|BREAKOUT|REVERSAL|VOLATILE","entry":<n>,"stopLoss":<n>,"target1":<n>,"target2":<n>,"target3":<n>,"riskReward":<n>,"confidence":<0-100>,"volatility":"LOW|MEDIUM|HIGH|EXTREME","patternDetected":"<pattern or NONE>","technicalSetup":"<2-3 sentences citing specific levels and indicators>","trendAnalysis":"<multi-timeframe view>","keyLevels":"<specific S/R prices>","momentumReading":"<RSI, ATR, volume context>","smartMoney":"<institutional footprint — cite exact order book levels if provided>","macroContext":"<macro & news impact on this specific asset>","marketPsychology":"<fear/greed, sentiment>","riskFactors":"<top 2-3 specific risks>","invalidation":"<exact price that invalidates this call>","suggestedPosition":"<% of portfolio>","priorCallUpdate":"<is prior call playing out, invalidated, or n/a>","executiveSummary":"<2-3 sentences — directional view, key evidence, key risk>"}`;
 }
 
 // ─────────────────────────────────────────────────
@@ -147,15 +171,12 @@ export async function chatWithClaude(messages: ChatMessage[], apiKey: string, sy
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
+      'anthropic-version': '2023-06-01'},
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 1200,
       system: systemContext,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-    }),
-  });
+      messages: messages.map(m => ({ role: m.role, content: m.content }))})});
   if (!res.ok) {
     const errBody = await res.text().catch(() => '');
     if (res.status === 401) throw new Error('Invalid Anthropic API key — check it in Settings.');

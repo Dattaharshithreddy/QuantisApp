@@ -23,6 +23,16 @@ export type PaperPortfolioStats = {
   byRegime: { regime: string; trades: number; netPnl: number; winRate: number }[];
   bestTrade: BestWorstTrade;
   worstTrade: BestWorstTrade;
+  // FIX (Audit item #3): aggregated peak-profit withdrawal metrics across all closed trades.
+  // All values read from frozen PaperTradeRecord fields — never recomputed.
+  avgPeakProfit: number | null;          // mean peak unrealized P&L across all trades
+  avgMaxProfitWithdrawn: number | null;  // mean largest "profit given back" across all trades
+  avgMFE: number | null;                 // mean Maximum Favorable Excursion (= avgPeakProfit when > 0)
+  avgMAE: number | null;                 // mean Maximum Adverse Excursion (always <= 0)
+  // FIX (Audit item #1): partial-close breakdown — how many journal entries are partial closes.
+  // Partial closes now appear in the journal (PARTIAL_CLOSE exitReason). This count helps the
+  // user understand the composition of their trade history.
+  partialCloseCount: number;
   mostProfitableSymbol: string | null;
   mostAccurateSymbol: string | null;
   mostProfitableTimeframe: string | null;
@@ -80,8 +90,7 @@ function computePredictionAccuracyStats(trades: PaperTradeRecord[]): PredictionA
     correctCount: correct.length, incorrectCount: incorrect.length, neutralCount: neutral.length,
     correctButLosingCount: correct.filter(t => t.pnl <= 0).length,
     incorrectButWinningCount: incorrect.filter(t => t.pnl > 0).length,
-    avgPnlCorrect: avg(correct), avgPnlIncorrect: avg(incorrect),
-  };
+    avgPnlCorrect: avg(correct), avgPnlIncorrect: avg(incorrect)};
 }
 
 function computeTradeEconomicsStats(trades: PaperTradeRecord[]): TradeEconomicsStats {
@@ -120,8 +129,7 @@ function computeTradeEconomicsStats(trades: PaperTradeRecord[]): TradeEconomicsS
       { bucket: 'THIN', trades: thin.length, avgPnl: avgPnl(thin) },
       { bucket: 'HEALTHY', trades: healthy.length, avgPnl: avgPnl(healthy) },
     ],
-    costProfitRatioDistribution,
-  };
+    costProfitRatioDistribution};
 }
 
 function groupStats<T>(trades: PaperTradeRecord[], keyFn: (t: PaperTradeRecord) => T): { key: T; trades: number; netPnl: number; winRate: number }[] {
@@ -133,8 +141,7 @@ function groupStats<T>(trades: PaperTradeRecord[], keyFn: (t: PaperTradeRecord) 
   });
   return Array.from(groups.entries()).map(([k, ts]) => ({
     key: k as any, trades: ts.length, netPnl: ts.reduce((s, t) => s + t.pnl, 0),
-    winRate: (ts.filter(t => t.pnl > 0).length / ts.length) * 100,
-  }));
+    winRate: (ts.filter(t => t.pnl > 0).length / ts.length) * 100}));
 }
 
 export async function computePaperPortfolioStats(startingCapital: number): Promise<PaperPortfolioStats> {
@@ -171,8 +178,25 @@ export async function computePaperPortfolioStats(startingCapital: number): Promi
   const accurateTimeframes = byTimeframe.filter(s => s.trades >= MIN_SAMPLE);
   const mostAccurateTimeframe = accurateTimeframes.length ? accurateTimeframes.reduce((b, s) => s.winRate > b.winRate ? s : b).timeframe : null;
 
-  const bestTrade: BestWorstTrade = trades.length ? (() => { const t = trades.reduce((b, t) => t.pnl > b.pnl ? t : b); return { symbol: t.symbol, pnl: t.pnl, pnlPct: t.pnlPct, entryTime: t.entryTime, exitTime: t.exitTime }; })() : null;
-  const worstTrade: BestWorstTrade = trades.length ? (() => { const t = trades.reduce((b, t) => t.pnl < b.pnl ? t : b); return { symbol: t.symbol, pnl: t.pnl, pnlPct: t.pnlPct, entryTime: t.entryTime, exitTime: t.exitTime }; })() : null;
+  // FIX (Audit item #1): exclude PARTIAL_CLOSE entries from best/worst trade.
+  // Partial closes are now in the journal but represent fractions — including them would
+  // distort best/worst (a partial of a big winner would appear as a separate "trade").
+  // Analytics stats (winRate, avgWin, etc.) DO include partials since they are real realized P&L.
+  const fullTrades = trades.filter(t => t.exitReason !== 'PARTIAL_CLOSE');
+  const bestTrade: BestWorstTrade = fullTrades.length ? (() => { const t = fullTrades.reduce((b, t) => t.pnl > b.pnl ? t : b); return { symbol: t.symbol, pnl: t.pnl, pnlPct: t.pnlPct, entryTime: t.entryTime, exitTime: t.exitTime }; })() : null;
+  const worstTrade: BestWorstTrade = fullTrades.length ? (() => { const t = fullTrades.reduce((b, t) => t.pnl < b.pnl ? t : b); return { symbol: t.symbol, pnl: t.pnl, pnlPct: t.pnlPct, entryTime: t.entryTime, exitTime: t.exitTime }; })() : null;
+
+  // FIX (Audit item #3): compute MFE/MAE/peak-profit aggregates from stored trade fields.
+  // Every field read here was frozen at trade close — never recomputed.
+  const tradesWithPeakData = trades.filter(t => t.peakProfit != null);
+  const tradesWithMAE      = trades.filter(t => t.maxDrawdownDuringTrade != null);
+  const avgPeakProfit         = tradesWithPeakData.length ? tradesWithPeakData.reduce((s, t) => s + (t.peakProfit ?? 0), 0) / tradesWithPeakData.length : null;
+  const avgMaxProfitWithdrawn = tradesWithPeakData.length ? tradesWithPeakData.reduce((s, t) => s + (t.maxProfitWithdrawn ?? 0), 0) / tradesWithPeakData.length : null;
+  // MFE = maxUnrealizedProfit (most favorable excursion in absolute P&L terms)
+  const avgMFE = trades.length ? trades.reduce((s, t) => s + (t.maxUnrealizedProfit ?? 0), 0) / trades.length : null;
+  const avgMAE = tradesWithMAE.length  ? tradesWithMAE.reduce((s, t) => s + (t.maxDrawdownDuringTrade ?? 0), 0) / tradesWithMAE.length : null;
+
+  const partialCloseCount = trades.filter(t => t.exitReason === 'PARTIAL_CLOSE').length;
 
   // Performance trend: older half vs. recent half of trades by exit time —
   // a real, verifiable signal, not a fabricated trend line.
@@ -200,6 +224,7 @@ export async function computePaperPortfolioStats(startingCapital: number): Promi
     shortWinRate: shorts.length ? (shorts.filter(t => t.pnl > 0).length / shorts.length) * 100 : 0,
     bySymbol, byTimeframe, byHorizon, byAssetClass, byRegime,
     bestTrade, worstTrade, mostProfitableSymbol, mostAccurateSymbol, mostProfitableTimeframe, mostAccurateTimeframe,
+    avgPeakProfit, avgMaxProfitWithdrawn, avgMFE, avgMAE, partialCloseCount,
     avgConfidence: trades.length ? trades.reduce((s, t) => s + t.aiConfidence, 0) / trades.length : 0,
     avgRisk: trades.length ? trades.reduce((s, t) => s + t.riskScoreAtEntry, 0) / trades.length : 0,
     avgTradeQuality: (() => {
@@ -208,6 +233,5 @@ export async function computePaperPortfolioStats(startingCapital: number): Promi
     })(),
     performanceTrend,
     tradeEconomicsStats: computeTradeEconomicsStats(trades),
-    predictionAccuracyStats: computePredictionAccuracyStats(trades),
-  };
+    predictionAccuracyStats: computePredictionAccuracyStats(trades)};
 }

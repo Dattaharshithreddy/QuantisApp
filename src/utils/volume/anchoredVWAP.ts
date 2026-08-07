@@ -62,8 +62,7 @@ function computeFromAnchor(
     anchorType, anchorBar,
     vwap:      Array.from(vwapArr),
     upperDev1: Array.from(upper1), lowerDev1: Array.from(lower1),
-    upperDev2: Array.from(upper2), lowerDev2: Array.from(lower2),
-  };
+    upperDev2: Array.from(upper2), lowerDev2: Array.from(lower2)};
 }
 
 // ── Fix B: prefix-sum based per-bar causal swing-anchored VWAP ────────────────
@@ -209,8 +208,7 @@ export function computeAllVWAPs(
       monthlyVWAP:   monthly.vwap[i]   ?? session.vwap[i],
       upperDev1:     session.upperDev1[i],
       lowerDev1:     session.lowerDev1[i],
-      sessionSlope:  session.vwap[i] - session.vwap[prevI],
-    };
+      sessionSlope:  session.vwap[i] - session.vwap[prevI]};
   }
 
   return { session, swingHigh, swingLow, weekly, monthly, snapshots };

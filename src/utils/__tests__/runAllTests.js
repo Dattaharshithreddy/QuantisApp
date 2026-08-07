@@ -37,6 +37,36 @@ const D = s => `\x1b[2m${s}\x1b[0m`;
 
 const NODE_TESTS = [
   {
+    file:  'assetResolver.test.js',
+    label: 'Asset Resolver (resolveVariant, resolveSymbol, exchanges, legacy compat, ML isolation, invariants)',
+    pass:  /25 passed, 0 failed/,
+    count: /(25) passed/,
+  },
+  {
+    file:  'assetCompatibilityShim.test.js',
+    label: 'Asset Compatibility Shim (dual model, 18 consumer patterns, ML isolation, hide/restore, WebSocket sets)',
+    pass:  /25 passed, 0 failed/,
+    count: /(25) passed/,
+  },
+  {
+    file:  'coindcxExecutor.test.js',
+    label: 'CoinDCX Executor (signing, capabilities, routing, credential guards, broker labels)',
+    pass:  /20 passed, 0 failed/,
+    count: /(20) passed/,
+  },
+  {
+    file:  'twoLayerCache.test.js',
+    label: 'Two-Layer Precompute Cache (key stability, causal integrity, hit/miss, invalidation)',
+    pass:  /15 passed, 0 failed/,
+    count: /(15) passed/,
+  },
+  {
+    file:  'importIntegrity.test.js',
+    label: 'Import Integrity (broken paths, missing Pressable, duplicate React, corrupted lines, missing hooks)',
+    pass:  /7 passed, 0 failed/,
+    count: /(7) passed/,
+  },
+  {
     file:  'liveTrading.test.js',
     label: 'Live Trading (idempotency, lifecycle, reconciliation, kill switch, snapshots)',
     pass:  /(\d+) passed, 0 failed/,
@@ -145,7 +175,7 @@ function runJestTests(suites) {
   const patterns = suites.map(s => s.pattern).join('|');
   const result = spawnSync(
     jestBin,
-    [`--testPathPattern=(${patterns})`, '--rootDir', TESTS, '--testEnvironment=node', '--no-coverage', '--silent'],
+    [`--testPathPatterns`, `(${patterns})`, '--rootDir', TESTS, '--testEnvironment=node', '--no-coverage', '--silent'],
     { encoding: 'utf8', cwd: ROOT }
   );
 

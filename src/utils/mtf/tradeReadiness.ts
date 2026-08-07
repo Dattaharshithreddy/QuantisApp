@@ -28,8 +28,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Timeframe, TF_ORDER, TFSignal, MTFScores } from './mtfTypes';
-import type { StrategyProfile } from '../strategy/strategyTypes';
-import { MTF_ALIGN_MIN, SMC_OB_MIN } from '../strategy/strategyTypes';
+import { MTF_ALIGN_MIN, SMC_OB_MIN, StrategyProfile } from '../strategy/strategyTypes';
 import { evaluateSignalGates } from '../signalGates';
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -166,8 +165,7 @@ function buildDecisionFactors(params: {
       engine:  'Market Regime',
       role:    'context',
       verdict,
-      detail:  regimeSnap.label.replace(/_/g, ' '),
-    });
+      detail:  regimeSnap.label.replace(/_/g, ' ')});
   }
 
   // ② Multi-Timeframe — timing / alignment layer
@@ -185,8 +183,7 @@ function buildDecisionFactors(params: {
       engine:  'Multi-Timeframe',
       role:    'timing',
       verdict,
-      detail:  score > 0.15 ? 'Timeframes aligned' : score < -0.15 ? 'Timeframes misaligned' : 'Alignment weak',
-    });
+      detail:  score > 0.15 ? 'Timeframes aligned' : score < -0.15 ? 'Timeframes misaligned' : 'Alignment weak'});
   }
 
   // ③ Pattern Engine — confirmation layer
@@ -201,8 +198,7 @@ function buildDecisionFactors(params: {
       engine:  'Pattern Engine',
       role:    'confirmation',
       verdict,
-      detail:  `${topPattern.confidence.toFixed(0)}% confidence`,
-    });
+      detail:  `${topPattern.confidence.toFixed(0)}% confidence`});
   }
 
   // ④ Market Structure — structure layer
@@ -219,8 +215,7 @@ function buildDecisionFactors(params: {
       engine:  'Market Structure',
       role:    'structure',
       verdict,
-      detail:  bullStruct ? 'HH + HL (bullish)' : bearStruct ? 'LH + LL (bearish)' : 'Mixed structure',
-    });
+      detail:  bullStruct ? 'HH + HL (bullish)' : bearStruct ? 'LH + LL (bearish)' : 'Mixed structure'});
   }
 
   return factors;
@@ -245,8 +240,7 @@ function buildConflictNote(factors: DecisionFactor[], tradeDir: 1 | -1 | 0): str
     'Market Structure': 'Structure sets the context — no entry against the prevailing swing direction.',
     'Multi-Timeframe':  'MTF alignment outweighs entry signals — higher timeframes define the trend.',
     'Market Regime':    'Regime sets the macro backdrop — trading against it lowers your edge.',
-    'Pattern Engine':   'Pattern confirmation is required before executing the trade signal.',
-  };
+    'Pattern Engine':   'Pattern confirmation is required before executing the trade signal.'};
 
   return `${topBlocker.engine} is blocking. ${reasonMap[topBlocker.engine] ?? ''}`;
 }
@@ -280,8 +274,7 @@ export function computeTradeReadiness(params: {
     lastSwingHigh, lastSwingLow, pricePrecision = 2,
     smcSnap, msSnapshot, topPattern,
     strategyContext = null,
-    strategyProfile = null,
-  } = params;
+    strategyProfile = null} = params;
 
   // ── Graceful fallback ─────────────────────────────────────────────────────
   if (!prediction || !mtfSnap || !regimeSnap) {
@@ -293,8 +286,7 @@ export function computeTradeReadiness(params: {
       tfStrip: [], decisionFactors: [], conflictNote: '',
       unavailable: true,
       strategyContext: null,
-      strategyBlockers: [],
-    };
+      strategyBlockers: []};
   }
 
   // ── Read the prediction engine's decision (single source of truth) ─────────
@@ -395,8 +387,7 @@ export function computeTradeReadiness(params: {
       baseTF,
       smcBullOBStrength: smcSnap?.bullOBStrength ?? 0,
       smcBearOBStrength: smcSnap?.bearOBStrength ?? 0,
-      validatedPatterns: [],
-    });
+      validatedPatterns: []});
 
     if (!sgResult.allowed) {
       if (sgResult.state === 'AVOID') state = 'AVOID';
@@ -417,8 +408,7 @@ export function computeTradeReadiness(params: {
   const tfStrip: TFStripEntry[] = [];
   tfStrip.push({
     tf: baseTF, direction: dirLabel(tradeDir),
-    isCurrent: true, isBlocking: false,
-  });
+    isCurrent: true, isBlocking: false});
   const higherSignals = mtfSignals
     .filter(s => TF_ORDER.indexOf(s.tf) > baseTFIdx && s.barCount >= 10)
     .sort((a, b) => TF_ORDER.indexOf(a.tf) - TF_ORDER.indexOf(b.tf));
@@ -427,14 +417,12 @@ export function computeTradeReadiness(params: {
       tf: s.tf,
       direction: dirLabel(s.trendDir !== 0 ? s.trendDir : s.structureDir),
       isCurrent: false,
-      isBlocking: s.tf === blockingTF,
-    });
+      isBlocking: s.tf === blockingTF});
   }
 
   // ── Decision factors ──────────────────────────────────────────────────────
   const decisionFactors = buildDecisionFactors({
-    tradeDir, regimeSnap, mtfSnap, smcSnap, msSnapshot, topPattern,
-  });
+    tradeDir, regimeSnap, mtfSnap, smcSnap, msSnapshot, topPattern});
   const conflictNote = buildConflictNote(decisionFactors, tradeDir);
 
   // ── Regime / pattern helpers for text generation ──────────────────────────
@@ -613,6 +601,5 @@ export function computeTradeReadiness(params: {
     strategyBlockers,
     // strategyContext is assigned LAST — structural proof that no decision
     // field above reads it. It is presentation metadata passed through unchanged.
-    strategyContext: strategyContext ?? null,
-  };
+    strategyContext: strategyContext ?? null};
 }

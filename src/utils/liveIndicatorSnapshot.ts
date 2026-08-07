@@ -53,6 +53,5 @@ export function getIndicatorSnapshot(candles: Candle[]): IndicatorSnapshot | nul
     rsi, rsiRecovering, rsiOverbought: rsi > 70,
     macdHistogram: macdHist, macdBullish: macdHist != null && macdHist > 0,
     adxValue, adxStrengthening,
-    relativeVolume: relVolValue, volumeExpansion: relVolValue != null && relVolValue > 1.3,
-  };
+    relativeVolume: relVolValue, volumeExpansion: relVolValue != null && relVolValue > 1.3};
 }

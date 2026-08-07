@@ -1,10 +1,9 @@
+import React, { useMemo } from 'react';
 // Presentational component — no state, no hooks, no memoization needed here.
 // All data is precomputed in useChartIndicators and passed as props.
-import React from 'react';
 import { View, Text } from 'react-native';
-import { pFmt } from '../../../utils/indicators';
+import { Candle, pFmt } from '../../../utils/indicators';
 import { getMarketStructureSnapshot } from '../../../utils/marketStructureSnapshot';
-import { Candle } from '../../../utils/indicators';
 import { Card, SectionLabel, Pill } from '../../../components/Common';
 import { RADIUS } from '../../../theme/colors';
 import { ChartPatternSummary, PatternResult } from '../../../utils/chartPatterns';
@@ -13,7 +12,6 @@ import { PatternMatch } from '../../../utils/candlePatterns';
 import type { TFSignal, Timeframe } from '../../../utils/mtf/mtfTypes';
 import { computeTradeReadiness } from '../../../utils/mtf/tradeReadiness';
 import { computeStrategyRegimeMatrix, recommendStrategy, recommendStrategyGlobal } from '../../../utils/strategy/strategyPerformance';
-import { getActiveStrategyId } from '../../../utils/strategy/strategyStorage';
 import { TradeReadinessCard } from './TradeReadinessCard';
 
 type Props = {
@@ -50,7 +48,7 @@ type Props = {
   }>;
 };
 
-export function MarketStructureCard({ candles, msSnapshot, smcSnap, fvgSnap, fvgBull, fvgBear, vwapSnap, vpSnap, mtfSnap, mtfSignals = [], regimeSnap, T, geoPatterns = null, validatedPatterns = [], candlePatterns = [], prediction = null, baseTF = '15m', pricePrecision = 2, paperTrades = [], strategyProfile = null }: Props) {
+export const MarketStructureCard = React.memo(function MarketStructureCard({ candles, msSnapshot, smcSnap, fvgSnap, fvgBull, fvgBear, vwapSnap, vpSnap, mtfSnap, mtfSignals = [], regimeSnap, T, geoPatterns = null, validatedPatterns = [], candlePatterns = [], prediction = null, baseTF = '15m', pricePrecision = 2, paperTrades = [], strategyProfile = null }: Props) {
   const snap = getMarketStructureSnapshot(candles);
 
   // ── Trade Readiness — translate engine outputs to plain English ───────────
@@ -74,8 +72,7 @@ export function MarketStructureCard({ candles, msSnapshot, smcSnap, fvgSnap, fvg
     topPattern: topConfirmedForReadiness
       ? { direction: topConfirmedForReadiness.direction, confidence: topConfirmedForReadiness.confidence }
       : null,
-    strategyProfile: strategyProfile ?? null,
-  });
+    strategyProfile: strategyProfile ?? null});
   if (!snap) return null;
 
   const structColor = (s: string) => s === 'HH' || s === 'HL' ? T.green : s === 'LH' || s === 'LL' ? T.red : T.textDim;
@@ -362,8 +359,7 @@ export function MarketStructureCard({ candles, msSnapshot, smcSnap, fvgSnap, fvg
             <View style={{
               marginTop: 8, flexDirection: 'row', alignItems: 'flex-start', gap: 8,
               backgroundColor: T.blue + '0D', borderRadius: 6,
-              borderWidth: 1, borderColor: T.blue + '30', padding: 8,
-            }}>
+              borderWidth: 1, borderColor: T.blue + '30', padding: 8}}>
               <Text style={{ fontSize: 12, marginTop: 1 }}>💡</Text>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700', letterSpacing: 0.4, marginBottom: 2 }}>
@@ -402,4 +398,4 @@ export function MarketStructureCard({ candles, msSnapshot, smcSnap, fvgSnap, fvg
       )}
     </Card>
   );
-}
+});

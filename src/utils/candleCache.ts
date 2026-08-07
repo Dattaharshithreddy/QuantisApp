@@ -64,11 +64,13 @@ const sessionCache = new Map<string, CacheEntry>();
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type CacheEntry = {
-  version:   number;
-  candles:   Candle[];
-  fetchedAt: number;   // when the last incremental fetch completed
-  symbol:    string;
-  tf:        string;
+  version:          number;
+  candles:          Candle[];
+  fetchedAt:        number;  // when the last incremental fetch completed
+  symbol:           string;
+  tf:               string;
+  historyExhausted: boolean; // true = Binance has no older data than what's cached
+                             // false / absent = older bars may exist; backfill is safe
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -90,7 +92,20 @@ function validateAndSort(candles: Candle[]): Candle[] {
   for (const c of candles) {
     if (isValidCandle(c)) byTime.set(c.time, c);
   }
-  return Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+  const sorted = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+
+  // Spike filter: reject candles where high > close * 10.
+  // Real intraday range never exceeds 10x the close — anything larger is a
+  // corrupt data point (e.g. Binance occasionally emits malformed klines).
+  // Also reject candles where open/high/low/close are internally inconsistent.
+  return sorted.filter(c => {
+    if (c.high > c.close * 10 || c.high > c.open * 10) return false;
+    if (c.low  < c.close / 10 || c.low  < c.open  / 10) return false;
+    if (c.high < c.low) return false;
+    if (c.high < Math.max(c.open, c.close)) return false;
+    if (c.low  > Math.min(c.open, c.close)) return false;
+    return true;
+  });
 }
 
 function isCacheEntryValid(raw: any): raw is CacheEntry {
@@ -102,6 +117,7 @@ function isCacheEntryValid(raw: any): raw is CacheEntry {
     typeof raw.tf        === 'string' &&
     Array.isArray(raw.candles) &&
     raw.candles.length >= 0
+    // historyExhausted is optional — old cache entries without it are still valid
   );
 }
 
@@ -140,15 +156,19 @@ async function readCache(symbol: string, tf: string): Promise<CacheEntry | null>
   }
 }
 
-async function writeCache(symbol: string, tf: string, candles: Candle[]): Promise<void> {
+async function writeCache(symbol: string, tf: string, candles: Candle[], historyExhausted = false): Promise<void> {
   const sk = storageKey(symbol, tf);
+  // Once historyExhausted is true it stays true — Binance history doesn't grow backward.
+  // Preserve any existing true value even when caller passes false (default).
+  const existing = sessionCache.get(sk);
+  const keepExhausted = historyExhausted || (existing?.historyExhausted === true);
   const entry: CacheEntry = {
-    version:   CACHE_VERSION,
-    candles:   validateAndSort(candles),
-    fetchedAt: Date.now(),
+    version:          CACHE_VERSION,
+    candles:          validateAndSort(candles),
+    fetchedAt:        Date.now(),
     symbol,
     tf,
-  };
+    historyExhausted: keepExhausted};
   sessionCache.set(sk, entry);
   try {
     await AsyncStorage.setItem(sk, JSON.stringify(entry));
@@ -161,6 +181,27 @@ async function writeCache(symbol: string, tf: string, candles: Candle[]): Promis
 // ── Public: merge utility (used by useChartData for panning) ──────────────────
 export function mergeCandles(a: Candle[], b: Candle[]): Candle[] {
   return validateAndSort([...a, ...b]);
+}
+
+// ── Public: history-exhausted helpers (for Production Evaluation) ───────────
+// Lets the eval engine know whether it has already fetched all available Binance
+// history for a symbol+timeframe, so subsequent eval runs skip re-pagination.
+
+/** Returns true if a prior fetchMaxHistory confirmed Binance has no older data. */
+export async function isHistoryExhausted(symbol: string, tf: string): Promise<boolean> {
+  const entry = await readCache(symbol, tf);
+  return entry?.historyExhausted === true;
+}
+
+/**
+ * Persists historyExhausted=true into the existing cache entry for this symbol/tf.
+ * Called after fetchMaxHistory returns historyExhausted=true.
+ * No-op if no cache entry exists yet.
+ */
+export async function markHistoryExhausted(symbol: string, tf: string): Promise<void> {
+  const entry = await readCache(symbol, tf);
+  if (!entry) return;
+  await writeCache(symbol, tf, entry.candles, true);
 }
 
 // ── Public: legacy read (used by chart path for instant render) ───────────────

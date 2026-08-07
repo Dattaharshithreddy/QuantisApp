@@ -27,8 +27,7 @@ export async function searchBinance(query: string): Promise<Asset[]> {
     .slice(0, 25)
     .map(s => ({
       symbol: s.baseAsset + 'USD', name: s.baseAsset, type: 'CRYPTO' as const, src: 'binance' as const,
-      bnSym: s.symbol, base: 1, vol: 0.03, custom: true,
-    }));
+      bnSym: s.symbol, base: 1, vol: 0.03, custom: true}));
 }
 
 // ─────────────────────────────────────────────────
@@ -60,8 +59,7 @@ export async function searchNSE(query: string): Promise<Asset[]> {
     .slice(0, 25)
     .map(s => ({
       symbol: s.symbol, name: s.name, type: (s.symbol.includes('NIFTY') ? 'INDEX' : 'STOCK') as 'INDEX' | 'STOCK',
-      src: 'ao' as const, aoToken: s.token, aoEx: s.exch_seg, base: 100, vol: 0.015, custom: true,
-    }));
+      src: 'ao' as const, aoToken: s.token, aoEx: s.exch_seg, base: 100, vol: 0.015, custom: true}));
 }
 
 // ─────────────────────────────────────────────────
@@ -75,8 +73,7 @@ export async function searchAlphaVantage(query: string, key: string): Promise<As
   if (json.Note || json.Information) throw new Error('Alpha Vantage rate limit — wait a minute');
   return (json.bestMatches || []).slice(0, 15).map((m: any) => ({
     symbol: m['1. symbol'], name: m['2. name'], type: 'STOCK' as const, src: 'av' as const,
-    avSym: m['1. symbol'], base: 100, vol: 0.02, custom: true,
-  }));
+    avSym: m['1. symbol'], base: 100, vol: 0.02, custom: true}));
 }
 
 // ─────────────────────────────────────────────────
@@ -96,6 +93,5 @@ export function searchForex(query: string, rates: Record<string, number> | null)
     .slice(0, 20)
     .map(code => ({
       symbol: 'USD' + code, name: `USD / ${CURRENCY_NAMES[code] || code}`, type: 'FOREX' as const, src: 'forex' as const,
-      fxKey: code, fxInv: true, base: rates[code], vol: 0.003, custom: true,
-    }));
+      fxKey: code, fxInv: true, base: rates[code], vol: 0.003, custom: true}));
 }

@@ -20,9 +20,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getLivePortfolio, removeLivePosition, LivePosition } from './livePortfolio';
-import { notifyLiveOrderFilled }   from './paperNotifications';
-import { cancelLiveOrder }         from './liveOrderExecution';
-import { logger }                  from './logger';
+import { notifyLiveOrderFilled } from './paperNotifications';
+import { logger } from './logger';
 import type { AOSession }          from '../api/angelOne';
 
 const CLOSING_IN_FLIGHT = new Set<string>(); // position IDs currently being closed
@@ -76,8 +75,7 @@ async function closeLivePosition(
         exchange: pos.broker === 'ANGEL_ONE_FUTURES' ? 'NFO' : 'NSE',
         ordertype: 'MARKET', producttype: productType as any,
         duration: 'DAY', price: 0, squareoff: 0, stoploss: 0, quantity: pos.qty,
-        uniqueorderid: `monitor_close_${pos.id}_${Date.now()}`,
-      }, aoSession);
+        uniqueorderid: `monitor_close_${pos.id}_${Date.now()}`}, aoSession);
 
       const pnl = (price - pos.entryPrice) * pos.qty * (pos.direction === 'LONG' ? 1 : -1);
       await removeLivePosition(pos.id, pnl);

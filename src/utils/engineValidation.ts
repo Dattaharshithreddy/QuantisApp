@@ -16,7 +16,7 @@ export type ValidationReport = { checks: ValidationCheck[]; allPassed: boolean }
 // bars safely before the divergence point must be byte-identical regardless
 // of what happens later. If they're not, the pipeline is leaking future
 // information into past decisions.
-function checkNoLeakage(baseCandles: Candle[]): ValidationCheck {
+async function checkNoLeakage(baseCandles: Candle[]): Promise<ValidationCheck> {
   if (baseCandles.length < 100) return { name: 'No Future Leakage', passed: false, detail: 'Not enough candles to run this check (need 100+)' };
 
   const divergePoint = Math.floor(baseCandles.length * 0.7);
@@ -28,7 +28,7 @@ function checkNoLeakage(baseCandles: Candle[]): ValidationCheck {
     })
   );
 
-  const Sa = precomputeSeries(seriesA), Sb = precomputeSeries(seriesB);
+  const Sa = await precomputeSeries(seriesA), Sb = await precomputeSeries(seriesB);
   const checkBars = [divergePoint - 50, divergePoint - 30, divergePoint - 10].filter(i => i > 20);
   let allMatch = true;
   const mismatches: number[] = [];
@@ -43,8 +43,7 @@ function checkNoLeakage(baseCandles: Candle[]): ValidationCheck {
     passed: allMatch,
     detail: allMatch
       ? `Verified: features at bars ${checkBars.join(', ')} are identical regardless of a dramatic synthetic change ${baseCandles.length - divergePoint}+ bars later.`
-      : `FAILED at bars: ${mismatches.join(', ')} — features changed based on future data.`,
-  };
+      : `FAILED at bars: ${mismatches.join(', ')} — features changed based on future data.`};
 }
 
 // CHECK 2 — Train/test isolation: confirm no training label resolves to a
@@ -63,8 +62,7 @@ async function checkTrainTestIsolation(candles: Candle[]): Promise<ValidationChe
   return {
     name: 'Train/Test Isolation',
     passed,
-    detail: `Training fit on ${fitted.trainSampleCount} samples, walk-forward begins at bar ${firstWalkIdx}. Training labels are trimmed so none resolve into the walk window (see fitEnsemble's trainEnd trim).`,
-  };
+    detail: `Training fit on ${fitted.trainSampleCount} samples, walk-forward begins at bar ${firstWalkIdx}. Training labels are trimmed so none resolve into the walk window (see fitEnsemble's trainEnd trim).`};
 }
 
 // CHECK 3 — Reproducibility: run the exact same backtest twice with the
@@ -87,8 +85,7 @@ async function checkReproducibility(candles: Candle[]): Promise<ValidationCheck>
     passed: identical && differsWithDifferentSeed,
     detail: identical
       ? `Same seed (777) run twice: ${run1.trades.length} identical trades both times, ${run1.metrics.totalReturnPct.toFixed(2)}% return both times. Different seed (778) genuinely changes the result (confirms the seed isn't a no-op).`
-      : 'Results differ between two runs with the SAME seed — reproducibility is broken.',
-  };
+      : 'Results differ between two runs with the SAME seed — reproducibility is broken.'};
 }
 
 export async function runEngineValidation(candles: Candle[]): Promise<ValidationReport> {

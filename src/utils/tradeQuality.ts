@@ -100,16 +100,14 @@ function volRegimeFromLabel(label: string): string | null {
 export function fromOpportunity(o: OpportunitySignal): { quality: TradeQuality; breakdown: TradeQualityBreakdown } {
   const quality: TradeQuality = {
     score: o.compositeScore, grade: scoreToGrade(o.compositeScore), stars: scoreToStars(o.compositeScore),
-    riskBadge: riskScoreToBadge(o.riskScore),
-  };
+    riskBadge: riskScoreToBadge(o.riskScore)};
 
   const isBuy = o.consensus.overallDirection === 'BUY';
   const common = buildCommonBreakdown({
     walkForwardAccuracy: o.walkForwardAccuracy, riskRewardRatio: o.riskRewardRatio, trendStrength: o.consensus.trendStrength,
     volRegimeLabel: volRegimeFromLabel(o.currentRegime),
     regimeMatches: o.currentRegime === 'Bull' ? isBuy : o.currentRegime === 'Bear' ? !isBuy : null,
-    isBuy,
-  });
+    isBuy});
 
   // Multi-timeframe-specific items the single-prediction path can't know:
   // real cross-timeframe agreement, not an approximation.
@@ -153,15 +151,13 @@ export function fromSinglePrediction(
       trendStrength: snapshot?.adxValue ?? null,
       overallConfidence: prediction.confidence,
       conflictingTimeframes: [],
-      perTimeframe: [],
-    },
+      perTimeframe: []},
     riskRewardRatio: prediction.riskRewardRatio,
     riskScore: prediction.riskScore,
     modelAgree: prediction.ensembleAgree,
     walkForwardAccuracy: prediction.walkForwardAccuracy,
     volumeRatio: snapshot?.relativeVolume ?? null,
-    currentRegime,
-  });
+    currentRegime});
 
   const quality: TradeQuality = { score, grade: scoreToGrade(score), stars: scoreToStars(score), riskBadge: riskScoreToBadge(prediction.riskScore) };
 
@@ -169,8 +165,7 @@ export function fromSinglePrediction(
     walkForwardAccuracy: prediction.walkForwardAccuracy, riskRewardRatio: prediction.riskRewardRatio, trendStrength: snapshot?.adxValue ?? null,
     volRegimeLabel: volRegimeFromLabel(currentRegime),
     regimeMatches: currentRegime === 'Bull' ? isBuy : currentRegime === 'Bear' ? !isBuy : null,
-    isBuy,
-  });
+    isBuy});
 
   // Reuses generateExplanation's real indicator checks directly — same
   // EMA200/RSI/MACD/volume logic, not re-derived here.

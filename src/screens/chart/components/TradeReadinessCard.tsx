@@ -7,7 +7,7 @@
 // What Changes This / Next Review / Next Trigger
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity , Pressable } from 'react-native';
 import { RADIUS } from '../../../theme/colors';
 import type { TradeReadiness, TradeReadinessState, DecisionFactor, StrategyDisplayContext } from '../../../utils/mtf/tradeReadiness';
 import type { Timeframe } from '../../../utils/mtf/mtfTypes';
@@ -48,15 +48,17 @@ function SectionHeader({ title, T }: { title: string; T: any }) {
   return (
     <Text style={{
       color: T.textDim, fontSize: 9, fontWeight: '700',
-      letterSpacing: 0.6, marginBottom: 6, marginTop: 12,
-    }}>
+      letterSpacing: 0.6, marginBottom: 6, marginTop: 12}}>
       {title}
     </Text>
   );
 }
 
 function Divider({ T }: { T: any }) {
-  return <View style={{ height: 1, backgroundColor: T.textDim + '20', marginVertical: 2 }} />;
+  // CRASH FIX: guard against undefined T — previously called as <Divider theme={T} />
+  // which passed undefined as T (prop name mismatch). All call sites now use T={T}.
+  // The fallback color '#88888820' means a missed undefined never crashes the render.
+  return <View style={{ height: 1, backgroundColor: (T?.textDim ?? '#888') + '20', marginVertical: 2 }} />;
 }
 
 // "Why?" block — colored left border matching state
@@ -68,8 +70,7 @@ function WhyBlock({ text, color, T }: { text: string; color: string; T: any }) {
       borderLeftWidth: 3,
       borderLeftColor: color,
       padding: 10,
-      marginTop: 4,
-    }}>
+      marginTop: 4}}>
       <Text style={{ color: T.text, fontSize: 12, lineHeight: 18 }}>{text}</Text>
     </View>
   );
@@ -85,8 +86,7 @@ function ActionChecklist({ items, T }: { items: string[]; T: any }) {
             width: 18, height: 18, borderRadius: 9,
             backgroundColor: T.blue + '22',
             alignItems: 'center', justifyContent: 'center',
-            marginTop: 1,
-          }}>
+            marginTop: 1}}>
             <Text style={{ color: T.blue, fontSize: 9, fontWeight: '800' }}>{i + 1}</Text>
           </View>
           <Text style={{ color: T.text, fontSize: 12, lineHeight: 18, flex: 1 }}>{item}</Text>
@@ -104,8 +104,7 @@ function RiskBlock({ text, T }: { text: string; T: any }) {
       borderRadius: RADIUS.sm,
       borderLeftWidth: 2,
       borderLeftColor: (T.red ?? '#EF4444') + '60',
-      padding: 10,
-    }}>
+      padding: 10}}>
       <Text style={{ color: T.textSub ?? T.textDim, fontSize: 11, lineHeight: 16 }}>{text}</Text>
     </View>
   );
@@ -133,8 +132,7 @@ function DecisionBreakdown({ factors, T }: { factors: DecisionFactor[]; T: any }
                 borderRadius: RADIUS.sm,
                 padding: 8,
                 borderWidth: 1,
-                borderColor: col + '30',
-              }}>
+                borderColor: col + '30'}}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
                   <Text style={{ fontSize: 10 }}>{vcfg.emoji}</Text>
                   <Text style={{ color: col, fontSize: 10, fontWeight: '700', flexShrink: 1 }}>{f.verdict}</Text>
@@ -173,8 +171,7 @@ function TFStrip({ entries, T }: { entries: TradeReadiness['tfStrip']; T: any })
             borderWidth: isBlocking ? 1.5 : 1,
             borderColor: isBlocking ? col : col + '40',
             alignItems: 'center',
-            minWidth: 46,
-          }}>
+            minWidth: 46}}>
             <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700' }}>
               {TF_SHORT[tf]}{isCurrent ? ' ●' : ''}
             </Text>
@@ -200,8 +197,7 @@ function NextTriggerBlock({ text, T }: { text: string; T: any }) {
       borderRadius: RADIUS.sm,
       borderWidth: 1,
       borderColor: T.blue + '30',
-      padding: 10,
-    }}>
+      padding: 10}}>
       <Text style={{ fontSize: 14, marginTop: 1 }}>🔔</Text>
       <View style={{ flex: 1 }}>
         <Text style={{ color: T.textDim, fontSize: 8, fontWeight: '700', letterSpacing: 0.4, marginBottom: 2 }}>
@@ -224,8 +220,7 @@ function StrategyContextBlock({ ctx, T }: { ctx: StrategyDisplayContext; T: any 
       padding: 10,
       borderWidth: 1,
       borderColor: T.textDim + '30',
-      gap: 6,
-    }}>
+      gap: 6}}>
       {/* Strategy identity */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
         <Text style={{ fontSize: 14 }}>{ctx.strategyIcon}</Text>
@@ -234,8 +229,7 @@ function StrategyContextBlock({ ctx, T }: { ctx: StrategyDisplayContext; T: any 
         </Text>
         <View style={{
           backgroundColor: T.blue + '22', borderRadius: 4,
-          paddingHorizontal: 6, paddingVertical: 2, marginLeft: 'auto',
-        }}>
+          paddingHorizontal: 6, paddingVertical: 2, marginLeft: 'auto'}}>
           <Text style={{ color: T.blue, fontSize: 8, fontWeight: '700' }}>
             h={ctx.predictionHorizon}
           </Text>
@@ -308,7 +302,7 @@ type Props = {
   T: any;
 };
 
-export function TradeReadinessCard({
+export const TradeReadinessCard = React.memo(function TradeReadinessCard({
   readiness, mtfScore = 0, chochAlignment = 0, htfBias = 0, T,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -319,8 +313,7 @@ export function TradeReadinessCard({
       <View style={{
         marginBottom: 14, backgroundColor: T.bg3,
         borderRadius: RADIUS.md, padding: 12,
-        borderWidth: 1, borderColor: T.textDim + '22',
-      }}>
+        borderWidth: 1, borderColor: T.textDim + '22'}}>
         <Text style={{ color: T.textDim, fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 }}>
           TRADE READINESS
         </Text>
@@ -337,19 +330,19 @@ export function TradeReadinessCard({
   return (
     <View style={{
       marginBottom: 14, borderRadius: RADIUS.md,
-      borderWidth: 1, borderColor: color + '40', overflow: 'hidden',
-    }}>
+      borderWidth: 1, borderColor: color + '40', overflow: 'hidden'}}>
 
       {/* ── Collapsed row ──────────────────────────────────────────────── */}
-      <TouchableOpacity
+      <Pressable
+        hitSlop={8}
+        android_ripple={{color:'rgba(255,255,255,0.1)'}}
         onPress={() => setExpanded(e => !e)}
         activeOpacity={0.75}
         style={{
           flexDirection: 'row', alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 12, paddingVertical: 11,
-          backgroundColor: color + '12',
-        }}
+          backgroundColor: color + '12'}}
       >
         <Text style={{ color: T.textDim, fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>
           TRADE READINESS
@@ -360,7 +353,7 @@ export function TradeReadinessCard({
           </Text>
           <Text style={{ color: T.textDim, fontSize: 11 }}>{expanded ? '▲' : '▼'}</Text>
         </View>
-      </TouchableOpacity>
+      </Pressable>
 
       {/* ── Expanded detail ─────────────────────────────────────────────── */}
       {expanded && (
@@ -444,8 +437,7 @@ export function TradeReadinessCard({
                     {/* Group label */}
                     <Text style={{
                       color: T.textDim, fontSize: 8, fontWeight: '700',
-                      letterSpacing: 0.6, marginBottom: 4,
-                    }}>
+                      letterSpacing: 0.6, marginBottom: 4}}>
                       {group.label}
                     </Text>
                     {/* Blocker rows */}
@@ -457,8 +449,7 @@ export function TradeReadinessCard({
                       return (
                         <View key={bi} style={{
                           flexDirection: 'row', gap: 6, marginBottom: 3,
-                          paddingLeft: 4,
-                        }}>
+                          paddingLeft: 4}}>
                           <Text style={{ color: dotCol, fontSize: 10, marginTop: 2 }}>
                             {b.severity === 'AVOID' ? '✕' : '•'}
                           </Text>
@@ -466,8 +457,7 @@ export function TradeReadinessCard({
                             color: isPrimary ? T.text : (T.textSub ?? T.textDim),
                             fontSize: isPrimary ? 12 : 11,
                             fontWeight: isPrimary ? '600' : '400',
-                            lineHeight: 16, flex: 1,
-                          }}>
+                            lineHeight: 16, flex: 1}}>
                             {b.reason}
                           </Text>
                         </View>
@@ -507,4 +497,4 @@ export function TradeReadinessCard({
       )}
     </View>
   );
-}
+});

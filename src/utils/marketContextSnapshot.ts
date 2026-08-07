@@ -97,8 +97,7 @@ export function summariseContext(snap: MarketContextSnapshot | null | undefined)
       adTrend:        c.breadth?.adTrend ?? null,
       fiiBias:        c.fiidii?.bias     ?? null,
       pcrSentiment:   c.pcr?.sentiment   ?? null,
-      sectorLeader:   c.sectors?.leader  ?? null,
-    };
+      sectorLeader:   c.sectors?.leader  ?? null};
   }
 
   if (snap.kind === 'CRYPTO') {
@@ -123,8 +122,7 @@ export function summariseContext(snap: MarketContextSnapshot | null | undefined)
       fundingSentiment: c.funding?.sentiment        ?? null,
       openInterestConviction: c.openInterest?.conviction ?? null,
       stablecoinSignal: c.stablecoin?.signal        ?? null,
-      marketRegime:    c.marketCap?.regime          ?? null,
-    };
+      marketRegime:    c.marketCap?.regime          ?? null};
   }
 
   return { assetKind: 'NONE', overallSentiment: 'UNAVAILABLE' };

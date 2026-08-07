@@ -22,16 +22,12 @@
 //   • No ML training data or signal weights are exposed here.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { getPaperTrades }         from './paperTradeJournal';
+import { PaperTradeRecord, getPaperTrades } from './paperTradeJournal';
 import { getFuturesPortfolio }   from './futures/futuresPortfolio';
 import { getBnFuturesPortfolio } from './futures/binance/bnFuturesPortfolio';
 import { getSecureCredential }   from './secureCredentials';
-import { loadShadowTrades }      from './shadowTradeJournal';
+import { ShadowTrade, loadShadowTrades } from './shadowTradeJournal';
 import { getLivePortfolio }      from './livePortfolio';
-import type { PaperTradeRecord } from './paperTradeJournal';
-import type { ShadowTrade }      from './shadowTradeJournal';
-
-// ── Constants ─────────────────────────────────────────────────────────────────
 const MIN_SAMPLE         = 5;   // minimum trades to surface an insight
 const MIN_TRADES_OVERALL = 10;  // minimum total trades to run coach at all
 const CALIBRATION_BAND   = 10;  // ±10% — confidence "should" predict win rate
@@ -137,8 +133,7 @@ function overrideInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     evidence:   `Overrides: ${pct(overrideWR)} WR, avg ${fmt(overridePnl)} P&L (${overrides.length} trades) · Normal: ${pct(normalWR)} WR, avg ${fmt(normalPnl)} P&L (${normal.length} trades)`,
     sentiment,
     sampleSize: overrides.length + normal.length,
-    impact:     Math.min(100, Math.abs(delta) * 2),
-  }];
+    impact:     Math.min(100, Math.abs(delta) * 2)}];
 }
 
 function confidenceInsights(trades: PaperTradeRecord[]): CoachInsight[] {
@@ -159,8 +154,7 @@ function confidenceInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     trades: withConf.filter(t => {
       const c = t.signalSnapshot!.confidence;
       return c >= b.min && c < b.max;
-    }),
-  })).filter(b => b.trades.length >= MIN_SAMPLE);
+    })})).filter(b => b.trades.length >= MIN_SAMPLE);
 
   if (buckets.length < 2) return [];
 
@@ -184,8 +178,7 @@ function confidenceInsights(trades: PaperTradeRecord[]): CoachInsight[] {
       evidence:  buckets.map(b => `${b.label}: ${pct(winRate(b.trades))} WR (${b.trades.length})`).join(' · '),
       sentiment: delta > 5 ? 'positive' : 'warning',
       sampleSize: top.trades.length + bottom.trades.length,
-      impact:    Math.min(100, Math.abs(delta) * 1.5),
-    });
+      impact:    Math.min(100, Math.abs(delta) * 1.5)});
   }
 
   return insights;
@@ -217,8 +210,7 @@ function regimeInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     evidence:  `Best: ${best.regime} ${pct(best.wr)} WR (${best.count} trades) · Worst: ${worst.regime} ${pct(worst.wr)} WR (${worst.count} trades)`,
     sentiment: 'neutral',
     sampleSize: best.count + worst.count,
-    impact:    Math.min(100, delta * 1.2),
-  }];
+    impact:    Math.min(100, delta * 1.2)}];
 }
 
 function strategyInsights(trades: PaperTradeRecord[]): CoachInsight[] {
@@ -244,8 +236,7 @@ function strategyInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     evidence:  stats.map(s => `${s.strategy}: PF ${s.pf.toFixed(2)}, ${pct(s.wr)} WR (${s.count})`).join(' · '),
     sentiment: best.pf > 1.5 ? 'positive' : 'neutral',
     sampleSize: withStrategy.length,
-    impact:    Math.min(100, (best.pf - worst.pf) * 20),
-  }];
+    impact:    Math.min(100, (best.pf - worst.pf) * 20)}];
 }
 
 function directionInsights(trades: PaperTradeRecord[]): CoachInsight[] {
@@ -270,8 +261,7 @@ function directionInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     evidence:  `LONG: ${pct(longWR)} WR (${longs.length} trades) · SHORT: ${pct(shortWR)} WR (${shorts.length} trades)`,
     sentiment: delta > 20 ? 'warning' : 'neutral',
     sampleSize: longs.length + shorts.length,
-    impact:    Math.min(100, delta * 1.5),
-  }];
+    impact:    Math.min(100, delta * 1.5)}];
 }
 
 function timingInsights(trades: PaperTradeRecord[]): CoachInsight[] {
@@ -299,8 +289,7 @@ function timingInsights(trades: PaperTradeRecord[]): CoachInsight[] {
         evidence:  `TP hits: avg ${fmt(tpAvg)} (${tpHits.length} trades) · Manual closes: avg ${fmt(earlyAvg)} (${earlyExits.length} trades)`,
         sentiment: 'warning',
         sampleSize: earlyExits.length + tpHits.length,
-        impact:    Math.min(100, leaving * 5),
-      }];
+        impact:    Math.min(100, leaving * 5)}];
     }
   }
 
@@ -332,8 +321,7 @@ function signalTypeInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     evidence:  stats.map(s => `${s.type}: ${pct(s.wr)} (${s.count})`).join(' · '),
     sentiment: 'positive',
     sampleSize: withType.length,
-    impact:    Math.min(100, delta * 1.3),
-  }];
+    impact:    Math.min(100, delta * 1.3)}];
 }
 
 function modelVersionInsights(trades: PaperTradeRecord[]): CoachInsight[] {
@@ -366,8 +354,7 @@ function modelVersionInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     evidence:  stats.map(s => `v${s.version}: ${pct(s.wr)} WR (${s.count})`).join(' · '),
     sentiment: delta > 0 ? 'positive' : 'warning',
     sampleSize: withVersion.length,
-    impact:    Math.min(100, Math.abs(delta) * 1.5),
-  }];
+    impact:    Math.min(100, Math.abs(delta) * 1.5)}];
 }
 
 function generalInsights(trades: PaperTradeRecord[]): CoachInsight[] {
@@ -390,8 +377,7 @@ function generalInsights(trades: PaperTradeRecord[]): CoachInsight[] {
     evidence:  `WR ${pct(wr)} · PF ${pf.toFixed(2)} · Avg hold ${avgHoldH.toFixed(1)}h · ${trades.length} trades`,
     sentiment: pf > 1.5 ? 'positive' : pf > 1.0 ? 'neutral' : 'negative',
     sampleSize: trades.length,
-    impact:    50,
-  }];
+    impact:    50}];
 }
 
 // ── Shadow Journal insights ───────────────────────────────────────────────────
@@ -416,8 +402,7 @@ function shadowInsights(shadows: ShadowTrade[]): CoachInsight[] {
       headline:  `AI gates saved you from ${slHit} losing trades`,
       detail:    `Of ${total} blocked opportunities that resolved, ${slHit} (${(gateAccuracy * 100).toFixed(0)}%) would have hit stop-loss. The gates are working as intended — blocking more losers than winners.`,
       impact:    7,
-      metric:    `${(gateAccuracy * 100).toFixed(0)}% gate accuracy`,
-    });
+      metric:    `${(gateAccuracy * 100).toFixed(0)}% gate accuracy`});
   } else if (gateAccuracy <= 0.35) {
     insights.push({
       category:  'GENERAL',
@@ -425,8 +410,7 @@ function shadowInsights(shadows: ShadowTrade[]): CoachInsight[] {
       headline:  `AI gates may be too conservative — ${tpHit} profitable signals were blocked`,
       detail:    `Of ${total} blocked opportunities, ${tpHit} (${(100 - gateAccuracy * 100).toFixed(0)}%) would have hit take-profit. Consider reviewing your gate thresholds in Settings, or using the Override option selectively.`,
       impact:    8,
-      metric:    `${(100 - gateAccuracy * 100).toFixed(0)}% of blocks were winners`,
-    });
+      metric:    `${(100 - gateAccuracy * 100).toFixed(0)}% of blocks were winners`});
   }
 
   // Gate breakdown — which gate blocks the most
@@ -442,8 +426,7 @@ function shadowInsights(shadows: ShadowTrade[]): CoachInsight[] {
       headline:  `${topGate[0].replace('_', ' ')} is your most active gate (${topGate[1]} blocks)`,
       detail:    `This gate has blocked the most signals. Review Shadow Journal to see whether these blocks were correct or too aggressive.`,
       impact:    5,
-      metric:    `${topGate[1]} blocks`,
-    });
+      metric:    `${topGate[1]} blocks`});
   }
 
   return insights;
@@ -466,8 +449,7 @@ function liveTradeInsights(livePositions: import('./livePortfolio').LivePosition
       headline:  `Average live trading fee is ₹${avgFee.toFixed(0)} per order`,
       detail:    `High fees reduce net returns. Consider using LIMIT orders instead of MARKET to get maker rates, and batch fewer, higher-conviction trades.`,
       impact:    6,
-      metric:    `₹${avgFee.toFixed(0)} avg fee`,
-    });
+      metric:    `₹${avgFee.toFixed(0)} avg fee`});
   }
 
   const brokerCounts: Record<string, number> = {};
@@ -481,8 +463,7 @@ function liveTradeInsights(livePositions: import('./livePortfolio').LivePosition
       headline:  `Active across ${Object.keys(brokerCounts).length} live execution providers`,
       detail:    `You have positions across: ${Object.keys(brokerCounts).join(', ')}. Make sure your risk is not concentrated — diversification across instruments is good, but monitor total exposure.`,
       impact:    4,
-      metric:    Object.keys(brokerCounts).join(', '),
-    });
+      metric:    Object.keys(brokerCounts).join(', ')});
   }
 
   return insights;
@@ -540,8 +521,7 @@ export async function getFuturesCoachSummary(): Promise<FuturesCoachSummary> {
       realizedPnL:    nse.totalRealizedPnL,
       cashBalance:    nse.cashBalance,
       initialCapital: nse.initialCapital,
-      returnPct:      nseReturn,
-    },
+      returnPct:      nseReturn},
     bn: {
       totalTrades:      0,
       openPositions:    bn.openPositions.length,
@@ -549,9 +529,7 @@ export async function getFuturesCoachSummary(): Promise<FuturesCoachSummary> {
       usdtBalance:      bn.usdtBalance,
       initialCapital:   bn.initialCapital,
       returnPct:        bnReturn,
-      totalFundingPaid: bn.totalFundingPaid,
-    },
-  };
+      totalFundingPaid: bn.totalFundingPaid}};
 }
 
 // ── Main compute function ─────────────────────────────────────────────────────
@@ -571,8 +549,7 @@ export async function computeCoachInsights(): Promise<CoachReport> {
       insufficientReason: `The coach needs at least ${MIN_TRADES_OVERALL} completed trades to generate insights. You have ${trades.length} so far.`,
       insights:        [],
       overallGrade:    'INSUFFICIENT',
-      oneLiner:        `Keep trading — insights unlock at ${MIN_TRADES_OVERALL} trades.`,
-    };
+      oneLiner:        `Keep trading — insights unlock at ${MIN_TRADES_OVERALL} trades.`};
   }
 
   const livePositions = livePortfolio?.openPositions ?? [];
@@ -602,8 +579,7 @@ export async function computeCoachInsights(): Promise<CoachReport> {
     hasSufficientData: true,
     insights:          allInsights,
     overallGrade:      grade,
-    oneLiner,
-  };
+    oneLiner};
 }
 
 // ── Narrative via Anthropic API ────────────────────────────────────────────────
@@ -635,14 +611,11 @@ Write a concise, direct coaching message (3-4 short paragraphs).
     headers: {
       'Content-Type':    'application/json',
       'x-api-key':       key,
-      'anthropic-version': '2023-06-01',
-    },
+      'anthropic-version': '2023-06-01'},
     body: JSON.stringify({
       model:      'claude-sonnet-4-6',
       max_tokens: 500,
-      messages:   [{ role: 'user', content: prompt }],
-    }),
-  });
+      messages:   [{ role: 'user', content: prompt }]})});
 
   if (!res.ok) throw new Error(`Anthropic API ${res.status}`);
   const json = await res.json();

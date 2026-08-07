@@ -1,18 +1,19 @@
 import { Candle } from './indicators';
-import { fitEnsemble, runBacktest, computeMetrics, BacktestMetrics, DEFAULT_BACKTEST_CONFIG, BacktestConfig } from './backtest';
+import { fitEnsemble, runBacktest, computeMetrics, BacktestMetrics,
+         DEFAULT_BACKTEST_CONFIG, BacktestConfig,
+         buildFitCache, PrecomputedFitCache } from './backtest';
+import { PRIMARY_HORIZON } from './mlSignal'; // OPT A: used to seed horizonFittedMap with h=3 from runBacktest
 import { runBaseline, ALL_BASELINES, BaselineName } from './baselineStrategies';
 import { bucketTradesByRegime, RegimeBucket } from './regimeAnalysis';
-import { evaluateAllHorizons, pickBestHorizon, HorizonEvalEntry } from './horizonEvaluation';
+import { HorizonEvalEntry, evaluateAllHorizons, evaluateAllHorizonsWithTrades, pickBestHorizon } from './horizonEvaluation';
 import { evaluateThresholds, ThresholdEvalEntry } from './thresholdEvaluation';
-import { compareModels, ensembleGenuinelyHelps, ModelComparisonEntry } from './modelComparison';
+import { ModelComparisonEntry, compareModels, compareModelsWithTrades, ensembleGenuinelyHelps } from './modelComparison';
 import { analyzeFeatureContribution, FeatureContributionReport } from './featureContribution';
 import { createRNG } from './seededRandom';
 import { logger } from './logger';
 import { evaluateStrategies, StrategyEvalResult, StrategyEvalMode } from './strategyEvaluation';
 import type { StrategyId } from './strategy/strategyTypes';
 import { evaluateRegimes, RegimeEvalResult } from './regimeEvaluation';
-import { compareModelsWithTrades } from './modelComparison';
-import { evaluateAllHorizonsWithTrades } from './horizonEvaluation';
 
 // Orchestrates the full Production Model Evaluation for ONE (symbol,
 // timeframe) pair against REAL fetched market data — every sub-analysis
@@ -58,6 +59,18 @@ export async function evaluateProductionModel(
   strategyMode: StrategyEvalMode = 'ALL',
   selectedStrategyId: StrategyId | null = null,
 ): Promise<ProductionEvalResult | null> {
+  // ── Stage timing — logged at INFO level so production builds can diagnose slow runs ──
+  // Format: [PERF] symbol/tf  StepName  actual_ms
+  const _t0 = Date.now();
+  let _tLast = _t0;
+  const _stage = (name: string) => {
+    const now = Date.now();
+    const ms = now - _tLast;
+    _tLast = now;
+    logger.info('productionEval:perf', `[PERF] ${symbol}/${timeframe}  ${name.padEnd(35)}  ${ms}ms`);
+    return now;
+  };
+
   logger.info('productionEval', `Starting evaluation: ${symbol} on ${timeframe}, ${candles.length} candles provided`);
 
   if (candles.length < 120) {
@@ -66,43 +79,68 @@ export async function evaluateProductionModel(
   }
 
   const tick = () => new Promise<void>(r => setTimeout(r, 0));
-
   const config: BacktestConfig = { ...DEFAULT_BACKTEST_CONFIG, ...configOverrides };
 
-  // 1. Primary backtest (production defaults: horizon=3, threshold=0.55)
-  // runBacktest calls fitEnsemble synchronously — yields inside keep UI responsive
+  // ── Opt 4: build precomputeSeries + allFeatures ONCE ─────────────────────────
   await tick();
-  const primaryResult = await runBacktest(candles, config);
+  const fitCache = await buildFitCache(candles);
+  _stage('S1 buildFitCache (precomputeSeries + features)');
+  if (!fitCache) {
+    logger.warn('productionEval', `${symbol}/${timeframe}: could not build fit cache`);
+    return null;
+  }
+
+  // ── Opt 3: primary backtest exposes fitted ensemble — no second fitEnsemble ──
+  await tick();
+  const primaryResult = await runBacktest(candles, config, fitCache);
   if (!primaryResult) {
     logger.warn('productionEval', `${symbol}/${timeframe}: could not fit a model`);
     return null;
   }
-  // Stream partial result after primary backtest so UI shows something
-  // within the first few minutes instead of waiting for all 5 horizon
-  // sweeps, model comparison, and feature contribution to complete.
+  const fitted = primaryResult.fitted!;  // Opt 3: reuse — never call fitEnsemble(h=3) again
+  _stage('S2 runBacktest (fitEnsemble h=3 + simulation)');
+
   if (onProgress) onProgress({
     symbol, timeframe, candleCount: candles.length,
     primaryMetrics: primaryResult.metrics,
     regimes: [], horizons: [], bestHorizon: null,
     thresholds: [], modelComparison: [], ensembleHelps: { helps: false, reasoning: 'Computing…' },
-    featureContribution: null,
-    baselines: [], beatsAllBaselines: false,
-  }, { stage: 'primaryBacktest', percent: 20 });
+    featureContribution: null, baselines: [], beatsAllBaselines: false}, { stage: 'primaryBacktest', percent: 20 });
 
-  // 2. Fit once for the analyses that reuse a single trained model
-  await tick();
-  const fitted = await fitEnsemble(candles, config.trainSplitPct, config.seed);
-  if (!fitted) return null;
-
-  // 3. Regime breakdown
+  // 3. Regime breakdown — reuses `fitted` from Step 1
   await tick();
   const regimes = bucketTradesByRegime(candles, fitted.walkIndices, primaryResult.trades, config.startingCapital);
+  _stage('S3 bucketTradesByRegime');
 
-  // 4. Horizon evaluation — now async, yields between each of the 5 model trains
+  // ── Opt 1+4: build the horizon map ONCE here for sharing across all consumers ─
+  // evaluateAllHorizons (Step 4), evaluateStrategies (Step 9), and
+  // evaluateAllHorizonsWithTrades (Step 10) all need fitted ensembles for the
+  // same 5 horizons [1,3,5,10,20] on the same (candles, seed, split).
+  // Fitting them once and passing the map eliminates all duplicate training.
+  // Only simulateSignalStrategy re-runs per consumer (different execConfig).
+  //
+  // OPT A (duplicate h=3 elimination): runBacktest() in the step above already
+  // called fitEnsemble(h=3, PRIMARY_HORIZON). The result is in primaryResult.fitted.
+  // Seeding the map with that fitted model before the loop means the h=3 iteration
+  // is skipped entirely — saving one complete fitEnsemble call (100 MLP + 100 LR
+  // epochs) which is ~17% of total training time per combo.
+  // Correctness: identical weights guaranteed because (candles, trainSplitPct, seed,
+  // horizon=3, fitCache) are all the same. The map reuses the exact same object.
+  const horizonFittedMap = new Map<number, import('./backtest').FittedEnsemble>();
+  horizonFittedMap.set(PRIMARY_HORIZON, fitted);  // OPT A: reuse h=3 from runBacktest — no duplicate fit
+  for (const h of [1, 5, 10, 20]) {  // OPT A: skip h=3 (PRIMARY_HORIZON=3) already in map
+    await tick();
+    const f = await fitEnsemble(candles, config.trainSplitPct, config.seed, h, fitCache);
+    if (f) horizonFittedMap.set(h, f);
+  }
+
+  _stage('S4 horizonFittedMap build (4 fits: h=1,5,10,20 — h=3 reused from S2)');
+
+  // 4. Horizon evaluation — Opt 1: uses horizonFittedMap (no new fits).
+  //    Opt 2: includes trades (evaluateAllHorizonsWithTrades is now an alias).
+  //    Opt 4: cache eliminates precomputeSeries inside any fallback fit.
   await tick();
   const horizons = await evaluateAllHorizons(candles, config,
-    // Per-horizon progress: fire onProgress after each of the 5 horizon sweeps
-    // so the UI updates continuously (not just twice). Percent range: 20-65.
     onProgress ? (horizon, idx, total, entry) => {
       const pct = Math.round(20 + ((idx + 1) / total) * 45);
       const partialHorizons = horizons ? [...horizons] : [];
@@ -112,33 +150,38 @@ export async function evaluateProductionModel(
         primaryMetrics: primaryResult.metrics,
         regimes: primaryResult.regimes ?? [], horizons: partialHorizons, bestHorizon: null,
         thresholds: [], modelComparison: [], ensembleHelps: { helps: false, reasoning: 'Computing…' },
-        featureContribution: null, baselines: [], beatsAllBaselines: false,
-      }, { stage: `horizon${entry.horizon}`, percent: pct });
+        featureContribution: null, baselines: [], beatsAllBaselines: false}, { stage: `horizon${entry.horizon}`, percent: pct });
     } : undefined,
+    fitCache,
+    horizonFittedMap,   // Opt 1: reuse pre-fitted models, only re-run simulateSignalStrategy
   );
   const bestHorizon = pickBestHorizon(horizons);
+  _stage('S5 evaluateAllHorizons (5 simulations, 0 new fits)');
+
   if (onProgress) onProgress({
     symbol, timeframe, candleCount: candles.length,
     primaryMetrics: primaryResult.metrics,
     regimes: primaryResult.regimes ?? [], horizons, bestHorizon,
     thresholds: [], modelComparison: [], ensembleHelps: { helps: false, reasoning: 'Computing…' },
     featureContribution: null,
-    baselines: [], beatsAllBaselines: false,
-  }, { stage: 'horizonSweep', percent: 65 });
+    baselines: [], beatsAllBaselines: false}, { stage: 'horizonSweep', percent: 65 });
 
   // 5. Threshold sweep
   await tick();
   const thresholds = evaluateThresholds(fitted, config);
+  _stage('S6 evaluateThresholds');
 
   // 6. Model comparison
   await tick();
   const modelComparison = compareModels(fitted, config);
   const ensembleHelps = ensembleGenuinelyHelps(modelComparison);
+  _stage('S7 compareModels + ensembleGenuinelyHelps');
 
   // 7. Feature contribution
   await tick();
   const rng = createRNG(config.seed + 1);
   const featureContribution = analyzeFeatureContribution(fitted, rng);
+  _stage('S8 analyzeFeatureContribution (permutation importance)');
 
   // 8. Baseline comparison
   await tick();
@@ -151,10 +194,13 @@ export async function evaluateProductionModel(
   const beatsAllBaselines = baselines.every(b =>
     primaryResult.metrics.totalReturnPct > b.metrics.totalReturnPct
   );
+  _stage('S9 baseline comparisons');
 
-  // 9. Strategy evaluation — runs AFTER all existing steps, shares the same candles.
-  // Uses separate fitEnsemble calls per strategy (different horizons/labels).
-  // Does NOT change any result from steps 1–8.
+  // 9. Strategy evaluation — Opt 1: pass horizonFittedMap so evaluateStrategies
+  //    reuses pre-fitted ensembles for primary fits.
+  //    Opt 4: pass fitCache so per-strategy horizon sweeps skip precomputeSeries.
+  //    Total new fitEnsemble calls for strategy eval: 0 (primary fits) + 20 (horizon
+  //    sweeps with cache) → ~20 × training-only cost (no precompute overhead).
   await tick();
   let strategyEval: StrategyEvalResult | null = null;
   try {
@@ -163,7 +209,6 @@ export async function evaluateProductionModel(
       strategyMode,
       selectedStrategyId,
       { ...DEFAULT_BACKTEST_CONFIG, ...configOverrides },
-      // onProgress for strategy eval: stream partial results into the outer result
       onProgress ? (partial) => {
         onProgress({
           symbol, timeframe, candleCount: candles.length,
@@ -171,26 +216,26 @@ export async function evaluateProductionModel(
           regimes: primaryResult.regimes ?? [], horizons, bestHorizon,
           thresholds, modelComparison, ensembleHelps,
           featureContribution: null, baselines, beatsAllBaselines,
-          strategyEval: partial,
-        }, { stage: 'strategyEval', percent: 90 });
+          strategyEval: partial}, { stage: 'strategyEval', percent: 90 });
       } : undefined,
+      fitCache,          // Opt 4
+      horizonFittedMap,  // Opt 1
     );
   } catch (e: any) {
     logger.warn('productionEval', `Strategy evaluation failed (non-fatal): ${e.message}`);
   }
+  _stage('S10 evaluateStrategies (4 strategies, 20 simulations, 0 new fits)');
 
-  // 10. Regime evaluation — groups model/horizon/strategy trades by market regime.
-  // Reuses fitted (already computed in step 2) + new trades-carrying variants.
-  // compareModelsWithTrades and evaluateAllHorizonsWithTrades reuse fitted internals
-  // (regimeLabelAt, predictProb, atrAt) with zero additional precomputeSeries calls.
-  // Horizon runs do require fitEnsemble per horizon (different label → must retrain)
-  // but those fits are shared with step 4 — there is no way to avoid this.
+  // 10. Regime evaluation — Opt 2: evaluateAllHorizonsWithTrades now returns
+  //     from the already-computed horizons array (same data, no new fits).
+  //     compareModelsWithTrades reuses `fitted` (already from Step 1).
   await tick();
   let regimeEval: RegimeEvalResult | null = null;
   try {
-    const modelEntriesWithTrades  = compareModelsWithTrades(fitted, { ...config, buyThreshold: config.buyThreshold });
-    const horizonEntriesWithTrades = await evaluateAllHorizonsWithTrades(candles, config);
-    const strategyEntries = strategyEval?.entries ?? [];
+    const modelEntriesWithTrades   = compareModelsWithTrades(fitted, { ...config, buyThreshold: config.buyThreshold });
+    // Opt 2: horizons already contains trades — pass directly, no new fits.
+    const horizonEntriesWithTrades = horizons;
+    const strategyEntries          = strategyEval?.entries ?? [];
     regimeEval = await evaluateRegimes(
       fitted,
       primaryResult.trades,
@@ -202,6 +247,11 @@ export async function evaluateProductionModel(
   } catch (e: any) {
     logger.warn('productionEval', `Regime evaluation failed (non-fatal): ${e.message}`);
   }
+  _stage('S11 evaluateRegimes');
+
+  const _totalMs = Date.now() - _t0;
+  logger.info('productionEval:perf',
+    `[PERF] ${symbol}/${timeframe}  ${'TOTAL'.padEnd(35)}  ${_totalMs}ms = ${(_totalMs/60000).toFixed(1)}min`);
 
   logger.info('productionEval', `${symbol}/${timeframe} complete: ${primaryResult.trades.length} trades, ${primaryResult.metrics.totalReturnPct.toFixed(2)}% return, beats all baselines: ${beatsAllBaselines}`);
 
@@ -210,8 +260,7 @@ export async function evaluateProductionModel(
     primaryMetrics: primaryResult.metrics, regimes, horizons, bestHorizon, thresholds,
     modelComparison, ensembleHelps, featureContribution, baselines, beatsAllBaselines,
     strategyEval,
-    regimeEval,
-  };
+    regimeEval};
 }
 
 // Generates recommendations MECHANICALLY from measured results across all
@@ -236,8 +285,7 @@ export function generateRecommendations(results: ProductionEvalResult[]): Produc
     return {
       recommendedHorizon: null, recommendedThreshold: null, featuresToConsiderRemoving: [],
       needsMoreData: true, readyForPaperTrading: false,
-      reasoning: ['No (symbol, timeframe) combination produced enough trades (5+) to draw any conclusion. More historical data or a longer evaluation window is needed before any recommendation can be made.'],
-    };
+      reasoning: ['No (symbol, timeframe) combination produced enough trades (5+) to draw any conclusion. More historical data or a longer evaluation window is needed before any recommendation can be made.']};
   }
 
   // Recommended horizon: most frequently the "best" pick across all combinations

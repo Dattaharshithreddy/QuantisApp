@@ -68,8 +68,7 @@ export default function DeveloperSupportScreen({ navigation }: any) {
     try {
       await Share.share({
         title:   `QUANTIS Support Bundle v${bundle?.build?.buildVersion ?? '?'}`,
-        message: bundleStr,
-      });
+        message: bundleStr});
     } catch (e: any) {
       Alert.alert('Share failed', e.message);
     }

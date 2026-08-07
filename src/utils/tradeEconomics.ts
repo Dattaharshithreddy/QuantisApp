@@ -50,8 +50,7 @@ export function computeTradeEconomics(
 
   return {
     expectedGrossProfit, expectedLoss, expectedRoundTripFees, expectedSlippageCost,
-    expectedNetEdge, costAsPctOfExpectedProfit, atrPctOfPrice, tpDistancePctOfPrice,
-  };
+    expectedNetEdge, costAsPctOfExpectedProfit, atrPctOfPrice, tpDistancePctOfPrice};
 }
 
 // Presentation-only heuristic for the warning banner. This threshold is

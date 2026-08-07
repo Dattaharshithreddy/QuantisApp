@@ -70,8 +70,7 @@ export const SCALPING_PROFILE: StrategyProfile = {
   readinessContext: {
     focusLabel:   'Momentum & Speed',
     holdingLabel: 'Seconds to minutes',
-    watchFor:     'BOS on current bar, volume spike, tight spread',
-  },
+    watchFor:     'BOS on current bar, volume spike, tight spread'},
 };
 
 // ── Strategy 2: Intraday ──────────────────────────────────────────────────────
@@ -123,8 +122,7 @@ export const INTRADAY_PROFILE: StrategyProfile = {
   readinessContext: {
     focusLabel:   'Trend + Volume Confirmation',
     holdingLabel: 'Minutes to hours (same session)',
-    watchFor:     'MTF alignment, SMC Order Block, volume above average',
-  },
+    watchFor:     'MTF alignment, SMC Order Block, volume above average'},
 };
 
 // ── Strategy 3: Swing Trading ─────────────────────────────────────────────────
@@ -182,8 +180,7 @@ export const SWING_PROFILE: StrategyProfile = {
   readinessContext: {
     focusLabel:   'Regime + Structure + Pattern',
     holdingLabel: '2–5 trading days',
-    watchFor:     'HTF BOS confirmed, regime aligned, major pattern validated',
-  },
+    watchFor:     'HTF BOS confirmed, regime aligned, major pattern validated'},
 };
 
 // ── Strategy 4: Position Trading ──────────────────────────────────────────────
@@ -244,8 +241,7 @@ export const POSITION_PROFILE: StrategyProfile = {
   readinessContext: {
     focusLabel:   'Macro Trend + Strong Regime',
     holdingLabel: 'Weeks to months',
-    watchFor:     'STRONG_BULL/BEAR regime, all timeframes aligned, major SMC zone',
-  },
+    watchFor:     'STRONG_BULL/BEAR regime, all timeframes aligned, major SMC zone'},
 };
 
 // ── Registry ──────────────────────────────────────────────────────────────────

@@ -44,6 +44,5 @@ export function getMarketStructureSnapshot(candles: Candle[]): MarketStructureSn
     patterns,
     structureHighs: structure.highs === 'HH' ? 'HH' : structure.highs === 'LH' ? 'LH' : 'NONE',
     structureLows: structure.lows === 'HL' ? 'HL' : structure.lows === 'LL' ? 'LL' : 'NONE',
-    pivots, fib, lastSwingHigh, lastSwingLow,
-  };
+    pivots, fib, lastSwingHigh, lastSwingLow};
 }

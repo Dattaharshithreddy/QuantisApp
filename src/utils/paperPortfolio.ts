@@ -37,8 +37,18 @@ export type PaperPosition = {
   // Tracked live as price updates — needed for the journal's "Maximum
   // Unrealized Profit" / "Maximum Drawdown" fields, which can't be
   // reconstructed after the fact without having watched the position live.
-  maxUnrealizedProfit: number;
-  maxUnrealizedDrawdown: number;
+  // Renamed alias: maxUnrealizedProfit = maxProfitSeen (max favorable excursion, unrealized)
+  // This is the MFE in absolute P&L terms — the highest unrealised profit seen tick-by-tick.
+  maxUnrealizedProfit: number;   // alias: MFE / maxProfitSeen
+  maxUnrealizedDrawdown: number; // alias: MAE / maxAdverseExcursion (always <= 0)
+  // ── Peak-Profit Withdrawal tracking ─────────────────────────────────────────
+  // Tracks the largest "profit given back" from a peak — computed tick-by-tick.
+  //   peakProfit         = highest unrealizedPnL ever seen (== maxUnrealizedProfit when >0)
+  //   maxProfitWithdrawn = max(peak - currentPnL) seen during the trade lifecycle
+  // Required: must update EVERY tick inside monitorOpenPositions.
+  // Must never decrease. Must survive UI rerenders and app backgrounding.
+  peakProfit: number;          // running maximum of unrealizedPnL (>= maxUnrealizedProfit when positive)
+  maxProfitWithdrawn: number;  // max(peakProfit - unrealizedPnL) seen across all ticks (>= 0)
   // DIAGNOSTICS ONLY - never used to accept/reject the trade. Computed
   // once at entry by computeTradeEconomics() and frozen here.
   tradeEconomics: TradeEconomics;
@@ -148,7 +158,11 @@ const PORTFOLIO_KEY = 'paperPortfolio';
 
 // Increment this when any change to cash accounting logic requires recalculating
 // stored portfolio state from trade history.
-const CURRENT_PORTFOLIO_VERSION = 1;
+// v2: adds peakProfit and maxProfitWithdrawn fields to open positions that
+// were created before these fields existed. Both initialize to safe defaults:
+//   peakProfit = max(0, maxUnrealizedProfit)  — best guess from existing data
+//   maxProfitWithdrawn = 0                    — unknown without tick history; reset to zero
+const CURRENT_PORTFOLIO_VERSION = 2;
 
 export async function getPortfolio(): Promise<PaperPortfolioState> {
   try {
@@ -208,25 +222,47 @@ async function migratePortfolioIfNeeded(state: PaperPortfolioState): Promise<Pap
   const version = state.portfolioVersion ?? 0;
   if (version >= CURRENT_PORTFOLIO_VERSION) return state;
 
-  // v0 → v1: recalculate cashBalance from realizedPnL and open position costs.
-  const openPositionCost = state.openPositions.reduce(
-    (sum, p) => sum + p.entryPrice * p.qty + (p.entryFee ?? 0),
-    0,
-  );
-  const correctedCash = state.startingCapital + state.realizedPnL - openPositionCost;
+  // ── v0 → v1: recalculate cashBalance from realizedPnL and open position costs ──
+  let correctedCash = state.cashBalance;
+  if (version < 1) {
+    const openPositionCost = state.openPositions.reduce(
+      (sum, p) => sum + p.entryPrice * p.qty + (p.entryFee ?? 0),
+      0,
+    );
+    correctedCash = state.startingCapital + state.realizedPnL - openPositionCost;
+    logger.info('paperPortfolio',
+      `Portfolio migrated v0→v1: ` +
+      `cashBalance ${state.cashBalance.toFixed(2)} → ${correctedCash.toFixed(2)} ` +
+      `(startingCapital=${state.startingCapital}, realizedPnL=${state.realizedPnL.toFixed(2)}, ` +
+      `openPositionCost=${openPositionCost.toFixed(2)})`,
+    );
+  }
+
+  // ── v1 → v2: initialize peakProfit and maxProfitWithdrawn on open positions ──
+  // These fields did not exist before v6.9.3. Positions opened before the upgrade
+  // have no tick history to reconstruct these from, so we initialize from what IS
+  // available: peakProfit = max(0, maxUnrealizedProfit) (the highest favorable P&L
+  // seen is the best proxy for peak), maxProfitWithdrawn = 0 (unknown — reset).
+  // After migration, every subsequent tick in monitorOpenPositions will accurately
+  // update both fields going forward.
+  let migratedPositions = state.openPositions;
+  if (version < 2) {
+    migratedPositions = state.openPositions.map(p => ({
+      ...p,
+      peakProfit:         (p as any).peakProfit         ?? Math.max(0, p.maxUnrealizedProfit ?? 0),
+      maxProfitWithdrawn: (p as any).maxProfitWithdrawn ?? 0,
+    }));
+    logger.info('paperPortfolio',
+      `Portfolio migrated v1→v2: initialized peakProfit/maxProfitWithdrawn on ${migratedPositions.length} open position(s)`,
+    );
+  }
 
   const migrated: PaperPortfolioState = {
     ...state,
     cashBalance: correctedCash,
+    openPositions: migratedPositions,
     portfolioVersion: CURRENT_PORTFOLIO_VERSION,
   };
-
-  logger.info('paperPortfolio',
-    `Portfolio migrated v${version}→v${CURRENT_PORTFOLIO_VERSION}: ` +
-    `cashBalance ${state.cashBalance.toFixed(2)} → ${correctedCash.toFixed(2)} ` +
-    `(startingCapital=${state.startingCapital}, realizedPnL=${state.realizedPnL.toFixed(2)}, ` +
-    `openPositionCost=${openPositionCost.toFixed(2)})`,
-  );
 
   await savePortfolio(migrated);
   migrationRanThisSession = true;

@@ -132,6 +132,5 @@ export function explainPrediction(params: {
     bullishFactors, bearishFactors, neutralFactors,
     summaryLines, riskLevel, riskFlags: flags,
     riskSentence, confidenceLines,
-    direction, probability,
-  };
+    direction, probability};
 }

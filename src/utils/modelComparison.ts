@@ -45,8 +45,7 @@ export function ensembleGenuinelyHelps(entries: ModelComparisonEntry[]): { helps
     helps,
     reasoning: helps
       ? `Ensemble profit factor (${ensembleScore.toFixed(2)}) meaningfully exceeds the best individual model, ${bestIndividual.modelName} (${bestIndividualScore.toFixed(2)}).`
-      : `Ensemble (${ensembleScore.toFixed(2)}) does NOT meaningfully beat the best individual model, ${bestIndividual.modelName} (${bestIndividualScore.toFixed(2)}) — the ensemble may not be earning its complexity on this data.`,
-  };
+      : `Ensemble (${ensembleScore.toFixed(2)}) does NOT meaningfully beat the best individual model, ${bestIndividual.modelName} (${bestIndividualScore.toFixed(2)}) — the ensemble may not be earning its complexity on this data.`};
 }
 
 // Variant of compareModels that also returns raw trades per model.

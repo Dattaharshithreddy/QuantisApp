@@ -32,6 +32,5 @@ export default async function fetchBnFuturesKlines(
     high:   parseFloat(k[2]),
     low:    parseFloat(k[3]),
     close:  parseFloat(k[4]),
-    volume: parseFloat(k[5]),
-  }));
+    volume: parseFloat(k[5])}));
 }
