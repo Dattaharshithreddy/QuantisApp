@@ -6,7 +6,6 @@ import { useData } from '../context/DataContext';
 import { Pill } from '../components/Common';
 import { Asset, TYPE_COLORS } from '../api/assets';
 import { searchBinance, searchNSE, searchAlphaVantage, searchForex } from '../api/symbolSearch';
-import { findAssetByLegacySymbol } from '../utils/assetResolver';
 import { fetchForexRates } from '../api/forex';
 
 const MARKETS = [
@@ -61,20 +60,11 @@ export default function SymbolSearchScreen({ navigation, route }: any) {
 
   async function handlePick(asset: Asset) {
     await addAsset(asset);
-    // Phase 6: navigate with assetId+exchange for known built-in assets so
-    // ExchangeSelector appears automatically in ChartScreen. Custom/search
-    // results that don't resolve to a built-in fall back to legacy symbol param.
-    const resolved = findAssetByLegacySymbol(asset.symbol);
-    if (resolved) {
-      navigation.navigate('MainTabs', { screen: returnTo, params: {
-        assetId: resolved.assetId,
-        exchange: resolved.exchange,
-      }});
-    } else {
-      // Custom asset or unknown symbol — use legacy symbol param.
-      // ChartScreen backward-compat shim handles this correctly.
-      navigation.navigate('MainTabs', { screen: returnTo, params: { symbol: asset.symbol } });
-    }
+    // Navigate back using the original symbol approach — this is what worked
+    // before Phase 6. The assetId+exchange approach broke symbol search because
+    // not all searched assets resolve cleanly to a LogicalAsset id.
+    // ChartScreen's backward-compat shim handles { symbol } correctly for all cases.
+    navigation.navigate('MainTabs', { screen: returnTo, params: { symbol: asset.symbol } });
   }
 
   return (

@@ -87,7 +87,9 @@ function buildCommonBreakdown(opts: {
   return { strengths, weaknesses };
 }
 
-function volRegimeFromLabel(label: string): string | null {
+function volRegimeFromLabel(label: string | null | undefined): string | null {
+  // Guard: label may be undefined if called with a Promise (async called without await)
+  if (!label || typeof label !== 'string') return 'NORMAL';
   if (label.includes('Extreme')) return 'EXTREME';
   if (label.includes('High')) return 'HIGH';
   if (label.includes('Low')) return 'LOW';

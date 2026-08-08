@@ -445,9 +445,8 @@ async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[])
   const S = historicalS;
 
   // ── EMA updates (O(1) incremental) ───────────────────────────────────────
-  // EMA[n] = EMA[n-1] + alpha * (price[n] - EMA[n-1])  where alpha = 2/(period+1)
-  const updateEma = (arr: number[], period: number, price: number) => {
-    if (arr.length < n) return;
+  const updateEma = (arr: number[] | undefined, period: number, price: number) => {
+    if (!arr || arr.length < n || arr[n - 2] == null) return;
     const alpha = 2 / (period + 1);
     arr[n - 1] = arr[n - 2] + alpha * (price - arr[n - 2]);
   };
@@ -457,7 +456,7 @@ async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[])
   updateEma(S.sma20,  20,  cur.close); // approximation: SMA treated as EMA for the live bar
 
   // ── RSI update (O(1) using Wilder's smoothing) ────────────────────────────
-  if (S.rsiArr.length >= n) {
+  if (S.rsiArr && S.rsiArr.length >= n) {
     const delta  = cur.close - prv.close;
     const gain   = Math.max(0, delta);
     const loss   = Math.max(0, -delta);
@@ -471,7 +470,7 @@ async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[])
   }
 
   // ── ATR update (O(1)) ─────────────────────────────────────────────────────
-  if (S.atrArr.length >= n) {
+  if (S.atrArr && S.atrArr.length >= n) {
     const trueRange = Math.max(
       cur.high - cur.low,
       Math.abs(cur.high - prv.close),
@@ -482,7 +481,7 @@ async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[])
   }
 
   // ── MACD update (O(1)) ────────────────────────────────────────────────────
-  if (S.macdRes.macd.length >= n) {
+  if (S.macdRes?.macd && S.macdRes.macd.length >= n) {
     const alpha12 = 2 / 13, alpha26 = 2 / 27, alpha9 = 2 / 10;
     S.macdRes.macd[n - 1]  = S.macdRes.macd[n-2]  + alpha12 * (cur.close - S.macdRes.macd[n-2])
                              - (S.macdRes.macd[n-2] + alpha26 * (cur.close - S.macdRes.macd[n-2]));
@@ -493,7 +492,7 @@ async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[])
   }
 
   // ── Bollinger Bands update (O(1) approximate) ─────────────────────────────
-  if (S.bb.length >= n) {
+  if (S.bb && S.bb.length >= n) {
     const prevBb = S.bb[n - 2];
     if (prevBb) {
       // Approximate: shift the mean by EMA update
@@ -503,13 +502,13 @@ async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[])
   }
 
   // ── OBV update (O(1) cumulative) ─────────────────────────────────────────
-  if (S.obvArr.length >= n) {
+  if (S.obvArr && S.obvArr.length >= n) {
     const prevObv = S.obvArr[n - 2] ?? 0;
     S.obvArr[n - 1] = prevObv + (cur.close > prv.close ? cur.volume : cur.close < prv.close ? -cur.volume : 0);
   }
 
   // ── VWAP update (O(1) approximate) ───────────────────────────────────────
-  if (S.vwapArr.length >= n) {
+  if (S.vwapArr && S.vwapArr.length >= n) {
     const typPrice = (cur.high + cur.low + cur.close) / 3;
     const prevVwap = S.vwapArr[n - 2] ?? typPrice;
     // Exponential approximation of VWAP

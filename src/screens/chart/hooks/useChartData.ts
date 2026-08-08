@@ -94,9 +94,11 @@ export function useChartData(
   }, [assetId, exchange]); // allAssets intentionally omitted — built-ins are stable
 
   // symbol = variant.symbol — the internal ML/cache/price key
-  // This is what gets passed to trainAndPredict, candleCache, etc.
-  // It is IDENTICAL to the old asset.symbol — no downstream changes.
-  const symbol = variant?.symbol ?? assetId; // fallback for unknown custom assets
+  // Fallback chain: variant.symbol → find in allAssets by symbol → assetId itself
+  // This prevents undefined symbol crashing trainAndPredict, candleCache etc.
+  const symbol = variant?.symbol
+    ?? allAssets.find((a: any) => a.symbol === assetId || a.assetId === assetId)?.symbol
+    ?? assetId;
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState('');

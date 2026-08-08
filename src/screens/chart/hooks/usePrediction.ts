@@ -190,7 +190,10 @@ export function usePrediction(
   const tradeQualityResult = useMemo(() => {
     if (!ml.data || ml.data.action === 'HOLD' || !candlesRef.current.length) return null;
     const snapshot = getIndicatorSnapshot(candlesRef.current);
-    const regimeLabel = checkRegimeFilter(candlesRef.current, 'DISABLED').currentRegime;
+    // FIX: checkRegimeFilter is async — calling without await returned a Promise,
+    // causing volRegimeFromLabel(Promise).includes() to crash.
+    // Use memoryResult?.regime if available, otherwise 'UNKNOWN' — safe string fallback.
+    const regimeLabel: string = (ml.data.memoryResult as any)?.regime ?? 'UNKNOWN';
     return fromSinglePrediction(ml.data, candlesRef.current, snapshot, symbol, assetType, regimeLabel);
   }, [ml.data, symbol, assetType]);
 
