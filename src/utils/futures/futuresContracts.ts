@@ -218,6 +218,11 @@ export async function fetchNFOTokens(
  * useChartData, multiSourceFetch, etc.) see the resolved token automatically.
  */
 export async function resolveFuturesTokensIntoAssets(assets: import('../../api/assets').Asset[]): Promise<void> {
+  // Import ASSETS so we can mutate the SOURCE LogicalAsset variants in place.
+  // The flat shim (allAssets) is recreated by useMemo on every DataContext render,
+  // so mutations to flat shim objects are lost. Mutating the module-level ASSETS
+  // ensures the next useMemo run picks up the resolved aoTokens.
+  const { ASSETS: SOURCE_ASSETS } = require('../../api/assets');
   const futuresAssets = assets.filter(a => a.src === 'ao_futures' && a.underlying);
   if (!futuresAssets.length) return;
 
@@ -277,7 +282,13 @@ export async function resolveFuturesTokensIntoAssets(assets: import('../../api/a
       );
 
       if (token) {
-        asset.aoToken = token;
+        asset.aoToken = token; // mutate flat shim copy (current render)
+        // Also mutate the source LogicalAsset variant so future useMemo
+        // re-runs (after nftTokenVersion bump) keep the resolved token.
+        const sourceLA = SOURCE_ASSETS.find((la: any) => la.id === asset.assetId);
+        if (sourceLA?.exchanges?.ao_futures) {
+          sourceLA.exchanges.ao_futures.aoToken = token;
+        }
         resolved++;
       }
     } catch (e: any) {

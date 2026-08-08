@@ -3,6 +3,7 @@ import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { evaluateProductionModel, ProductionEvalResult } from '../utils/productionEvaluation';
+import { clearPrecomputeCache } from '../utils/mlSignal';
 import { computeOptimalConfig, OptimalConfig } from '../utils/modelOptimization';
 import { fetchMaxHistoryForAsset } from '../utils/multiSourceFetch';
 
@@ -302,6 +303,10 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
                 return { ...prev, [id]: { ...t, evalResults: next, steps, elapsedMs: Date.now() - t.startedAt } };
               });
             };
+            // Clear the two-layer precompute cache before production eval —
+            // it's optimized for the live chart's forming candle, but prod eval
+            // needs a clean full-history recompute for all bars (e.g. 3279 bars).
+            clearPrecomputeCache();
             const res = await evaluateProductionModel(candles, asset.symbol, tf, {}, onProgress, strategyMode);
             await tick();
             if (res) {

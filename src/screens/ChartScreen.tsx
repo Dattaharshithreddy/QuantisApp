@@ -193,17 +193,28 @@ export default function ChartScreen({ route, navigation }: any) {
   const [trainingSummary, setTrainingSummary] = useState<TrainingStatusInfo | null>(null);
   const [showTrainingSummary, setShowTrainingSummary] = useState(false);
 
-  // Handle route param change (new symbol from search)
+  // Handle route param change (new symbol or new assetId/exchange from Markets)
   useEffect(() => {
-    const newSym = route?.params?.symbol;
-    const newTf  = route?.params?.initialTf;
-    if (newSym && newSym !== symbol) {
-      setSymbol(newSym);
-      setReviewTrade(null); // clear review when navigating to a different symbol
+    const newSym     = route?.params?.symbol;
+    const newAssetId = route?.params?.assetId;
+    const newExchange = route?.params?.exchange ?? '';
+    const newTf      = route?.params?.initialTf;
+
+    // Priority 1: assetId+exchange navigation (from Markets with LogicalAsset)
+    if (newAssetId && (newAssetId !== assetId || newExchange !== exchange)) {
+      setAssetId(newAssetId);
+      setExchange(newExchange);
+      setReviewTrade(null);
     }
-    if (newTf  && newTf  !== tf)     setTf(newTf);
+    // Priority 2: legacy symbol navigation (from Search, Journal, Alerts)
+    else if (newSym && newSym !== symbol) {
+      setSymbol(newSym);
+      setReviewTrade(null);
+    }
+    if (newTf && newTf !== tf) setTf(newTf);
     if (route?.params?.reviewTrade !== undefined) setReviewTrade(route.params.reviewTrade);
-  }, [route?.params?.symbol, route?.params?.initialTf, route?.params?.reviewTrade]);
+  }, [route?.params?.assetId, route?.params?.exchange, route?.params?.symbol,
+      route?.params?.initialTf, route?.params?.reviewTrade]);
 
   // Load training summary for training history card
   useEffect(() => {
