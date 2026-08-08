@@ -25,6 +25,7 @@ import {
   clampLeverage, computeIsolatedMargin, computeLiquidationPrice,
   computeRoE, maxQtyFromBudget, riskBasedQty,
 } from '../utils/futures/binance/bnFuturesTypes';
+import { navigationRef } from '../../utils/navigationRef';
 import {
   getBnFuturesPortfolio, openBnFuturesPosition,
   BnFuturesPortfolioState,
@@ -119,9 +120,9 @@ function CryptoFuturesSection({ navigation }: any) {
 
   const qtyNum = parseFloat(qty) || 0;
   const margin = price > 0 && qtyNum > 0
-    ? computeIsolatedMargin(price, qtyNum, maxLev) : 0;
+    ? computeIsolatedMargin(qtyNum, price, maxLev, 0.0004) : 0; // (qty, entryPrice, leverage, takerFeeRate)
   const liqPrice = price > 0 && qtyNum > 0
-    ? computeLiquidationPrice(price, qtyNum, direction, maxLev) : 0;
+    ? computeLiquidationPrice(direction, price, maxLev) : 0; // (direction, entryPrice, leverage)
 
   const loadPortfolio = useCallback(async () => {
     setPortfolio(await getBnFuturesPortfolio());
@@ -155,12 +156,13 @@ function CryptoFuturesSection({ navigation }: any) {
           </Text>
           {openPositions.slice(0, 3).map(p => {
             const livePrice  = prices[PRICE_MAP[p.symbol as BnFuturesSymbol]]?.price ?? p.entryPrice;
-            const pnl        = computeRoE(p.entryPrice, livePrice, p.direction, p.leverage) * p.margin;
+            const unrealisedPnL = (livePrice - p.entryPrice) * p.qty * (p.direction === 'LONG' ? 1 : -1);
+            const pnl             = unrealisedPnL; // direct P&L in USDT
             const pnlColor   = pnl >= 0 ? T.green : T.red;
             return (
               <TouchableOpacity
                 key={p.id}
-                onPress={() => navigation.navigate('BnFuturesPositions')}
+                onPress={() => navigationRef.navigate('MoreTab', { screen: 'BnFuturesPositions' } as never)}
                 style={{ flexDirection: 'row', justifyContent: 'space-between',
                   paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: T.border + '40' }}>
                 <View>
@@ -178,7 +180,7 @@ function CryptoFuturesSection({ navigation }: any) {
             );
           })}
           {openPositions.length > 3 && (
-            <TouchableOpacity onPress={() => navigation.navigate('BnFuturesPositions')}>
+            <TouchableOpacity onPress={() => navigationRef.navigate('MoreTab', { screen: 'BnFuturesPositions' } as never)}>
               <Text style={{ color: T.accent, fontSize: 11, marginTop: 8, textAlign: 'center' }}>
                 View all {openPositions.length} positions →
               </Text>
@@ -413,7 +415,7 @@ function NseFuturesSection({ navigation }: any) {
             Open contracts from the Futures Contract screen.
           </Text>
           <TouchableOpacity
-            onPress={() => navigation.navigate('FuturesContract')}
+            onPress={() => navigationRef.navigate('MoreTab', { screen: 'FuturesContract' } as never)}
             style={{
               backgroundColor: T.accent, borderRadius: RADIUS.sm,
               paddingVertical: 12, alignItems: 'center', marginTop: 8,
@@ -454,7 +456,7 @@ function NseFuturesSection({ navigation }: any) {
             );
           })}
           <TouchableOpacity
-            onPress={() => navigation.navigate('FuturesPositions')}
+            onPress={() => navigationRef.navigate('MoreTab', { screen: 'FuturesPositions' } as never)}
             style={{
               backgroundColor: T.accent, borderRadius: RADIUS.sm,
               paddingVertical: 12, alignItems: 'center', marginTop: 4,
