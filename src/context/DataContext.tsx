@@ -421,7 +421,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       schedulePricesCacheSave(n);
       return n;
     });
-  }, [allAssets, schedulePricesCacheSave]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedulePricesCacheSave]); // allAssets intentionally omitted — variantsForExchange() uses stable ASSETS constant
 
   // Fire REST snapshot on mount and on foreground
   useEffect(() => { runBnSnapshot(); }, [runBnSnapshot]);

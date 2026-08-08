@@ -102,13 +102,15 @@ function dirLabel(v: number): 'BULLISH' | 'BEARISH' | 'RANGING' {
   return v > 0 ? 'BULLISH' : v < 0 ? 'BEARISH' : 'RANGING';
 }
 
-const TF_DISPLAY: Record<Timeframe, string> = {
+const TF_DISPLAY: Record<string, string> = {
   '5m': '5-minute', '15m': '15-minute', '30m': '30-minute',
-  '1h': '1-hour', '4h': '4-hour', '1d': 'Daily',
+  '1h': '1-hour', '4h': '4-hour', '1d': 'Daily', '1D': 'Daily',
+  '1w': 'Weekly', '1W': 'Weekly',
 };
 
-const TF_SHORT: Record<Timeframe, string> = {
-  '5m': '5M', '15m': '15M', '30m': '30M', '1h': '1H', '4h': '4H', '1d': '1D',
+const TF_SHORT: Record<string, string> = {
+  '5m': '5M', '15m': '15M', '30m': '30M', '1h': '1H', '4h': '4H',
+  '1d': '1D', '1D': '1D', '1w': '1W', '1W': '1W',
 };
 
 function nextReviewPhrase(tf: Timeframe | null): string {
@@ -431,8 +433,8 @@ export function computeTradeReadiness(params: {
   const regimeSide    = regimeSnap.label.includes('SIDEWAYS') || regimeSnap.label.includes('RANGING');
   const tradeDirWord  = tradeDir === 1 ? 'bullish' : tradeDir === -1 ? 'bearish' : 'neutral';
   const actionWord    = action === 'BUY' ? 'buy' : action === 'SELL' ? 'sell' : 'trade';
-  const entryTF       = TF_DISPLAY[baseTF];
-  const blockTFWord   = blockingTF ? TF_DISPLAY[blockingTF] : null;
+  const entryTF       = TF_DISPLAY[baseTF] ?? baseTF ?? 'current';
+  const blockTFWord   = blockingTF ? (TF_DISPLAY[blockingTF] ?? blockingTF) : null;
 
   // ── Why text ──────────────────────────────────────────────────────────────
   let whyText: string;

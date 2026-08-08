@@ -115,7 +115,7 @@ function CryptoFuturesSection({ navigation }: any) {
   const spec  = BN_CONTRACT_SPECS[sym];
   const price = prices[PRICE_MAP[sym]]?.price ?? 0;
   const tiers = LEVERAGE_TIERS[sym] ?? [];
-  const maxLev = clampLeverage(sym, leverage);
+  const maxLev = clampLeverage(leverage, sym);
 
   const qtyNum = parseFloat(qty) || 0;
   const margin = price > 0 && qtyNum > 0
@@ -249,7 +249,7 @@ function CryptoFuturesSection({ navigation }: any) {
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
           {[1,2,3,5,10,20,50,100].map(lv => {
-            const allowed = clampLeverage(sym, lv) === lv;
+            const allowed = clampLeverage(lv, sym) === lv;
             return (
               <TouchableOpacity
                 key={lv}
