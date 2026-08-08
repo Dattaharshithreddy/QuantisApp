@@ -171,7 +171,7 @@ export default function MarketsScreen({ navigation }: any) {
         maxToRenderPerBatch={10} // render 10 items per batch
         initialNumToRender={15}  // show 15 on first paint
         removeClippedSubviews={true}
-        renderItem={({ item }) => <MarketRow item={item} prices={prices} T={T} navigation={navigation} onLongPress={confirmRemove} />}
+        renderItem={({ item }) => <MarketRow item={item} prices={prices} T={T} navigation={navigation} onLongPress={confirmRemove} exchangePrefs={exchangePrefs ?? {}} />}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', marginTop: 50, paddingHorizontal: 30 }}>
             <Text style={{ fontSize: 32, marginBottom: 10 }}>🔍</Text>
@@ -222,10 +222,11 @@ export default function MarketsScreen({ navigation }: any) {
 // Without memo: every WebSocket tick re-renders all 40 rows simultaneously.
 // With memo: only the row whose price changed re-renders (~98% render reduction).
 const MarketRow = React.memo(function MarketRow({
-  item, prices, T, navigation, onLongPress,
+  item, prices, T, navigation, onLongPress, exchangePrefs,
 }: {
   item: any; prices: Record<string, any>; T: any;
   navigation: any; onLongPress: (sym: string, src: string, custom: boolean) => void;
+  exchangePrefs: Record<string, string>;
 }) {
   // For LogicalAsset: show price from the default exchange variant's symbol
   const defaultSym = getDefaultSym(item);

@@ -183,7 +183,10 @@ export async function fetchMaxHistoryForAsset(
   }
 
   if (asset.src === 'coindcx' && (asset as any).cdxSym) {
-    return fetchCdxCandles((asset as any).cdxSym, tf, limit);
+    // Must return { candles, capability, note } — same shape as every other branch.
+    // Previously returned raw Candle[] which caused destructuring to give candles=undefined.
+    const candles = await fetchCdxCandles((asset as any).cdxSym, tf, limit);
+    return { candles, capability, note: null };
   }
   if (asset.src === 'av' && asset.avSym) {
     if (!avKey) return { candles: [], capability, note: `${asset.symbol}: Alpha Vantage key not set — add one in Settings to evaluate this symbol.` };
