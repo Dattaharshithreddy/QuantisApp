@@ -109,13 +109,15 @@ export async function fetchCdxSnapshot(
       const market = (t.market ?? '').toUpperCase();
       if (!set.has(market)) return;
       const price = parseFloat(t.last_price ?? '0');
-      const high  = parseFloat(t.high ?? '0');
-      const low   = parseFloat(t.low  ?? '0');
-      const open24 = (high + low) / 2; // approx: CDX ticker has no open24
-      const chg = price > 0 && open24 > 0
+      if (price <= 0) return;
+      // Use actual 'open' (24h open) from CoinDCX for accurate chg%.
+      // CoinDCX does provide 'open' on the ticker — (high+low)/2 was an approximation.
+      const open24 = parseFloat(t.open ?? '0') ||
+                     ((parseFloat(t.high ?? '0') + parseFloat(t.low ?? '0')) / 2);
+      const chg = open24 > 0
         ? ((price - open24) / open24) * 100
         : parseFloat(t.change_24_hour ?? '0');
-      if (price > 0) result[market] = { price, chg };
+      result[market] = { price, chg };
     });
 
     return result;
@@ -179,11 +181,11 @@ export function openCdxPriceStream(
         if (!set.has(market)) return;
         const price = parseFloat(t.last_price ?? '0');
         if (price <= 0) return;
-        const high   = parseFloat(t.high ?? '0');
-        const low    = parseFloat(t.low  ?? '0');
-        const open24 = (high + low) / 2;
-        const chg    = open24 > 0 ? ((price - open24) / open24) * 100
-                                  : parseFloat(t.change_24_hour ?? '0');
+        const open24 = parseFloat(t.open ?? '0') ||
+                       ((parseFloat(t.high ?? '0') + parseFloat(t.low ?? '0')) / 2);
+        const chg = open24 > 0
+          ? ((price - open24) / open24) * 100
+          : parseFloat(t.change_24_hour ?? '0');
         onTick(market, price, chg);
       });
     } catch (e: any) {

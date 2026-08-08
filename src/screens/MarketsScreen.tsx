@@ -12,7 +12,14 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Skeleton } from '../components/Common';
 import { RADIUS } from '../theme/colors';
 
-// Module-level stable helper — no allocation on every render
+// Module-level stable helpers — no allocation on every render
+function getDefaultSym(item: any): string {
+  if (item?.exchanges && item?.defaultExchange) {
+    return item.exchanges[item.defaultExchange]?.symbol ?? item.id ?? item.symbol ?? '';
+  }
+  return item?.symbol ?? item?.id ?? '';
+}
+
 function getSubtitle(item: any): string {
   if (item?.exchanges && item?.defaultExchange) {
     return item.exchanges[item.defaultExchange]?.symbol ?? item.id ?? item.symbol ?? '';
@@ -221,13 +228,7 @@ const MarketRow = React.memo(function MarketRow({
   navigation: any; onLongPress: (sym: string, src: string, custom: boolean) => void;
 }) {
   // For LogicalAsset: show price from the default exchange variant's symbol
-  const defaultSym = (() => {
-    const la = item as any;
-    if (la.exchanges && la.defaultExchange) {
-      return la.exchanges[la.defaultExchange]?.symbol ?? la.symbol ?? la.id;
-    }
-    return la.symbol;
-  })();
+  const defaultSym = getDefaultSym(item);
   const p = prices[defaultSym];
   const pos = (p?.chg || 0) >= 0;
   const isLive = p?.source === 'websocket' || p?.source === 'snapshot';
@@ -243,10 +244,12 @@ const MarketRow = React.memo(function MarketRow({
   return (
     <TouchableOpacity
       onPress={() => {
-          // exchangePrefs loaded synchronously from DataContext
-          const slug = ((item as any).name ?? item.symbol).toLowerCase().replace(/\s+/g, '');
-          const prefExchange = (exchangePrefs ?? {})[slug] ?? (item as any).defaultExchange ?? '';
-          navigation.navigate('Chart', { assetId: (item as any).id ?? item.symbol, exchange: prefExchange });
+          const la = item as any;
+          const assetId = la.id ?? la.symbol;
+          if (!assetId) return; // guard: never navigate with undefined assetId
+          const slug = (la.name ?? la.symbol ?? '').toLowerCase().replace(/\s+/g, '');
+          const prefExchange = (exchangePrefs ?? {})[slug] ?? la.defaultExchange ?? '';
+          navigation.navigate('Chart', { assetId, exchange: prefExchange });
         }}
       onLongPress={() => onLongPress((item as any).id, (item as any).defaultExchange, (item as any).custom)}
       activeOpacity={0.7}
