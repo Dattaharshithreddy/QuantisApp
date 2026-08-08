@@ -433,8 +433,11 @@ export async function precomputeSeries(candles: Candle[]) {
  */
 async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[]): Promise<SeriesResult> {
   const n   = candles.length;
+  // Safety guards — Production Eval crash fix
+  if (n < 2 || !historicalS) return historicalS;
   const cur = candles[n - 1];
   const prv = candles[n - 2];
+  if (!cur || !prv) return historicalS;
 
   // Clone top-level only — arrays are shared by reference since we only patch index n-1.
   // We patch in place on the stored arrays, which is safe because _liveCache and
