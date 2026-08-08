@@ -250,7 +250,10 @@ const MarketRow = React.memo(function MarketRow({
           if (!assetId) return; // guard: never navigate with undefined assetId
           const slug = (la.name ?? la.symbol ?? '').toLowerCase().replace(/\s+/g, '');
           const prefExchange = (exchangePrefs ?? {})[slug] ?? la.defaultExchange ?? '';
-          navigation.navigate('Chart', { assetId, exchange: prefExchange });
+          // _ts forces React Navigation to update route.params even when
+          // assetId/exchange are the same as before (e.g. tapping same symbol twice).
+          // Without it, the tab navigator may serve stale params from the previous visit.
+          navigation.navigate('Chart', { assetId, exchange: prefExchange, _ts: Date.now() });
         }}
       onLongPress={() => onLongPress((item as any).id, (item as any).defaultExchange, (item as any).custom)}
       activeOpacity={0.7}

@@ -213,8 +213,11 @@ export default function ChartScreen({ route, navigation }: any) {
     }
     if (newTf && newTf !== tf) setTf(newTf);
     if (route?.params?.reviewTrade !== undefined) setReviewTrade(route.params.reviewTrade);
+  // _ts is a timestamp added by MarketsScreen to force this effect to fire
+  // even when assetId/exchange are unchanged (same symbol tapped twice, or
+  // tab navigator serving stale params from a previous visit).
   }, [route?.params?.assetId, route?.params?.exchange, route?.params?.symbol,
-      route?.params?.initialTf, route?.params?.reviewTrade]);
+      route?.params?.initialTf, route?.params?.reviewTrade, route?.params?._ts]);
 
   // Load training summary for training history card
   useEffect(() => {
