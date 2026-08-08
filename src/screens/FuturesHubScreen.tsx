@@ -25,7 +25,7 @@ import {
   clampLeverage, computeIsolatedMargin, computeLiquidationPrice,
   computeRoE, maxQtyFromBudget, riskBasedQty,
 } from '../utils/futures/binance/bnFuturesTypes';
-import { navigationRef } from '../../utils/navigationRef';
+import { navigationRef } from '../utils/navigationRef';
 import {
   getBnFuturesPortfolio, openBnFuturesPosition,
   BnFuturesPortfolioState,
