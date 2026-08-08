@@ -51,25 +51,30 @@ export async function evaluateAllHorizons(
     const horizon = HORIZONS_TO_TEST[hi];
     await tick();
 
-    // Opt 1: use pre-fitted model if available — no retraining.
-    // Opt 4: otherwise pass cache to skip precomputeSeries.
-    const fitted = horizonFittedMap?.get(horizon)
-      ?? await fitEnsemble(candles, execConfig.trainSplitPct, execConfig.seed, horizon, cache);
-    if (!fitted) continue;
+    try {
+      // Opt 1: use pre-fitted model if available — no retraining.
+      // Opt 4: otherwise pass cache to skip precomputeSeries.
+      const fitted = horizonFittedMap?.get(horizon)
+        ?? await fitEnsemble(candles, execConfig.trainSplitPct, execConfig.seed, horizon, cache);
+      if (!fitted) continue;
 
-    const { trades, equityCurve } = simulateSignalStrategy(
-      candles, fitted.walkIndices,
-      (idx) => {
-        const { ensembleProb, agree } = fitted.predictProb(idx);
-        return { enter: ensembleProb > execConfig.buyThreshold && agree, reason: `horizon=${horizon}` };
-      },
-      fitted.atrAt, execConfig,
-    );
+      const { trades, equityCurve } = simulateSignalStrategy(
+        candles, fitted.walkIndices,
+        (idx) => {
+          const { ensembleProb, agree } = fitted.predictProb(idx);
+          return { enter: ensembleProb > execConfig.buyThreshold && agree, reason: `horizon=${horizon}` };
+        },
+        fitted.atrAt, execConfig,
+      );
 
-    const metrics = computeMetrics(trades, equityCurve, execConfig.startingCapital);
-    const entry: HorizonEvalEntry = { horizon, metrics, trainSampleCount: fitted.trainSampleCount, trades };
-    results.push(entry);
-    onHorizonDone?.(horizon, hi, HORIZONS_TO_TEST.length, entry);
+      const metrics = computeMetrics(trades, equityCurve, execConfig.startingCapital);
+      const entry: HorizonEvalEntry = { horizon, metrics, trainSampleCount: fitted.trainSampleCount, trades };
+      results.push(entry);
+      onHorizonDone?.(horizon, hi, HORIZONS_TO_TEST.length, entry);
+    } catch (e: any) {
+      // Log the exact error for each horizon so we can diagnose
+      console.error('[horizonEval] horizon=' + horizon + ' failed: ' + e?.message + ' | stack: ' + e?.stack?.split('\n')[1]);
+    }
     await tick();
   }
 

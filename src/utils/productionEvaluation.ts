@@ -83,7 +83,9 @@ export async function evaluateProductionModel(
 
   // ── Opt 4: build precomputeSeries + allFeatures ONCE ─────────────────────────
   await tick();
+  logger.info('productionEval', `${symbol}/${timeframe}: starting buildFitCache, candles=${candles.length}`);
   const fitCache = await buildFitCache(candles);
+  logger.info('productionEval', `${symbol}/${timeframe}: buildFitCache done, fitCache=${fitCache ? 'ok' : 'null'}, S=${fitCache ? 'ok' : 'null'}${fitCache ? ', features='+fitCache.allFeatures.length : ''}`);
   _stage('S1 buildFitCache (precomputeSeries + features)');
   if (!fitCache) {
     logger.warn('productionEval', `${symbol}/${timeframe}: could not build fit cache`);
@@ -140,6 +142,7 @@ export async function evaluateProductionModel(
   //    Opt 2: includes trades (evaluateAllHorizonsWithTrades is now an alias).
   //    Opt 4: cache eliminates precomputeSeries inside any fallback fit.
   await tick();
+  logger.info('productionEval', `${symbol}/${timeframe}: starting horizon evaluation, fitCache=${!!fitCache}, horizonFittedMap size=${horizonFittedMap.size}`);
   const horizons = await evaluateAllHorizons(candles, config,
     onProgress ? (horizon, idx, total, entry) => {
       const pct = Math.round(20 + ((idx + 1) / total) * 45);
