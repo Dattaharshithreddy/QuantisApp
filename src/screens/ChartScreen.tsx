@@ -401,7 +401,9 @@ export default function ChartScreen({ route, navigation }: any) {
         {/* ── PAPER / LIVE trading mode toggle ─────────────────────────── */}
         {/* Only shown for AO and Binance assets — not for forex/AV */}
         {/* FIX: added 'ao_futures' — NFO futures use Angel One and support Paper/Live mode */}
-        {(asset?.src === 'ao' || asset?.src === 'ao_futures' || asset?.src === 'binance') && (
+        {(asset?.src === 'ao' || asset?.src === 'ao_futures' ||
+           asset?.src === 'binance' || asset?.src === 'binance_futures' ||
+           asset?.src === 'coindcx' || asset?.src === 'coindcx_futures') && (
           <View style={{ flexDirection: 'row', alignItems: 'center',
             paddingHorizontal: 12, paddingVertical: 6,
             backgroundColor: live.isLiveMode ? T.red + '10' : T.bg2 ?? T.bg3,

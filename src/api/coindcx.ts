@@ -299,8 +299,12 @@ export function openCdxPriceStream(
     .then(socket => {
       if (closed) { releaseSocket(); return; }
       socket.on('coindcx-ticker', onTickerEvent);
+      // Also listen to 'ticker' (alternative event name some versions use)
+      socket.on('ticker', onTickerEvent);
+      // Emit 'subscribe' in case CoinDCX requires explicit subscription
+      socket.emit('subscribe', { channelNames: [...set] });
       onStatus('live');
-      logger.info('cdx-stream', `Subscribed to coindcx-ticker for ${markets.length} markets`);
+      logger.info('cdx-stream', `Subscribed to coindcx-ticker + ticker for ${markets.length} markets`);
 
       // If socket disconnects, start fallback poll
       socket.on('disconnect', () => {
