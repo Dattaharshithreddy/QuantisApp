@@ -137,6 +137,15 @@ function getSocket(): Promise<any> {
     _socket.once('connect', () => {
       _socketReady = true;
       logger.info('cdx-socket', 'Socket.IO connected to CoinDCX stream');
+      // Debug: log first 3 events received to identify correct event names and structure
+      let _debugCount = 0;
+      _socket.onAny((eventName: string, ...args: any[]) => {
+        if (_debugCount < 3) {
+          const preview = JSON.stringify(args[0]).slice(0, 200);
+          logger.info('cdx-socket-debug', `Event: "${eventName}" | Data: ${preview}`);
+          _debugCount++;
+        }
+      });
       resolve(_socket);
     });
 

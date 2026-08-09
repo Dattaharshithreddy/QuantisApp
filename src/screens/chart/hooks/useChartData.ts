@@ -239,7 +239,7 @@ export function useChartData(
         const _nw = Date.now();
         data = await fetchBnKlines(variant!.bnSym!, tf, 500);
         setDataSrc('live');
-      } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
+      } else if ((variant?.src === 'coindcx' || variant?.src === 'coindcx_futures') && variant?.cdxSym) {
         // CoinDCX spot — public candle API, no auth required.
         // fetchCdxCandles returns candles in ascending order (oldest first),
         // same as Binance, so no additional sorting is needed here.
@@ -567,7 +567,7 @@ export function useChartData(
         // Binance: fetch 500 candles ending just before the oldest candle we have.
         // endTime is exclusive in Binance API so subtract 1ms.
         older = await fetchBnKlines(asset.bnSym, tf, 500, oldest - 1);
-      } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
+      } else if ((variant?.src === 'coindcx' || variant?.src === 'coindcx_futures') && variant?.cdxSym) {
         // CoinDCX: same pattern — fetch ending just before oldest.
         older = await fetchCdxCandles(asset.cdxSym, tf, 500, oldest - 1);
       } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {

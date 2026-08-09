@@ -36,6 +36,8 @@ const PROVIDER_ID: Record<string, string> = {
   ao_futures:       'angelone_futures',   // Angel One NFO futures
   binance:          'binance',            // Binance spot
   binance_futures:  'binance_futures',    // Binance USDM perpetual futures
+  coindcx:          'coindcx',           // CoinDCX spot
+  coindcx_futures:  'coindcx_futures',   // CoinDCX USDT-M perpetual futures
   av:               'paper',             // Alpha Vantage — data only
   forex:            'paper',             // Forex data — no live execution yet
 };
