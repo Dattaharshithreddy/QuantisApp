@@ -165,7 +165,8 @@ export default function RiskManagerScreen() {
           <SectionLabel theme={T}>POSITION SIZE CALCULATOR</SectionLabel>
           <View style={{ marginBottom: 10 }}>
             <Text style={labelStyle}>ACCOUNT SIZE (₹)</Text>
-            <TextInput value={String(settings.accountSize)} onChangeText={v => update('accountSize', v)} keyboardType="numeric" style={inputStyle(T)} />
+            <TextInput value={String(settings.accountSize)} onChangeText={v => update('accountSize', v)} keyboardType="numeric"
+                  selectTextOnFocus style={inputStyle(T)} />
           </View>
           {/* Risk % inputs — two equal columns, hint below */}
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 4 }}>
@@ -205,7 +206,12 @@ export default function RiskManagerScreen() {
                   NSE futures — max lots per single trade
                 </Text>
               </View>
-              <TextInput value={String(settings.maxFuturesLots ?? 5)} onChangeText={v => update('maxFuturesLots', v)} keyboardType="numeric" style={[inputStyle(T), { width: 70, textAlign: 'center' }]} />
+              <TextInput
+                  value={String(settings.maxFuturesLots ?? 5)}
+                  onChangeText={v => update('maxFuturesLots', v)}
+                  keyboardType="numeric"
+                  selectTextOnFocus
+                  style={[inputStyle(T), { width: 70, textAlign: 'center' }]} />
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flex: 1 }}>
@@ -214,7 +220,12 @@ export default function RiskManagerScreen() {
                   Binance perps — 1×–125× (start low)
                 </Text>
               </View>
-              <TextInput value={String(settings.defaultFuturesLeverage ?? 10)} onChangeText={v => update('defaultFuturesLeverage', v)} keyboardType="numeric" style={[inputStyle(T), { width: 70, textAlign: 'center' }]} />
+              <TextInput
+                  value={String(settings.defaultFuturesLeverage ?? 10)}
+                  onChangeText={v => update('defaultFuturesLeverage', v)}
+                  keyboardType="numeric"
+                  selectTextOnFocus
+                  style={[inputStyle(T), { width: 70, textAlign: 'center' }]} />
             </View>
           </View>
 
