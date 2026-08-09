@@ -48,7 +48,6 @@ import FuturesContractScreen  from '../screens/FuturesContractScreen';
 import FuturesPositionsScreen from '../screens/FuturesPositionsScreen';
 import FuturesMtmLogScreen    from '../screens/FuturesMtmLogScreen';
 import BnFuturesScreen         from '../screens/BnFuturesScreen';
-import FuturesHubScreen         from '../screens/FuturesHubScreen';
 import BnFuturesPositionsScreen from '../screens/BnFuturesPositionsScreen';
 import FuturesSettingsScreen    from '../screens/FuturesSettingsScreen';
 import PortfolioRiskScreen      from '../screens/PortfolioRiskScreen';
@@ -63,11 +62,10 @@ console.log('[QUANTIS_DIAG] M-nav-B: navigators created successfully');
 
 const ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
   Markets: { active: 'stats-chart',        inactive: 'stats-chart-outline' },
-  Chart:   { active: 'bar-chart',          inactive: 'bar-chart-outline' },
+  Chart:   { active: 'trending-up',        inactive: 'trending-up-outline' },
   Risk:    { active: 'shield-checkmark',   inactive: 'shield-checkmark-outline' },
   Journal: { active: 'book',              inactive: 'book-outline' },
   Alerts:  { active: 'notifications',     inactive: 'notifications-outline' },
-  Futures: { active: 'trending-up',       inactive: 'trending-up-outline' },
   MoreTab: { active: 'grid',             inactive: 'grid-outline' },
 };
 
@@ -103,7 +101,6 @@ const WrappedRisk = makeWrapped(RiskManagerScreen, 'Risk');
 const WrappedJournal = makeWrapped(JournalScreen, 'Journal');
 const WrappedAlerts = makeWrapped(AlertsScreen, 'Alerts');
 const WrappedSettings = makeWrapped(SettingsScreen, 'Settings');
-const WrappedFuturesHub = makeWrapped(FuturesHubScreen, 'Futures');
 const WrappedMoreMenu = makeWrapped(MoreMenuScreen, 'More');
 const WrappedOptionsStrategy = makeWrapped(OptionsStrategyScreen, 'Options Strategy');
 const WrappedPortfolio = makeWrapped(PortfolioScreen, 'Portfolio');
@@ -215,7 +212,6 @@ function MainTabs() {
       <Tab.Screen name="Risk" component={WrappedRisk} options={{ title: 'Risk' }} />
       <Tab.Screen name="Journal" component={WrappedJournal} />
       <Tab.Screen name="Alerts" component={WrappedAlerts} />
-      <Tab.Screen name="Futures" component={WrappedFuturesHub} options={{ title: 'Futures' }} />
       <Tab.Screen name="MoreTab" component={MoreStackNavigator} options={{ title: 'More' }} />
     </Tab.Navigator>
   );
