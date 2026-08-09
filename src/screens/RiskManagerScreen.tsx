@@ -176,7 +176,7 @@ export default function RiskManagerScreen() {
                 value={String(settings.riskPerTradePct)}
                 onChangeText={v => update('riskPerTradePct', v)}
                 keyboardType="numeric"
-                style={inputStyle(T)}
+                  selectTextOnFocus style={inputStyle(T)}
               />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -185,7 +185,7 @@ export default function RiskManagerScreen() {
                 value={String(settings.maxDailyLossPct)}
                 onChangeText={v => update('maxDailyLossPct', v)}
                 keyboardType="numeric"
-                style={inputStyle(T)}
+                  selectTextOnFocus style={inputStyle(T)}
               />
             </View>
           </View>
@@ -235,11 +235,13 @@ export default function RiskManagerScreen() {
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
             <View style={{ flex: 1 }}>
               <Text style={labelStyle}>ENTRY PRICE</Text>
-              <TextInput value={entry} onChangeText={setEntry} keyboardType="numeric" placeholder="e.g. 24900" placeholderTextColor={T.textDim} style={inputStyle(T)} />
+              <TextInput value={entry} onChangeText={setEntry} keyboardType="numeric"
+                  selectTextOnFocus placeholder="e.g. 24900" placeholderTextColor={T.textDim} style={inputStyle(T)} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={labelStyle}>STOP LOSS PRICE</Text>
-              <TextInput value={stopLoss} onChangeText={setStopLoss} keyboardType="numeric" placeholder="e.g. 24800" placeholderTextColor={T.textDim} style={inputStyle(T)} />
+              <TextInput value={stopLoss} onChangeText={setStopLoss} keyboardType="numeric"
+                  selectTextOnFocus placeholder="e.g. 24800" placeholderTextColor={T.textDim} style={inputStyle(T)} />
             </View>
           </View>
 
@@ -277,7 +279,8 @@ export default function RiskManagerScreen() {
                   value={String(riskExtras.cooldownAfterLosses)}
                   onChangeText={v => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 1 && n <= 20) updateRiskExtras({ cooldownAfterLosses: n }); }}
                   onBlur={() => { if (!riskExtras.cooldownAfterLosses || riskExtras.cooldownAfterLosses < 1) updateRiskExtras({ cooldownAfterLosses: 3 }); }}
-                  keyboardType="numeric" style={inputStyle(T)}
+                  keyboardType="numeric"
+                  selectTextOnFocus style={inputStyle(T)}
                 />
               </View>
             )}
@@ -294,7 +297,8 @@ export default function RiskManagerScreen() {
                 value={String(riskExtras.maxOpenPositions)}
                 onChangeText={v => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 1 && n <= 50) updateRiskExtras({ maxOpenPositions: n }); }}
                 onBlur={() => { if (!riskExtras.maxOpenPositions || riskExtras.maxOpenPositions < 1) updateRiskExtras({ maxOpenPositions: 5 }); }}
-                keyboardType="numeric" style={inputStyle(T)}
+                keyboardType="numeric"
+                  selectTextOnFocus style={inputStyle(T)}
               />
             </View>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
@@ -304,7 +308,8 @@ export default function RiskManagerScreen() {
                   value={String(riskExtras.maxExposurePerSymbolPct)}
                   onChangeText={v => { const n = parseFloat(v); if (!isNaN(n) && n >= 1 && n <= 100) updateRiskExtras({ maxExposurePerSymbolPct: n }); }}
                   onBlur={() => { if (!riskExtras.maxExposurePerSymbolPct || riskExtras.maxExposurePerSymbolPct < 1) updateRiskExtras({ maxExposurePerSymbolPct: 30 }); }}
-                  keyboardType="numeric" style={inputStyle(T)}
+                  keyboardType="numeric"
+                  selectTextOnFocus style={inputStyle(T)}
                 />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -313,7 +318,8 @@ export default function RiskManagerScreen() {
                   value={String(riskExtras.maxExposurePerAssetClassPct)}
                   onChangeText={v => { const n = parseFloat(v); if (!isNaN(n) && n >= 1 && n <= 100) updateRiskExtras({ maxExposurePerAssetClassPct: n }); }}
                   onBlur={() => { if (!riskExtras.maxExposurePerAssetClassPct || riskExtras.maxExposurePerAssetClassPct < 1) updateRiskExtras({ maxExposurePerAssetClassPct: 60 }); }}
-                  keyboardType="numeric" style={inputStyle(T)}
+                  keyboardType="numeric"
+                  selectTextOnFocus style={inputStyle(T)}
                 />
               </View>
             </View>
