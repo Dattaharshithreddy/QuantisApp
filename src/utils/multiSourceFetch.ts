@@ -34,7 +34,7 @@ export type FetchCapability = 'full_pagination' | 'single_call_capped' | 'unsupp
 export function getFetchCapability(asset: Asset): FetchCapability {
   if (asset.src === 'binance') return 'full_pagination';
   if (asset.src === 'ao' || asset.src === 'ao_futures') return 'full_pagination';
-  if (asset.src === 'coindcx') return 'single_call_capped'; // same throttle tier as Binance
+  if (asset.src === 'coindcx' || asset.src === 'coindcx_futures') return 'single_call_capped';
   if (asset.src === 'av') return 'single_call_capped';
   return 'unsupported'; // forex, and anything else with no historical source
 }
@@ -182,9 +182,8 @@ export async function fetchMaxHistoryForAsset(
     return { candles, capability, note: null };
   }
 
-  if (asset.src === 'coindcx' && (asset as any).cdxSym) {
-    // Must return { candles, capability, note } — same shape as every other branch.
-    // Previously returned raw Candle[] which caused destructuring to give candles=undefined.
+  if ((asset.src === 'coindcx' || asset.src === 'coindcx_futures') && (asset as any).cdxSym) {
+    // CoinDCX spot and futures use the same candles REST endpoint
     const candles = await fetchCdxCandles((asset as any).cdxSym, tf, limit);
     return { candles, capability, note: null };
   }

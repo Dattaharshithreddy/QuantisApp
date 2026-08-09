@@ -30,7 +30,7 @@ export type AssetType = 'INDEX' | 'STOCK' | 'FOREX' | 'CRYPTO' | 'COMMODITY';
 // ── Per-exchange variant ──────────────────────────────────────────────────────
 // Each variant describes how to fetch data for this asset from ONE exchange.
 export type ExchangeVariant = {
-  src:    string;   // 'binance' | 'coindcx' | 'ao' | 'ao_futures' | 'av' | 'forex'
+  src:    string;   // 'binance' | 'binance_futures' | 'coindcx' | 'coindcx_futures' | 'ao' | 'ao_futures' | 'av' | 'forex'
   symbol: string;   // INTERNAL symbol — used as ML key, cache key, price key
                     // e.g. 'BTCUSD' (Binance), 'BTCUSDT' (CoinDCX), 'NIFTY50' (AO)
   base:   number;   // seed price for initial render before live price arrives
@@ -129,15 +129,17 @@ export const ASSETS: LogicalAsset[] = [
   // Bitcoin: Binance spot + CoinDCX spot + Binance perpetual futures
   { id: 'BTC', name: 'Bitcoin', type: 'CRYPTO', defaultExchange: 'binance',
     exchanges: {
-      binance:  { src:'binance',  symbol:'BTCUSD',  bnSym:'BTCUSDT',  base:67420, vol:0.028 },
-      coindcx:  { src:'coindcx',  symbol:'BTCUSDT', cdxSym:'B-BTC_USDT', cdxMkt:'BTCUSDT', base:67420, vol:0.028 },
+      binance:         { src:'binance',         symbol:'BTCUSD',       bnSym:'BTCUSDT',               base:67420, vol:0.028 },
+      coindcx:         { src:'coindcx',         symbol:'BTCUSDT',      cdxSym:'B-BTC_USDT', cdxMkt:'BTCUSDT', base:67420, vol:0.028 },
+      coindcx_futures: { src:'coindcx_futures', symbol:'BTC-PERP-CDX', cdxSym:'B-BTC_USDT', cdxMkt:'B-BTC_USDT', base:67420, vol:0.028 },
     } },
 
   // Ethereum
   { id: 'ETH', name: 'Ethereum', type: 'CRYPTO', defaultExchange: 'binance',
     exchanges: {
-      binance:  { src:'binance',  symbol:'ETHUSD',  bnSym:'ETHUSDT',  base:3485,  vol:0.032 },
-      coindcx:  { src:'coindcx',  symbol:'ETHUSDT', cdxSym:'B-ETH_USDT', cdxMkt:'ETHUSDT', base:3485, vol:0.032 },
+      binance:         { src:'binance',         symbol:'ETHUSD',       bnSym:'ETHUSDT',               base:3485, vol:0.032 },
+      coindcx:         { src:'coindcx',         symbol:'ETHUSDT',      cdxSym:'B-ETH_USDT', cdxMkt:'ETHUSDT', base:3485, vol:0.032 },
+      coindcx_futures: { src:'coindcx_futures', symbol:'ETH-PERP-CDX', cdxSym:'B-ETH_USDT', cdxMkt:'B-ETH_USDT', base:3485, vol:0.032 },
     } },
 
   // BNB

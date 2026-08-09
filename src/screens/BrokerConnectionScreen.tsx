@@ -14,6 +14,7 @@ import { useData } from '../context/DataContext';
 import { Card, SectionLabel } from '../components/Common';
 import { getLiveTradingCredential, setLiveTradingCredential, deleteLiveTradingCredential } from '../utils/secureCredentials';
 import { testCdxCredentials } from '../utils/execution/CoinDCXExecutor';
+import { testCdxFuturesCredentials } from '../utils/execution/CoinDCXFuturesExecutor';
 import { SPACING, RADIUS } from '../theme/colors';
 
 function StatusBadge({ connected, T }: { connected: boolean; T: any }) {
@@ -250,6 +251,7 @@ export default function BrokerConnectionScreen() {
             <>
               <Text style={{ color: T.textDim, fontSize: 11, marginBottom: 4, lineHeight: 16 }}>
                 Create an API key at CoinDCX → Settings → API & Security.
+              Works for both Spot and Futures trading.
               </Text>
               <Text style={{ color: T.textDim, fontSize: 11, marginBottom: 12, lineHeight: 16 }}>
                 Enable: Read Info, Trade Orders. Do NOT enable Withdrawal.
