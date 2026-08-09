@@ -69,6 +69,7 @@ export function useLiveTrading(
   const [tradingMode, setTradingModeState] = useState<TradingMode>('PAPER');
   const [liveSettings,  setLiveSettings]  = useState<LiveTradeSettings | null>(null);
   const [bnConfigured,  setBnConfigured]  = useState(false);
+  const [cdxConfigured, setCdxConfigured] = useState(false);
 
   // Load persisted mode for this provider whenever asset source changes.
   // Sources mapped to 'paper' always read PAPER (no stored value matters).
@@ -91,6 +92,7 @@ export function useLiveTrading(
   useEffect(() => {
     getLiveTradeSettings().then(setLiveSettings).catch(() => {});
     getLiveTradingCredential('binanceApiKey').then(k => setBnConfigured(!!k)).catch(() => {});
+    getLiveTradingCredential('cdxApiKey').then(k => setCdxConfigured(!!k)).catch(() => {});
   }, []);
 
   // Persist mode change under this provider's key only.
@@ -142,12 +144,18 @@ export function useLiveTrading(
       }
     }
 
-    if (!['ao', 'ao_futures', 'binance', 'binance_futures'].includes(asset.src)) {
+    if (asset.src === 'coindcx' || asset.src === 'coindcx_futures') {
+      if (!cdxConfigured) {
+        return 'CoinDCX API keys not configured. Go to More → Broker Connection.';
+      }
+    }
+
+    if (!['ao', 'ao_futures', 'binance', 'binance_futures', 'coindcx', 'coindcx_futures'].includes(asset.src)) {
       return `Live trading is not supported for ${asset.src} assets yet.`;
     }
 
     return null;
-  }, [asset, aoSession, bnConfigured]);
+  }, [asset, aoSession, bnConfigured, cdxConfigured]);
 
   // ── Build the LiveOrderRequest from prediction ────────────────────────────
   const buildRequest = useCallback(async (req: LiveTradeRequest) => {
@@ -258,7 +266,48 @@ export function useLiveTrading(
         takeProfit:  prediction.suggestedTakeProfit};
     }
 
-    return {
+    // CoinDCX spot and futures
+    if (asset.src === 'coindcx' || asset.src === 'coindcx_futures') {
+      const { getLiveTradingCredential: getCred } = await import('../../../utils/secureCredentials');
+      const cdxKey    = await getCred('cdxApiKey');
+      const cdxSecret = await getCred('cdxApiSecret');
+
+      let availableBalance = 0;
+      if (cdxKey && cdxSecret) {
+        try {
+          if (asset.src === 'coindcx_futures') {
+            const { fetchCdxFuturesWallet } = await import('../../../utils/execution/CoinDCXFuturesExecutor');
+            const wallet = await fetchCdxFuturesWallet(cdxKey, cdxSecret);
+            availableBalance = wallet.available;
+          } else {
+            const { fetchCdxBalances } = await import('../../../utils/execution/CoinDCXExecutor');
+            const balances = await fetchCdxBalances(cdxKey, cdxSecret);
+            availableBalance = balances['USDT']?.available ?? 0;
+          }
+        } catch { /* use 0 — order screen will show error */ }
+      }
+
+      const isFutures = asset.src === 'coindcx_futures';
+      const leverage  = isFutures ? (liveSettings?.defaultFuturesLeverage ?? 10) : 1;
+      const stopDist  = Math.abs(limitPrice - (prediction.suggestedStopLoss ?? limitPrice * 0.98));
+      const riskUsdt  = Math.max(availableBalance * 0.01, 1);
+      let qty         = stopDist > 0 ? (riskUsdt / stopDist) * leverage : 0.001;
+      qty             = Math.max(0.001, parseFloat(qty.toFixed(3)));
+
+      return {
+        assetSrc:    asset.src as 'coindcx' | 'coindcx_futures',
+        symbol:      asset.symbol,
+        direction,
+        qty,
+        leverage:    isFutures ? leverage : undefined,
+        orderType,
+        limitPrice,
+        stopLoss:    prediction.suggestedStopLoss,
+        takeProfit:  prediction.suggestedTakeProfit,
+      };
+    }
+
+        return {
       assetSrc:     asset.src as 'ao' | 'binance',
       symbol:       asset.symbol,
       symbolToken:  (asset as any).aoToken,
