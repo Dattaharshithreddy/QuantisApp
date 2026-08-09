@@ -498,9 +498,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Previously: allAssets in deps → allAssets rebuilt on every setPrices call →
   // runCdxSnapshot rebuilt → useEffect fired → another snapshot → infinite loop.
   const runCdxSnapshot = useCallback(async () => {
-    const cdxVariants = variantsForExchange('coindcx');
+    const cdxSpotSnap    = variantsForExchange('coindcx');
+    const cdxFutSnap     = variantsForExchange('coindcx_futures');
+    const cdxVariants    = [...cdxSpotSnap, ...cdxFutSnap];
     if (!cdxVariants.length) return;
-    const snapshot = await fetchCdxSnapshot(cdxVariants.map(({ variant }) => variant.cdxMkt!).filter(Boolean));
+    const uniqueSnapMkts = [...new Set(cdxVariants.map(({ variant }) => variant.cdxMkt).filter(Boolean) as string[])];
+    const snapshot = await fetchCdxSnapshot(uniqueSnapMkts);
     if (!Object.keys(snapshot).length) return;
     setPrices(p => {
       const n = { ...p };
@@ -524,10 +527,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // CoinDCX poll stream — opens when CoinDCX assets are present
   useEffect(() => {
     cdxUnsubRef.current?.();
-    const cdxVariants = variantsForExchange('coindcx');
+    // Include both spot and futures variants — futures prices come from same ticker
+    const cdxSpot    = variantsForExchange('coindcx');
+    const cdxFutures = variantsForExchange('coindcx_futures');
+    const cdxVariants = [...cdxSpot, ...cdxFutures];
     if (!cdxVariants.length) return;
+    // Deduplicate cdxMkt keys (spot ETHUSDT and futures ETHUSDT are same feed)
+    const uniqueMarkets = [...new Set(cdxVariants.map(({ variant }) => variant.cdxMkt).filter(Boolean) as string[])];
     const close = openCdxPriceStream(
-      cdxVariants.map(({ variant }) => variant.cdxMkt!).filter(Boolean),
+      uniqueMarkets,
       (market, price, chg) => {
         const entry = cdxVariants.find(({ variant }) => variant.cdxMkt === market);
         if (!entry) return;

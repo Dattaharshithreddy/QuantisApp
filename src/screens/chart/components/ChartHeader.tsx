@@ -46,7 +46,12 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
         paddingVertical: 14, paddingHorizontal: SPACING.lg, marginBottom: 14, ...T.elev1}}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-            <Text style={{ color: T.text, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 }}>{symbol}</Text>
+            <Text style={{ color: T.text, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 }}>
+              {/* Show clean display name for internal symbols like ETH-PERP-CDX */}
+              {(asset as any)?.src === 'coindcx_futures'
+                ? ((asset as any)?.cdxSym ?? symbol)?.replace('B-','')?.replace('_','/')?.replace('USDT', '/USDT Perp')?.split('/').slice(0,2).join('/') + ' Perp'
+                : symbol}
+            </Text>
             {(() => {
               const isLive     = dataSrc === 'live' && cp?.source === 'websocket';
               const isUpdating = dataSrc === 'live' && cp?.source === 'snapshot';

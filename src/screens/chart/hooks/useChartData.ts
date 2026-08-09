@@ -17,7 +17,7 @@ import { useData } from '../../../context/DataContext';
 import { resolveVariant, findAssetByLegacySymbol } from '../../../utils/assetResolver';
 import type { LogicalAsset, ExchangeVariant } from '../../../api/assets';
 import { fetchBnKlines, subscribeToBnKline, openBinanceAggTradeStream } from '../../../api/binance';
-import { fetchCdxCandles, subscribeToCdxKline } from '../../../api/coindcx';
+import { fetchCdxCandles, fetchCdxFuturesCandles, subscribeToCdxKline } from '../../../api/coindcx';
 import { fetchAVKlines } from '../../../api/alphaVantage';
 import { aoCandles, aoCandlesBefore, openAOMarketFeed } from '../../../api/angelOne';
 import { getCachedCandles, setCachedCandles, mergeCandles } from '../../../utils/candleCache';
@@ -239,12 +239,11 @@ export function useChartData(
         const _nw = Date.now();
         data = await fetchBnKlines(variant!.bnSym!, tf, 500);
         setDataSrc('live');
-      } else if ((variant?.src === 'coindcx' || variant?.src === 'coindcx_futures') && variant?.cdxSym) {
-        // CoinDCX spot — public candle API, no auth required.
-        // fetchCdxCandles returns candles in ascending order (oldest first),
-        // same as Binance, so no additional sorting is needed here.
-        const _nw = Date.now();
+      } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
         data = await fetchCdxCandles(variant!.cdxSym!, tf, 500);
+        setDataSrc('live');
+      } else if (variant?.src === 'coindcx_futures' && variant?.cdxSym) {
+        data = await fetchCdxFuturesCandles(variant!.cdxSym!, tf, 500);
         setDataSrc('live');
       } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
         // ao_futures uses the same Angel One API as ao — only the exchange (NFO) differs,
