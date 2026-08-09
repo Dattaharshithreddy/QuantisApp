@@ -15,7 +15,7 @@
 //   Order create:  POST /exchange/v1/orders/create
 //   Order cancel:  DELETE /exchange/v1/orders/cancel
 //   Cancel all:    DELETE /exchange/v1/orders/cancel_all
-//   Balances:      GET /exchange/v1/users/balances
+//   Balances:      POST /exchange/v1/users/balances
 //   Open orders:   GET /exchange/v1/orders/active_orders
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ function cdxSign(body: object, apiSecret: string): string {
 const CDX_BASE = 'https://api.coindcx.com';
 
 async function cdxRequest<T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'POST' | 'DELETE',
   path: string,
   body: object,
   apiKey: string,
@@ -223,7 +223,7 @@ export async function fetchCdxBalances(
 ): Promise<Record<string, { available: number; locked: number }>> {
   const body = { timestamp: Date.now() };
   const entries = await cdxRequest<CdxBalanceEntry[]>(
-    'GET', '/exchange/v1/users/balances', body, apiKey, apiSecret
+    'POST', '/exchange/v1/users/balances', body, apiKey, apiSecret
   );
   const result: Record<string, { available: number; locked: number }> = {};
   for (const e of entries) {
