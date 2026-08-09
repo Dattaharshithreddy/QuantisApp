@@ -1,61 +1,55 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// COINDCX DATA API  (v1.0.0)
+// COINDCX DATA API  (v2.0.0 — Phase 8: Socket.IO real-time)
 //
-// Candle history + live price feed for CoinDCX spot markets.
-// Mirrors the structure of binance.ts: same Candle shape, same return types,
-// same WebSocket reconnect pattern.
+// Phase 8 upgrades from 5s REST poll to CoinDCX's socket.io v2.4.0 WebSocket,
+// matching Binance's ~100ms latency for live price and kline updates.
 //
-// Endpoints used:
-//   Candles:   GET https://public.coindcx.com/market_data/candles
-//   Ticker:    GET https://api.coindcx.com/exchange/ticker
-//   Live LTP:  GET https://api.coindcx.com/exchange/ticker (polled — CoinDCX
-//              WebSocket requires socket.io-client v2.4.0 which is a native
-//              module dependency; REST poll avoids that dependency for Phase 1.
-//              Phase 2 will upgrade to socket.io for true tick-level updates.)
+// Architecture:
+//   fetchCdxCandles     — unchanged (REST, used for chart history)
+//   fetchCdxSnapshot    — unchanged (REST, used for initial price seed)
+//   openCdxPriceStream  — UPGRADED: socket.io 'coindcx-ticker' event
+//   subscribeToCdxKline — UPGRADED: socket.io 'new-trade' event per pair
 //
-// Notes:
-//   - CoinDCX candles return in DESCENDING order (newest first).
-//     We reverse to ascending (oldest first) to match what the rest of the
-//     app expects from Binance and Angel One.
-//   - pair format: 'B-BTC_USDT' (exchange-prefixed).
-//     market format: 'BTCUSDT' (no prefix, used for orders and ticker lookups).
-//   - Timeframe mapping: app uses '1D', CoinDCX uses '1d'.
+// CoinDCX socket.io v2 API:
+//   URL:        wss://stream.coindcx.com  (socket.io v2 path)
+//   Subscribe:  socket.emit('join', { channelName: 'B-BTC_USDT' })
+//   Trades:     socket.on('new-trade', ({ data }) => ...)
+//                 data[i] = { p: priceStr, q: qtyStr, T: timestampMs, m: isMaker, s: 'B-BTC_USDT' }
+//   Ticker:     socket.on('coindcx-ticker', (tickerArray) => ...)
+//                 tickerArray[i] = { market:'BTCUSDT', last_price:'64984', ... }
+//
+// Fallback: if socket.io fails to connect within 8s, falls back to 5s REST poll
+// so the app always has prices even if the WebSocket is unavailable.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { AppState, AppStateStatus } from 'react-native';
 import { Candle } from '../utils/indicators';
 import { withRetry } from '../utils/retry';
 import { logger } from '../utils/logger';
+// @ts-ignore — socket.io-client v2 has no bundled TS types for this import style
+import io from 'socket.io-client';
 
-const CDX_PUBLIC = 'https://public.coindcx.com';
-const CDX_BASE   = 'https://api.coindcx.com';
+const CDX_PUBLIC    = 'https://public.coindcx.com';
+const CDX_BASE      = 'https://api.coindcx.com';
+const CDX_STREAM    = 'https://stream.coindcx.com';
+const CONNECT_TIMEOUT_MS = 8_000;  // fall back to REST poll if no connection in 8s
+const RECONNECT_DELAY_MS = 3_000;  // wait 3s before reconnect attempt
 
-// AbortSignal.timeout() is ES2022 and not available on older Android/Hermes.
-// This polyfill creates an equivalent signal using AbortController + setTimeout.
+// AbortSignal.timeout() polyfill for Hermes on older Android
 function timeoutSignal(ms: number): AbortSignal {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), ms);
-  // Clean up timer if signal is used in a way that completes normally
   ctrl.signal.addEventListener('abort', () => clearTimeout(id));
   return ctrl.signal;
 }
 
 // ── Timeframe mapping ─────────────────────────────────────────────────────────
-// App TF → CoinDCX interval string.
-// CoinDCX supports: 1m 5m 15m 30m 1h 2h 4h 6h 8h 1d 3d 1w 1M
 const TF_CDX: Record<string, string> = {
   '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
   '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w',
 };
 
-// ── Candles ───────────────────────────────────────────────────────────────────
-// pair:  the CoinDCX pair string, e.g. 'B-BTC_USDT' (from asset.cdxSym)
-// tf:    app timeframe string, e.g. '15m', '1D'
-// limit: max 1000; we default to 500 to match Binance parity
-// endTime: if provided, fetch candles ending at or before this timestamp (ms)
-//
-// CoinDCX returns candles NEWEST FIRST. We reverse to OLDEST FIRST so the
-// app's indicator engine (which expects chronological order) works unchanged.
+// ── Candles (unchanged from Phase 1) ─────────────────────────────────────────
 export async function fetchCdxCandles(
   pair: string,
   tf: string,
@@ -71,7 +65,6 @@ export async function fetchCdxCandles(
     if (!r.ok) throw new Error(`CoinDCX candles HTTP ${r.status}`);
     const json: any[] = await r.json();
 
-    // Map to app Candle shape and sort ascending (oldest first)
     const candles: Candle[] = json.map(k => ({
       time:   k.time,
       open:   Number(k.open),
@@ -85,33 +78,22 @@ export async function fetchCdxCandles(
   }, { tag: 'cdx-candles', retries: 2 });
 }
 
-// ── REST snapshot — current price + 24h change for a list of markets ─────────
-// market: CoinDCX market name without exchange prefix, e.g. 'BTCUSDT', 'ETHUSDT'
-// Returns a map from market → { price, chg }
-// Used by DataContext on startup and foreground to seed the price display
-// before the poll interval fires.
+// ── REST snapshot (unchanged — used for initial price seed) ──────────────────
 export async function fetchCdxSnapshot(
   markets: string[],
 ): Promise<Record<string, { price: number; chg: number }>> {
   if (!markets.length) return {};
   try {
-    const r = await fetch(`${CDX_BASE}/exchange/ticker`, {
-      signal: timeoutSignal(8_000),
-    });
+    const r = await fetch(`${CDX_BASE}/exchange/ticker`, { signal: timeoutSignal(8_000) });
     if (!r.ok) return {};
     const tickers: any[] = await r.json();
-
     const set = new Set(markets.map(m => m.toUpperCase()));
     const result: Record<string, { price: number; chg: number }> = {};
-
     tickers.forEach(t => {
-      // ticker.market is the symbol without prefix, e.g. 'BTCUSDT'
       const market = (t.market ?? '').toUpperCase();
       if (!set.has(market)) return;
       const price = parseFloat(t.last_price ?? '0');
       if (price <= 0) return;
-      // Use actual 'open' (24h open) from CoinDCX for accurate chg%.
-      // CoinDCX does provide 'open' on the ticker — (high+low)/2 was an approximation.
       const open24 = parseFloat(t.open ?? '0') ||
                      ((parseFloat(t.high ?? '0') + parseFloat(t.low ?? '0')) / 2);
       const chg = open24 > 0
@@ -119,7 +101,6 @@ export async function fetchCdxSnapshot(
         : parseFloat(t.change_24_hour ?? '0');
       result[market] = { price, chg };
     });
-
     return result;
   } catch (e: any) {
     logger.warn('cdx-snapshot', e.message);
@@ -127,139 +108,319 @@ export async function fetchCdxSnapshot(
   }
 }
 
-// ── Polling price stream for CoinDCX assets ───────────────────────────────────
-// CoinDCX's WebSocket requires socket.io-client v2.4.0 — a native npm module
-// that needs a build step. For Phase 1 we use a simple REST poll (every 2s)
-// which gives the Markets screen live prices without adding a new native dep.
+// ── Shared socket.io connection ────────────────────────────────────────────────
+// One socket is shared across all subscribers to avoid creating multiple
+// connections for each asset. Binance does the same with its single WebSocket.
+let _socket: any | null = null;
+let _socketRefCount = 0;
+let _socketReady = false;
+
+function getSocket(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if (_socket && _socketReady) { resolve(_socket); return; }
+    if (_socket && !_socketReady) {
+      // Socket exists but not yet connected — wait for it
+      _socket.once('connect', () => resolve(_socket));
+      _socket.once('connect_error', reject);
+      return;
+    }
+
+    // Create new socket
+    _socket = io(CDX_STREAM, {
+      transports:         ['websocket'],
+      reconnection:        true,
+      reconnectionAttempts: 10,
+      reconnectionDelay:   RECONNECT_DELAY_MS,
+      timeout:             CONNECT_TIMEOUT_MS,
+    });
+
+    _socket.once('connect', () => {
+      _socketReady = true;
+      logger.info('cdx-socket', 'Socket.IO connected to CoinDCX stream');
+      resolve(_socket);
+    });
+
+    _socket.on('disconnect', (reason: string) => {
+      _socketReady = false;
+      logger.warn('cdx-socket', `Disconnected: ${reason}`);
+    });
+
+    _socket.on('reconnect', () => {
+      _socketReady = true;
+      logger.info('cdx-socket', 'Reconnected to CoinDCX stream');
+    });
+
+    _socket.once('connect_error', (err: Error) => {
+      logger.warn('cdx-socket', `Connect error: ${err.message}`);
+      reject(err);
+    });
+  });
+}
+
+function releaseSocket() {
+  _socketRefCount = Math.max(0, _socketRefCount - 1);
+  if (_socketRefCount === 0 && _socket) {
+    _socket.disconnect();
+    _socket = null;
+    _socketReady = false;
+    logger.info('cdx-socket', 'Socket disconnected (no more subscribers)');
+  }
+}
+
+// ── Helper: parse price fields from CoinDCX ticker ───────────────────────────
+function parseTicker(t: any): { market: string; price: number; chg: number } | null {
+  const market = (t.market ?? '').toUpperCase();
+  const price  = parseFloat(t.last_price ?? '0');
+  if (!market || price <= 0) return null;
+  const open24 = parseFloat(t.open ?? '0') ||
+                 ((parseFloat(t.high ?? '0') + parseFloat(t.low ?? '0')) / 2);
+  const chg = open24 > 0
+    ? ((price - open24) / open24) * 100
+    : parseFloat(t.change_24_hour ?? '0');
+  return { market, price, chg };
+}
+
+// ── Phase 8: Socket.IO price stream ──────────────────────────────────────────
+// Subscribes to CoinDCX's 'coindcx-ticker' event which fires on every price
+// update (~100ms latency). Falls back to 5s REST poll if socket unavailable.
 //
-// The poll is intentionally lightweight: one call fetches ALL tickers at once,
-// not one call per symbol, so adding more CoinDCX assets costs zero extra calls.
-//
-// Returns an unsubscribe function (matches Binance openBinanceStream pattern).
+// Returns an unsubscribe function.
 export function openCdxPriceStream(
-  markets: string[],                                          // e.g. ['BTCUSDT', 'ETHUSDT']
+  markets: string[],
   onTick: (market: string, price: number, chg: number) => void,
   onStatus: (s: 'live' | 'connecting' | 'reconnecting' | 'error') => void,
 ): () => void {
   if (!markets.length) return () => {};
 
   const set = new Set(markets.map(m => m.toUpperCase()));
-  let timerId: ReturnType<typeof setInterval> | null = null;
   let closed = false;
-  let consecutiveErrors = 0;
+  let fallbackTimer: ReturnType<typeof setInterval> | null = null;
   let appActive = AppState.currentState === 'active';
 
-  // Pause polling when app is backgrounded — critical for low-memory devices.
-  // Without this, fetch promises accumulate while the app is invisible and
-  // can exhaust the 256-512MB heap on mid-range Android devices.
+  onStatus('connecting');
+
+  // AppState guard — pause when backgrounded
   const appStateSub = AppState.addEventListener('change', (state: AppStateStatus) => {
     appActive = state === 'active';
-    if (appActive && !closed) {
-      // Resume: fire one poll immediately then restart interval
-      poll();
-      if (timerId === null) timerId = setInterval(poll, 5000);
-    } else if (!appActive && timerId !== null) {
-      // Pause: clear interval, let in-flight requests complete naturally
-      clearInterval(timerId);
-      timerId = null;
-    }
   });
 
-  async function poll() {
-    if (!appActive || closed) return; // guard: don't fire if backgrounded
-    try {
-      const r = await fetch(`${CDX_BASE}/exchange/ticker`, {
-        signal: timeoutSignal(5_000),
-      });
-      if (!r.ok) throw new Error(`ticker HTTP ${r.status}`);
-      const tickers: any[] = await r.json();
-      consecutiveErrors = 0;
-      onStatus('live');
+  function startFallbackPoll() {
+    if (fallbackTimer || closed) return;
+    logger.warn('cdx-stream', 'Socket.IO unavailable — using REST poll fallback');
+    onStatus('reconnecting');
 
-      tickers.forEach(t => {
-        const market = (t.market ?? '').toUpperCase();
-        if (!set.has(market)) return;
-        const price = parseFloat(t.last_price ?? '0');
-        if (price <= 0) return;
-        const open24 = parseFloat(t.open ?? '0') ||
-                       ((parseFloat(t.high ?? '0') + parseFloat(t.low ?? '0')) / 2);
-        const chg = open24 > 0
-          ? ((price - open24) / open24) * 100
-          : parseFloat(t.change_24_hour ?? '0');
-        onTick(market, price, chg);
-      });
-    } catch (e: any) {
-      consecutiveErrors++;
-      logger.warn('cdx-stream', `Poll error #${consecutiveErrors}: ${e.message}`);
-      onStatus(consecutiveErrors === 1 ? 'reconnecting' : 'error');
+    async function poll() {
+      if (!appActive || closed) return;
+      try {
+        const r = await fetch(`${CDX_BASE}/exchange/ticker`, { signal: timeoutSignal(5_000) });
+        if (!r.ok) return;
+        const tickers: any[] = await r.json();
+        onStatus('live');
+        tickers.forEach(t => {
+          const parsed = parseTicker(t);
+          if (parsed && set.has(parsed.market)) {
+            onTick(parsed.market, parsed.price, parsed.chg);
+          }
+        });
+      } catch { /* silent */ }
     }
+
+    poll();
+    fallbackTimer = setInterval(poll, 5000);
   }
 
-  // Poll every 5s — matches Binance futures poll rate.
-  onStatus('connecting');
-  poll();
-  timerId = setInterval(poll, 5000);
+  function stopFallbackPoll() {
+    if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
+  }
+
+  // Ticker event handler
+  function onTickerEvent(tickerArray: any[]) {
+    if (!appActive || closed) return;
+    if (!Array.isArray(tickerArray)) return;
+    onStatus('live');
+    tickerArray.forEach(t => {
+      const parsed = parseTicker(t);
+      if (parsed && set.has(parsed.market)) {
+        onTick(parsed.market, parsed.price, parsed.chg);
+        stopFallbackPoll(); // stop REST poll if socket is working
+      }
+    });
+  }
+
+  _socketRefCount++;
+
+  getSocket()
+    .then(socket => {
+      if (closed) { releaseSocket(); return; }
+      socket.on('coindcx-ticker', onTickerEvent);
+      onStatus('live');
+      logger.info('cdx-stream', `Subscribed to coindcx-ticker for ${markets.length} markets`);
+
+      // If socket disconnects, start fallback poll
+      socket.on('disconnect', () => {
+        if (!closed) { onStatus('reconnecting'); startFallbackPoll(); }
+      });
+      socket.on('reconnect', () => {
+        if (!closed) { stopFallbackPoll(); onStatus('live'); }
+      });
+    })
+    .catch(() => {
+      // Socket.IO failed — use REST poll fallback
+      _socketRefCount = Math.max(0, _socketRefCount - 1);
+      startFallbackPoll();
+    });
 
   return () => {
     closed = true;
     appStateSub.remove();
-    if (timerId !== null) { clearInterval(timerId); timerId = null; }
+    stopFallbackPoll();
+    if (_socket) _socket.off('coindcx-ticker', onTickerEvent);
+    releaseSocket();
   };
 }
 
-// ── Live candle stream (poll-based) ──────────────────────────────────────────
-// Mirrors subscribeToBnKline but uses REST polling since we don't have a
-// socket.io dep yet. Polls the most recent candle every 3s and fires onCandle
-// with the updated OHLCV. On a candle close (new candle time appears) it fires
-// with isClosed=true for the closed candle, then immediately again for the new one.
+// ── Phase 8: Socket.IO kline stream ───────────────────────────────────────────
+// Subscribes to per-pair 'new-trade' events for real-time candle updates.
+// Each trade fires an OHLCV update for the forming candle, then detects
+// candle close when the candle timestamp changes.
+// Falls back to 5s REST poll if socket unavailable.
 //
 // Returns an unsubscribe function.
 export function subscribeToCdxKline(
-  pair: string,
+  pair: string,    // CoinDCX pair, e.g. 'B-BTC_USDT'
   tf: string,
-  onCandle: (c: { time: number; open: number; high: number; low: number; close: number; volume: number; isClosed: boolean }) => void,
+  onCandle: (c: {
+    time: number; open: number; high: number; low: number;
+    close: number; volume: number; isClosed: boolean;
+  }) => void,
   onStatus: (s: 'live' | 'connecting' | 'reconnecting' | 'error') => void,
 ): () => void {
-  let timerId: ReturnType<typeof setInterval> | null = null;
-  let lastTime = 0;
   let closed = false;
-  let errors = 0;
+  let fallbackTimer: ReturnType<typeof setInterval> | null = null;
+  let lastCandleTime = 0;
 
-  async function poll() {
-    try {
-      // Fetch only the 2 most recent candles — enough to detect a close
-      const candles = await fetchCdxCandles(pair, tf, 2);
-      if (!candles.length) return;
-      errors = 0;
-      onStatus('live');
-
-      const latest = candles[candles.length - 1];
-
-      if (lastTime !== 0 && latest.time !== lastTime) {
-        // The forming candle has closed — a new one started
-        // Find the old candle (second to last, if available)
-        const prev = candles.find(c => c.time === lastTime);
-        if (prev) {
-          onCandle({ ...prev, isClosed: true });
-        }
-      }
-
-      // Always fire with the latest (forming) candle
-      onCandle({ ...latest, isClosed: false });
-      lastTime = latest.time;
-    } catch (e: any) {
-      errors++;
-      logger.warn('cdx-kline', `Poll error #${errors}: ${(e as Error).message}`);
-      onStatus(errors === 1 ? 'reconnecting' : 'error');
-    }
-  }
+  // Forming candle tracker — accumulates trades into OHLCV
+  let forming: { time: number; open: number; high: number; low: number; close: number; volume: number } | null = null;
 
   onStatus('connecting');
-  poll();
-  timerId = setInterval(poll, 5000); // slowed from 3s to match price poll rate
+
+  function startFallbackPoll() {
+    if (fallbackTimer || closed) return;
+    logger.warn('cdx-kline', `${pair}: using REST kline fallback`);
+
+    async function poll() {
+      if (closed) return;
+      try {
+        const candles = await fetchCdxCandles(pair, tf, 2);
+        if (!candles.length) return;
+        onStatus('live');
+        const latest = candles[candles.length - 1];
+        if (lastCandleTime !== 0 && latest.time !== lastCandleTime) {
+          const prev = candles.find(c => c.time === lastCandleTime);
+          if (prev) onCandle({ ...prev, isClosed: true });
+        }
+        onCandle({ ...latest, isClosed: false });
+        lastCandleTime = latest.time;
+      } catch { /* silent */ }
+    }
+
+    poll();
+    fallbackTimer = setInterval(poll, 5000);
+  }
+
+  function stopFallbackPoll() {
+    if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
+  }
+
+  // Seed the forming candle from REST before socket starts
+  // so the chart doesn't show a gap while socket connects
+  fetchCdxCandles(pair, tf, 1).then(candles => {
+    if (closed || !candles.length) return;
+    const c = candles[0];
+    forming = { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
+    lastCandleTime = c.time;
+    onCandle({ ...forming, isClosed: false });
+  }).catch(() => {});
+
+  // Trade event handler — builds forming candle from individual trades
+  function onTradeEvent(trades: any[]) {
+    if (closed || !Array.isArray(trades)) return;
+
+    trades.forEach(trade => {
+      if (trade.s !== pair) return; // filter to our pair
+      const price  = parseFloat(trade.p ?? '0');
+      const qty    = parseFloat(trade.q ?? '0');
+      const ts     = trade.T ?? Date.now();
+      if (price <= 0) return;
+
+      // Compute the candle bucket start time for this trade
+      // based on the current timeframe interval
+      const intervalMs = tfToMs(tf);
+      const candleTime = intervalMs > 0
+        ? Math.floor(ts / intervalMs) * intervalMs
+        : (forming?.time ?? ts);
+
+      if (!forming || candleTime > forming.time) {
+        // New candle started — close the old one
+        if (forming) onCandle({ ...forming, isClosed: true });
+        forming = { time: candleTime, open: price, high: price, low: price, close: price, volume: qty };
+        lastCandleTime = candleTime;
+      } else {
+        // Update forming candle
+        forming.high   = Math.max(forming.high, price);
+        forming.low    = Math.min(forming.low, price);
+        forming.close  = price;
+        forming.volume += qty;
+      }
+
+      onCandle({ ...forming, isClosed: false });
+      stopFallbackPoll();
+    });
+    onStatus('live');
+  }
+
+  _socketRefCount++;
+
+  getSocket()
+    .then(socket => {
+      if (closed) { releaseSocket(); return; }
+      // Subscribe to the pair channel
+      socket.emit('join', { channelName: pair });
+      socket.on('new-trade', onTradeEvent);
+      onStatus('live');
+      logger.info('cdx-kline', `Subscribed to new-trade for ${pair}`);
+
+      socket.on('disconnect', () => { if (!closed) startFallbackPoll(); });
+      socket.on('reconnect', () => {
+        if (!closed) {
+          // Re-join the channel after reconnect
+          socket.emit('join', { channelName: pair });
+          stopFallbackPoll();
+          onStatus('live');
+        }
+      });
+    })
+    .catch(() => {
+      _socketRefCount = Math.max(0, _socketRefCount - 1);
+      startFallbackPoll();
+    });
 
   return () => {
     closed = true;
-    if (timerId !== null) { clearInterval(timerId); timerId = null; }
+    stopFallbackPoll();
+    if (_socket) {
+      _socket.emit('leave', { channelName: pair });
+      _socket.off('new-trade', onTradeEvent);
+    }
+    releaseSocket();
   };
+}
+
+// ── Timeframe → milliseconds (for candle bucket calculation) ─────────────────
+function tfToMs(tf: string): number {
+  const map: Record<string, number> = {
+    '1m': 60_000, '5m': 300_000, '15m': 900_000, '30m': 1_800_000,
+    '1h': 3_600_000, '4h': 14_400_000, '1D': 86_400_000, '1W': 604_800_000,
+  };
+  return map[tf] ?? 0;
 }
