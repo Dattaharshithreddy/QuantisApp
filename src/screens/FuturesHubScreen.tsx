@@ -134,7 +134,12 @@ function CryptoFuturesSection({ navigation }: any) {
     if (!price || qtyNum <= 0) return;
     setPlacing(true);
     try {
-      await openBnFuturesPosition({ symbol: sym, direction, qty: qtyNum, leverage: maxLev, entryPrice: price });
+      // Compute sensible default SL/TP based on price movement (2% SL, 4% TP)
+      const slPct = 0.02;
+      const tpPct = 0.04;
+      const stopLoss   = direction === 'LONG'  ? price * (1 - slPct) : price * (1 + slPct);
+      const takeProfit = direction === 'LONG'  ? price * (1 + tpPct) : price * (1 - tpPct);
+      await openBnFuturesPosition({ symbol: sym, direction, qty: qtyNum, leverage: maxLev, entryPrice: price, stopLoss, takeProfit });
       await loadPortfolio();
       setQty('');
     } catch (e: any) {

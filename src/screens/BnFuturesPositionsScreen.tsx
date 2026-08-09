@@ -133,7 +133,7 @@ export default function BnFuturesPositionsScreen({ navigation }: any) {
           const price     = getPrice(pos);
           const pnl       = computeBnPnL(pos.direction, pos.entryPrice, price, pos.qty);
           const roe       = computeRoE(pnl, pos.isolatedMargin);
-          const liqDist   = Math.abs(price - pos.liquidationPrice) / price * 100;
+          const liqDist   = pos.liquidationPrice != null && price > 0 ? Math.abs(price - pos.liquidationPrice) / price * 100 : 0;
           const isLong    = pos.direction === 'LONG';
           const liqRisk   = liqDist < 5;
           const spec      = BN_CONTRACT_SPECS[pos.symbol];
@@ -195,7 +195,7 @@ export default function BnFuturesPositionsScreen({ navigation }: any) {
                 {[
                   { label: 'ENTRY',  value: `$${pos.entryPrice.toFixed(2)}`,  color: T.text  },
                   { label: 'MARK',   value: `$${price.toFixed(2)}`,            color: T.text  },
-                  { label: 'LIQ',    value: `$${pos.liquidationPrice.toFixed(2)}`, color: liqRisk ? T.red : T.textDim },
+                  { label: 'LIQ',    value: pos.liquidationPrice != null ? `$${pos.liquidationPrice.toFixed(2)}` : '—', color: liqRisk ? T.red : T.textDim },
                   { label: 'MARGIN', value: `$${pos.isolatedMargin.toFixed(2)}`, color: T.amber },
                 ].map(({ label, value, color }) => (
                   <View key={label} style={{ alignItems: 'center' }}>
@@ -209,7 +209,7 @@ export default function BnFuturesPositionsScreen({ navigation }: any) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between',
                 marginBottom: 10 }}>
                 <TouchableOpacity
-                  onPress={() => setEditing({ id: pos.id, field: 'sl', value: pos.stopLoss.toFixed(2) })}>
+                  onPress={() => setEditing({ id: pos.id, field: 'sl', value: (pos.stopLoss ?? 0).toFixed(2) })}>
                   <Text style={{ color: T.textDim, fontSize: 9 }}>SL ✎{' '}
                     {editing?.id === pos.id && editing.field === 'sl' ? (
                       <TextInput value={editing.value}
@@ -220,12 +220,12 @@ export default function BnFuturesPositionsScreen({ navigation }: any) {
                         style={{ color: T.red, fontSize: 9, borderBottomWidth: 1, borderBottomColor: T.red, minWidth: 50 }}
                       />
                     ) : (
-                      <Text style={{ color: T.red }}>${pos.stopLoss.toFixed(2)}</Text>
+                      <Text style={{ color: T.red }}>${(pos.stopLoss ?? 0).toFixed(2)}</Text>
                     )}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setEditing({ id: pos.id, field: 'tp', value: pos.takeProfit.toFixed(2) })}>
+                  onPress={() => setEditing({ id: pos.id, field: 'tp', value: (pos.takeProfit ?? 0).toFixed(2) })}>
                   <Text style={{ color: T.textDim, fontSize: 9 }}>TP ✎{' '}
                     {editing?.id === pos.id && editing.field === 'tp' ? (
                       <TextInput value={editing.value}
@@ -236,7 +236,7 @@ export default function BnFuturesPositionsScreen({ navigation }: any) {
                         style={{ color: T.green, fontSize: 9, borderBottomWidth: 1, borderBottomColor: T.green, minWidth: 50 }}
                       />
                     ) : (
-                      <Text style={{ color: T.green }}>${pos.takeProfit.toFixed(2)}</Text>
+                      <Text style={{ color: T.green }}>${(pos.takeProfit ?? 0).toFixed(2)}</Text>
                     )}
                   </Text>
                 </TouchableOpacity>
