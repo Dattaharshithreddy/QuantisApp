@@ -77,7 +77,7 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ color: priceColor, fontSize: 24, fontWeight: '800', letterSpacing: -0.4 }}>{pFmt(livePrice ?? cp?.price)}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
-              <Text style={{ color: priceColor, fontSize: 12, fontWeight: '700' }}>{isPos ? '▲' : '▼'} {Math.abs(cp.chg).toFixed(2)}%</Text>
+              <Text style={{ color: priceColor, fontSize: 12, fontWeight: '700' }}>{isPos ? '▲' : '▼'} {isNaN(cp.chg) ? '0.00' : Math.abs(cp.chg).toFixed(2)}%</Text>
             </View>
           </View>
         )}

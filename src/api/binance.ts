@@ -203,7 +203,7 @@ export async function fetchBnSpotSnapshot(
     data.forEach(d => {
       result[d.symbol] = {
         price: parseFloat(d.lastPrice),
-        chg:   parseFloat(d.priceChangePercent),
+        chg:   parseFloat(d.priceChangePercent) || 0,
       };
     });
     return result;

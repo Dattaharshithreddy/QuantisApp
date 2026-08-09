@@ -606,12 +606,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             if (!canUpdate(p[symbol], 'websocket', ts)) return p;
             const prev = p[symbol] ?? {};
             const chg  = prev.open24h ? ((ltp - prev.open24h) / prev.open24h) * 100 : (prev.chg ?? 0);
+            const safeChg = isNaN(chg) ? (prev.chg ?? 0) : chg;
             return {
               ...p,
               [symbol]: {
                 ...prev,
                 price: ltp,
-                chg,
+                chg: safeChg,
                 // Preserve open24h so chg stays consistent across ticks
                 open24h: prev.open24h ?? (ohlcv?.open ?? ltp),
                 status: 'live',
