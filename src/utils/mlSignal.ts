@@ -439,13 +439,35 @@ async function _computeLiveOverlay(historicalS: SeriesResult, candles: Candle[])
   const prv = candles[n - 2];
   if (!cur || !prv) return historicalS;
 
-  // Clone top-level only — arrays are shared by reference since we only patch index n-1.
-  // We patch in place on the stored arrays, which is safe because _liveCache and
-  // _historicalCache have separate keys — if _historicalCache is accessed again
-  // for a different forming candle, a new overlay is computed on the same base arrays.
-  // The in-place patch of S[n-1] on those arrays is correct because S[0..n-2] never
-  // changes between calls for the same historical key.
-  const S = historicalS;
+  // FIX: Must NOT mutate historicalS in place.
+  // historicalS is the same object stored in both _historicalCache.result AND
+  // in buildFitCache's fitCache.S. If we patch S arrays in place, we corrupt
+  // fitCache.S — predictProb() then reads wrong indicator values → crash.
+  //
+  // Solution: shallow-clone the top-level S object and deep-clone only the
+  // arrays we will patch (ema20, ema50, ema200, sma20, rsiArr, atrArr,
+  // macdRes, bb, obvArr, vwapArr). All other arrays (histVol, stochRsi, etc.)
+  // are referenced as-is since we don't write to them in the overlay.
+  const S: SeriesResult = {
+    ...historicalS,
+    // Clone only the arrays we mutate so fitCache.S is never corrupted
+    ema20:   historicalS.ema20   ? [...historicalS.ema20]   : historicalS.ema20,
+    ema50:   historicalS.ema50   ? [...historicalS.ema50]   : historicalS.ema50,
+    ema200:  historicalS.ema200  ? [...historicalS.ema200]  : historicalS.ema200,
+    sma20:   historicalS.sma20   ? [...historicalS.sma20]   : historicalS.sma20,
+    rsiArr:  historicalS.rsiArr  ? [...historicalS.rsiArr]  : historicalS.rsiArr,
+    atrArr:  historicalS.atrArr  ? [...historicalS.atrArr]  : historicalS.atrArr,
+    obvArr:  historicalS.obvArr  ? [...historicalS.obvArr]  : historicalS.obvArr,
+    vwapArr: historicalS.vwapArr ? [...historicalS.vwapArr] : historicalS.vwapArr,
+    // macdRes and bb are objects — clone them with their inner arrays
+    macdRes: historicalS.macdRes ? {
+      ...historicalS.macdRes,
+      macd:   historicalS.macdRes.macd   ? [...historicalS.macdRes.macd]   : historicalS.macdRes.macd,
+      signal: historicalS.macdRes.signal ? [...historicalS.macdRes.signal] : historicalS.macdRes.signal,
+      hist:   historicalS.macdRes.hist   ? [...historicalS.macdRes.hist]   : historicalS.macdRes.hist,
+    } : historicalS.macdRes,
+    bb: historicalS.bb ? [...historicalS.bb] : historicalS.bb,
+  };
 
   // ── EMA updates (O(1) incremental) ───────────────────────────────────────
   const updateEma = (arr: number[] | undefined, period: number, price: number) => {
