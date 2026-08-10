@@ -278,36 +278,43 @@ export default function AIChatScreen({ route }: any) {
   const inputRef   = useRef<TextInput>(null);
 
   // ── Persist / restore history ──────────────────────────────────────────────
-  useEffect(() => {
-    AsyncStorage.getItem(HISTORY_KEY(symbol)).then(raw => {
-      if (raw) {
-        try { setMessages(JSON.parse(raw).slice(-MAX_STORED)); } catch {}
-      }
-      setHistoryLoaded(true);
-    });
-  }, [symbol]);
-
+  // Debounce ref — avoids AsyncStorage write on every streaming chunk
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persist = useCallback((msgs: ChatMessage[]) => {
-    AsyncStorage.setItem(HISTORY_KEY(symbol), JSON.stringify(msgs.slice(-MAX_STORED)));
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      AsyncStorage.setItem(HISTORY_KEY(symbol), JSON.stringify(msgs.slice(-MAX_STORED)));
+    }, 500);
   }, [symbol]);
 
   // ── Build market context ───────────────────────────────────────────────────
   const buildContext = useCallback(async () => {
     setContextErr('');
     try {
-      let candles: any[] = [];
-      const tf = '15m';
-      if (asset?.src === 'binance' && asset?.bnSym) {
-        candles = await fetchCandlesWithCache(symbol, tf,
-          async () => fetchBnKlines(asset.bnSym!, tf, 1000));
-      } else if (asset?.src === 'coindcx' && (asset as any).cdxSym) {
-        candles = await fetchCdxCandles((asset as any).cdxSym, tf);
-      } else if (asset?.src === 'av' && asset?.avSym) {
-        candles = await fetchCandlesWithCache(symbol, tf,
-          async () => fetchAVKlines(asset.avSym!, tf, avKey));
-      } else {
-        candles = await fetchCandlesWithCache(symbol, tf, async () => []);
+      // Load history AND candles in parallel — don't wait for history before fetching
+      const [historyRaw, candles] = await Promise.all([
+        AsyncStorage.getItem(HISTORY_KEY(symbol)).catch(() => null),
+        (async () => {
+          const tf = '15m';
+          // Only fetch 50 candles — enough for RSI/MA/OHLC context, much faster
+          if (asset?.src === 'binance' && asset?.bnSym) {
+            return fetchCandlesWithCache(symbol, tf,
+              async () => fetchBnKlines(asset.bnSym!, tf, 50), { maxCandles: 50 });
+          } else if (asset?.src === 'coindcx' && (asset as any).cdxSym) {
+            return fetchCdxCandles((asset as any).cdxSym, tf, 50);
+          } else if (asset?.src === 'av' && asset?.avSym) {
+            return fetchCandlesWithCache(symbol, tf,
+              async () => fetchAVKlines(asset.avSym!, tf, avKey), { maxCandles: 50 });
+          }
+          return fetchCandlesWithCache(symbol, tf, async () => [], { maxCandles: 50 });
+        })(),
+      ]);
+
+      // Restore history if present (parallel with candle fetch)
+      if (historyRaw) {
+        try { setMessages(JSON.parse(historyRaw).slice(-MAX_STORED)); } catch {}
       }
+      setHistoryLoaded(true);
 
       const last = candles[candles.length - 1];
       if (!last) throw new Error('No candle data available for this asset.');
@@ -344,31 +351,57 @@ export default function AIChatScreen({ route }: any) {
     }
   }, [asset, symbol, aoSession, avKey, news, cp]);
 
-  useEffect(() => { if (historyLoaded) buildContext(); }, [historyLoaded]);
+  useEffect(() => { buildContext(); }, [symbol]);
 
   // ── Send message with streaming ────────────────────────────────────────────
-  const send = useCallback(async (text?: string) => {
-    const content = (text ?? input).trim();
-    if (!content || sending || !contextReady) return;
+  // Use refs for values accessed inside the streaming callback to avoid
+  // stale closure captures and dep array rebuilds on every message.
+  const sendingRef      = useRef(false);
+  const messagesRef     = useRef<(ChatMessage & { streaming?: boolean })[]>([]);
+  const inputRef2       = useRef('');
+  const throttleRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  // Keep refs in sync with state
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { inputRef2.current = input; }, [input]);
+
+  const send = useCallback(async (text?: string) => {
+    const content = (text ?? inputRef2.current).trim();
+    if (!content || sendingRef.current || !contextReady) return;
+
+    // Instant haptic + clear input before any async work
+    sendingRef.current = true;
+    setSending(true);
     setInput('');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const userMsg: ChatMessage = { role: 'user', content };
-    const withUser = [...messages, userMsg];
-    setMessages(withUser);
+    const withUser = [...messagesRef.current, userMsg];
+    // Show user bubble + typing indicator atomically
+    const withTyping = [...withUser, { role: 'assistant' as const, content: '', streaming: true }];
+    setMessages(withTyping);
+    messagesRef.current = withTyping;
     persist(withUser);
-    setSending(true);
-
-    // Add streaming placeholder
-    const streamingId = Date.now();
-    setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true } as any]);
 
     // Scroll to bottom immediately
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
 
     abortRef.current = new AbortController();
     let accumulated = '';
+    let pendingUpdate = false;
+
+    // Throttled UI update — batches chunks into 50ms windows
+    // Prevents excessive re-renders competing with the JS thread
+    function flushUpdate() {
+      pendingUpdate = false;
+      setMessages(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.streaming) next[next.length - 1] = { ...last, content: accumulated };
+        return next;
+      });
+      listRef.current?.scrollToEnd({ animated: false });
+    }
 
     try {
       await chatWithClaudeStream(
@@ -377,20 +410,16 @@ export default function AIChatScreen({ route }: any) {
         contextRef.current,
         (chunk) => {
           accumulated += chunk;
-          // Update streaming message in place
-          setMessages(prev => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.streaming) {
-              next[next.length - 1] = { ...last, content: accumulated };
-            }
-            return next;
-          });
-          // Auto-scroll as content arrives
-          listRef.current?.scrollToEnd({ animated: false });
+          // Throttle: schedule one update per 50ms window, not per chunk
+          if (!pendingUpdate) {
+            pendingUpdate = true;
+            throttleRef.current = setTimeout(flushUpdate, 50);
+          }
         },
         abortRef.current.signal,
       );
+      // Flush any remaining buffered content
+      if (throttleRef.current) { clearTimeout(throttleRef.current); throttleRef.current = null; }
 
       // Finalise — remove streaming flag
       const final = [...withUser, { role: 'assistant' as const, content: accumulated }];
@@ -416,10 +445,13 @@ export default function AIChatScreen({ route }: any) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } finally {
+      sendingRef.current = false;
       setSending(false);
       abortRef.current = null;
+      if (throttleRef.current) { clearTimeout(throttleRef.current); throttleRef.current = null; }
     }
-  }, [input, sending, contextReady, messages, anthropicKey, persist]);
+  // Minimal deps — values accessed via refs to avoid stale closures and rebuilds
+  }, [contextReady, anthropicKey, persist]);
 
   const clearHistory = useCallback(() => {
     AsyncStorage.removeItem(HISTORY_KEY(symbol));
