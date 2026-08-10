@@ -164,6 +164,73 @@ Return ONLY valid JSON:
 // ─────────────────────────────────────────────────
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
+// Streaming chat — calls onChunk with each text delta so the UI can render
+// tokens as they arrive (same experience as Claude.ai / ChatGPT).
+// Falls back to non-streaming if the environment doesn't support ReadableStream.
+export async function chatWithClaudeStream(
+  messages: ChatMessage[],
+  apiKey: string,
+  systemContext: string,
+  onChunk: (delta: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (!apiKey) throw new Error('No Anthropic API key set — add one in Settings to use AI Chat.');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key':          apiKey,
+      'anthropic-version':  '2023-06-01',
+      'anthropic-beta':     'messages-2023-12-15',
+    },
+    body: JSON.stringify({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 1200,
+      stream:     true,
+      system:     systemContext,
+      messages:   messages.map(m => ({ role: m.role, content: m.content })),
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    if (res.status === 401) throw new Error('Invalid Anthropic API key — check it in Settings.');
+    if (res.status === 429) throw new Error('Rate limited — wait a moment and try again.');
+    throw new Error(`HTTP ${res.status}${errBody ? ': ' + errBody.slice(0, 150) : ''}`);
+  }
+
+  // Parse server-sent events
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let full = '';
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') break;
+      try {
+        const evt = JSON.parse(data);
+        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+          const chunk = evt.delta.text ?? '';
+          full += chunk;
+          onChunk(chunk);
+        }
+      } catch { /* skip malformed SSE line */ }
+    }
+  }
+  return full.trim();
+}
+
+// Non-streaming fallback (kept for compatibility)
 export async function chatWithClaude(messages: ChatMessage[], apiKey: string, systemContext: string): Promise<string> {
   if (!apiKey) throw new Error('No Anthropic API key set — add one in Settings to use AI Chat.');
   const res = await fetch('https://api.anthropic.com/v1/messages', {

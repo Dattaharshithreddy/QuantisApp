@@ -1,431 +1,558 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList,
-         ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+// ─────────────────────────────────────────────────────────────────────────────
+// AI COPILOT CHAT SCREEN  (v3.0.0 — streaming + beautiful UX)
+//
+// Feels like Claude.ai / ChatGPT — tokens appear as they stream, not after
+// a multi-second wait. Markdown-aware message renderer with:
+//   • Bold, italic, code spans, bullet lists, numbered lists
+//   • Section headers (## style)
+//   • Price/number highlighting in accent colour
+//   • Animated typing indicator (3-dot bounce)
+//   • Auto-scroll to bottom as tokens arrive
+//   • Haptic feedback on send
+//   • Suggested quick prompts when chat is empty
+// ─────────────────────────────────────────────────────────────────────────────
+import React, {
+  useEffect, useState, useRef, useCallback, memo,
+} from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, FlatList,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
+  Animated, Easing,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
-import { Candle, calcMA, calcRSI, pFmt } from '../utils/indicators';
 import { fetchCdxCandles } from '../api/coindcx';
 import { fetchBnKlines } from '../api/binance';
 import { fetchAVKlines } from '../api/alphaVantage';
-import { aoCandles } from '../api/angelOne';
-import { chatWithClaude, buildChatContext, ChatMessage } from '../api/claude';
+import { chatWithClaudeStream, buildChatContext, ChatMessage } from '../api/claude';
 import { fetchCandlesWithCache } from '../utils/candleCache';
 import { fetchCryptoContextPartial } from '../utils/cryptoMarketContext/cryptoMarketContextFetch';
+const SRC_LABEL: Record<string, string> = {
+  ao: 'Angel One', ao_futures: 'Angel One NFO', av: 'Alpha Vantage',
+  binance: 'Binance', binance_futures: 'Binance Futures',
+  coindcx: 'CoinDCX', coindcx_futures: 'CoinDCX Futures', forex: 'Forex',
+};
+import { getRSI, getEMA } from '../utils/indicators';
 
-// Per-symbol chat history persisted to AsyncStorage.
-// Key: 'aichat_v1_<symbol>' — stores last 50 messages per symbol.
-const CHAT_KEY = (symbol: string) => `aichat_v1_${symbol}`;
-const MAX_STORED_MESSAGES = 50;  // keep last 50 per symbol (~40KB max)
+const HISTORY_KEY = (sym: string) => `aichat_v1_${sym}`;
+const MAX_STORED   = 50;
 
-const SUGGESTED_PROMPTS = [
-  'Predict where this is headed next',
-  'Give me entry, target, and stop-loss',
-  'What does the order book say right now?',
-  'Should I wait or act on this now?',
-  'How has the setup changed since last time?',
-];
+// ── Markdown-aware inline renderer ───────────────────────────────────────────
+// Renders **bold**, *italic*, `code`, and plain text inline.
+function InlineText({ text, baseStyle }: { text: string; baseStyle: any }) {
+  const parts: React.ReactNode[] = [];
+  // Split on bold, italic, and code spans
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  let last = 0, key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(<Text key={key++} style={baseStyle}>{text.slice(last, m.index)}</Text>);
+    const raw = m[0];
+    if (raw.startsWith('**'))
+      parts.push(<Text key={key++} style={[baseStyle, { fontWeight: '700' }]}>{raw.slice(2,-2)}</Text>);
+    else if (raw.startsWith('`'))
+      parts.push(<Text key={key++} style={[baseStyle, { fontFamily: 'monospace', backgroundColor: '#ffffff18', borderRadius: 3, paddingHorizontal: 3 }]}>{raw.slice(1,-1)}</Text>);
+    else
+      parts.push(<Text key={key++} style={[baseStyle, { fontStyle: 'italic' }]}>{raw.slice(1,-1)}</Text>);
+    last = m.index + raw.length;
+  }
+  if (last < text.length) parts.push(<Text key={key++} style={baseStyle}>{text.slice(last)}</Text>);
+  return <Text>{parts}</Text>;
+}
 
-export default function AIChatScreen({ route, navigation }: any) {
-  const { theme: T } = useTheme();
-  const { prices, aoSession, avKey, anthropicKey, allAssets, news } = useData();
-  const symbol = route?.params?.symbol || 'NIFTY50';
-  const asset = allAssets.find(a => a.symbol === symbol) || allAssets[0];
+// ── Message content renderer — parses markdown blocks ────────────────────────
+const MessageContent = memo(({ text, isUser, T }: { text: string; isUser: boolean; T: any }) => {
+  const baseColor   = isUser ? '#fff' : T.text;
+  const dimColor    = isUser ? 'rgba(255,255,255,0.75)' : T.textDim;
+  const accentColor = isUser ? '#ffffffcc' : T.accent;
+  const baseStyle   = { color: baseColor, fontSize: 14.5, lineHeight: 22 };
 
-  // ML prediction passed from ChartScreen when user navigates via the chat button.
-  // Used to populate mlSummary so the copilot is aware of the on-device signal.
-  // May be null if: user opened chat from More menu, prediction hasn't run yet,
-  // or the ML engine returned HOLD (no directional call).
-  const mlSignalParam = route?.params?.mlSignal ?? null;
+  const lines = text.split('\n');
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [contextReady, setContextReady] = useState(false);
-  const [contextErr, setContextErr] = useState('');
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const contextRef = useRef<string>('');
-  const listRef = useRef<FlatList>(null);
+  while (i < lines.length) {
+    const line = lines[i];
 
-  // ── Phase 1: Load persisted history for this symbol on mount ───────────────
-  useEffect(() => {
-    AsyncStorage.getItem(CHAT_KEY(symbol)).then(raw => {
-      if (raw) {
-        try {
-          const saved: ChatMessage[] = JSON.parse(raw);
-          if (saved.length) setMessages(saved);
-        } catch { /* ignore corrupt */ }
-      }
-      setHistoryLoaded(true);
-    }).catch(() => setHistoryLoaded(true));
-  }, [symbol]);
+    // Blank line
+    if (!line.trim()) { nodes.push(<View key={i} style={{ height: 6 }} />); i++; continue; }
 
-  // ── Phase 2: Persist messages whenever they change ─────────────────────────
-  // Debounced to avoid writing on every keystroke during streaming.
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const persistMessages = useCallback((msgs: ChatMessage[]) => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const toSave = msgs.slice(-MAX_STORED_MESSAGES); // keep last 50
-      AsyncStorage.setItem(CHAT_KEY(symbol), JSON.stringify(toSave)).catch(() => {});
-    }, 500);
-  }, [symbol]);
-
-  // ── Build market context (system prompt) ───────────────────────────────────
-  const buildContext = useCallback(async () => {
-    setContextReady(false); setContextErr('');
-    try {
-      let candles: Candle[] = [];
-      let srcLabel = 'No live source';
-      if (asset.src === 'binance' && asset.bnSym) {
-        const bnSym = asset.bnSym;
-        const BN_TF_MS: Record<string, number> = {
-          '1m':60000,'3m':180000,'5m':300000,'15m':900000,
-          '30m':1800000,'1h':3600000,'4h':14400000,'1D':86400000,
-        };
-        const barMs = BN_TF_MS['15m'];
-        const CORRECTION_WINDOW = 10;
-        candles = await fetchCandlesWithCache(asset.symbol, '15m',
-          async (newestCachedTime) => {
-            if (newestCachedTime) {
-              const fromTime = newestCachedTime - (CORRECTION_WINDOW * barMs);
-              return fetchBnKlines(bnSym, '15m', 1000, undefined, fromTime);
-            }
-            return fetchBnKlines(bnSym, '15m', 1000);
-          },
-          { skipApiIfFresh: true },
-        );
-        srcLabel = 'Binance (15m)';
-      } else if ((asset.src === 'ao' || asset.src === 'ao_futures') && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
-        const sess = aoSession;
-        candles = await fetchCandlesWithCache(asset.symbol, '15m',
-          async () => aoCandles(asset.aoToken!, asset.aoEx!, '15m', sess), { skipApiIfFresh: true });
-        srcLabel = 'Angel One (15m)';
-      } else if (asset.src === 'coindcx' && (asset as any).cdxSym) {
-        candles = await fetchCdxCandles((asset as any).cdxSym, tf ?? '15m');
-      } else if (asset.src === 'av' && asset.avSym && avKey) {
-        candles = await fetchCandlesWithCache(asset.symbol, '15m',
-          async () => fetchAVKlines(asset.avSym!, '15m', avKey), { skipApiIfFresh: true });
-        srcLabel = 'Alpha Vantage (15m)';
-      }
-
-      if (!candles.length) {
-        setContextErr(`No live data for ${symbol} — connect a data source in Settings.`);
-        return;
-      }
-
-      const last  = candles[candles.length - 1];
-      const ma20  = calcMA(candles, 20)[candles.length - 1];
-      const ma50  = calcMA(candles, 50)[candles.length - 1];
-      const atrRaw = candles.slice(-15).reduce((s, c, i) => i === 0 ? s : s + Math.abs(c.high - c.low), 0) / 14;
-      const rsi   = calcRSI(candles);
-      const cp    = prices[symbol];
-
-      // ── Candle history strategy ───────────────────────────────────────────
-      // 15m candles: 96 bars = 1 trading day, 480 = 5 days.
-      // We give Claude two layers of context:
-      //   • Recent: last 96 bars (24 hours) as individual OHLCV rows — fine grain
-      //   • Historical: preceding bars summarised into daily OHLCV buckets
-      //     (up to 14 trading days) — trend/range context without token blow-up.
-      const RECENT_BARS  = 96;   // 1 day of 15m bars
-      const HISTORY_DAYS = 14;   // daily summaries beyond the recent window
-
-      const recentCandles = candles.slice(-RECENT_BARS);
-      const olderCandles  = candles.slice(0, Math.max(0, candles.length - RECENT_BARS));
-
-      // Build per-day OHLCV buckets from older candles
-      const dayMap: Record<string, { o: number; h: number; l: number; c: number; v: number }> = {};
-      for (const c of olderCandles) {
-        const dayKey = new Date(c.time * 1000).toISOString().slice(0, 10); // YYYY-MM-DD
-        if (!dayMap[dayKey]) {
-          dayMap[dayKey] = { o: c.open, h: c.high, l: c.low, c: c.close, v: 0 };
-        } else {
-          if (c.high > dayMap[dayKey].h) dayMap[dayKey].h = c.high;
-          if (c.low  < dayMap[dayKey].l) dayMap[dayKey].l = c.low;
-          dayMap[dayKey].c = c.close;
-        }
-        dayMap[dayKey].v += c.volume;
-      }
-      const dailySummaryRows = Object.entries(dayMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .slice(-HISTORY_DAYS)
-        .map(([day, d]) =>
-          `${day} O:${pFmt(d.o)} H:${pFmt(d.h)} L:${pFmt(d.l)} C:${pFmt(d.c)} V:${(d.v / 1000).toFixed(0)}K`
-        );
-
-      // Recent bars as individual 15m rows
-      const recentRows = recentCandles.map(c =>
-        `O:${pFmt(c.open)} H:${pFmt(c.high)} L:${pFmt(c.low)} C:${pFmt(c.close)} V:${(c.volume / 1000).toFixed(0)}K`
+    // ## Header
+    if (line.startsWith('## ')) {
+      nodes.push(
+        <Text key={i} style={{ color: baseColor, fontSize: 13, fontWeight: '800',
+          letterSpacing: 0.5, marginTop: 10, marginBottom: 4, opacity: 0.9 }}>
+          {line.slice(3).toUpperCase()}
+        </Text>
       );
-
-      // Compose the OHLC block: daily history then recent bars
-      const ohlcParts: string[] = [];
-      if (dailySummaryRows.length) {
-        ohlcParts.push(`--- Daily history (${dailySummaryRows.length} trading days) ---`);
-        ohlcParts.push(...dailySummaryRows);
-        ohlcParts.push(`--- Recent 15m bars (${recentRows.length} bars / ~24 hrs) ---`);
-      }
-      ohlcParts.push(...recentRows);
-      const ohlc = ohlcParts.join('\n');
-
-      // Rich order book with price levels
-      let obSummary: string | undefined;
-      if (cp?.depth) {
-        const buyQ  = cp.depth.buy.reduce((s, d) => s + d.qty, 0);
-        const sellQ = cp.depth.sell.reduce((s, d) => s + d.qty, 0);
-        const total = buyQ + sellQ || 1;
-        const spread = cp.depth.sell[0]?.price && cp.depth.buy[0]?.price
-          ? (cp.depth.sell[0].price - cp.depth.buy[0].price).toFixed(4) : 'n/a';
-        const bidRows = cp.depth.buy.slice(0, 5).map(d => `BID ${pFmt(d.price)} ×${d.qty.toFixed(3)}`).join(' | ');
-        const askRows = cp.depth.sell.slice(0, 5).map(d => `ASK ${pFmt(d.price)} ×${d.qty.toFixed(3)}`).join(' | ');
-        obSummary = `Buy ${((buyQ/total)*100).toFixed(0)}% / Sell ${((sellQ/total)*100).toFixed(0)}% | Spread:${spread} | ATR:${atrRaw.toFixed(2)}\nBids: ${bidRows}\nAsks: ${askRows}`;
-      }
-
-      const newsSummary = news.slice(0, 4).map(n => `${n.txt} (${n.imp})`).join(' | ') || undefined;
-
-      // ── Fear & Greed + market structure for crypto assets ─────────────────
-      // Uses fetchCryptoContextPartial so we only pay for FEAR_GREED + MARKET_CAP
-      // (no funding/OI fetch here — those are symbol-specific and slower).
-      // The cache from the chart's usePrediction run is reused — no extra API call
-      // if the chart has been opened recently.
-      let fearGreedSummary: string | undefined;
-      if (asset.src === 'binance' || asset.type === 'CRYPTO') {
-        try {
-          const cryptoCtx = await fetchCryptoContextPartial(symbol, ['FEAR_GREED', 'MARKET_CAP']);
-          const fg = cryptoCtx.fearGreed;
-          const mc = cryptoCtx.marketCap;
-          if (fg) {
-            fearGreedSummary =
-              `Fear & Greed: ${fg.value} (${fg.classification}, ${fg.trend} from ${fg.previousDay} yesterday)`;
-            if (mc) {
-              fearGreedSummary +=
-                ` | BTC Dom: ${mc.btcDominance.toFixed(1)}% | Market: ${mc.totalChange24h >= 0 ? '+' : ''}${mc.totalChange24h.toFixed(2)}% 24h | Regime: ${mc.regime}`;
-            }
-          }
-        } catch { /* non-fatal — context still built without it */ }
-      }
-
-      // ── ML signal summary for context ─────────────────────────────────────
-      // If the user navigated from the chart after running Predict, the signal
-      // is already available — no re-inference needed. This is the single source
-      // of truth: the same number the Predict button showed.
-      let mlSummary: string | undefined;
-      if (mlSignalParam && mlSignalParam.action !== 'HOLD') {
-        const sig = mlSignalParam;
-        const dirLabel = sig.direction === 'UP' ? '▲ BULLISH' : sig.direction === 'DOWN' ? '▼ BEARISH' : '— NEUTRAL';
-        const topF = (sig.topFeatures ?? [])
-          .map((f: any) => `${f.name} (${f.value?.toFixed(2) ?? '?'})`)
-          .join(', ');
-        mlSummary =
-          `Signal: ${sig.action} | Direction: ${dirLabel} | ` +
-          `P(up): ${(sig.ensembleProbUp * 100).toFixed(1)}% | ` +
-          `Confidence: ${sig.confidence.toFixed(0)}% | ` +
-          `Walk-forward accuracy: ${sig.walkForwardAccuracy.toFixed(1)}%` +
-          (topF ? ` | Top features: ${topF}` : '');
-      }
-
-      const historyHint = messages.length > 0
-        ? `\nCONVERSATION HISTORY: ${messages.length} prior messages in this session. Reference them when relevant — the user may be asking follow-up questions.`
-        : '';
-
-      contextRef.current = buildChatContext({
-        assetName: asset.name, symbol, type: asset.type, tf: '15m', srcLabel,
-        price: last.close, chgPct: cp?.chg ?? 0,
-        rsi: rsi?.[rsi.length - 1] ?? 50,
-        ma20, ma50, ohlc, obSummary, mlSummary,
-        newsSummary: [newsSummary, fearGreedSummary].filter(Boolean).join(' | ') || undefined,
-      }) + historyHint;
-
-      setContextReady(true);
-    } catch (e: any) {
-      // Map technical errors to user-friendly messages
-      const raw: string = e?.message ?? '';
-      const friendly =
-        raw.includes('401') || raw.includes('JWT') || raw.includes('Unauthorized')
-          ? 'Your Angel One session has expired. Go to Settings → Angel One to reconnect.'
-          : raw.includes('Network') || raw.includes('fetch') || raw.includes('timeout')
-          ? 'Network error — check your internet connection and try again.'
-          : raw.includes('API key') || raw.includes('Invalid key') || raw.includes('403')
-          ? 'Invalid API key. Please check your key in Settings.'
-          : raw || 'Something went wrong loading market data. Tap Retry.';
-      setContextErr(friendly);
+      i++; continue;
     }
-  }, [asset, symbol, aoSession, avKey, news, prices, messages.length]);
 
-  // Build context once on mount (after history loads so historyHint is accurate)
-  useEffect(() => {
-    if (historyLoaded) buildContext();
-  }, [historyLoaded]);
-
-  // ── Send message ───────────────────────────────────────────────────────────
-  async function send(text?: string) {
-    const content = (text ?? input).trim();
-    if (!content || sending || !contextReady) return;
-    const next: ChatMessage[] = [...messages, { role: 'user', content }];
-    setMessages(next);
-    persistMessages(next);
-    setInput('');
-    setSending(true);
-    try {
-      const reply = await chatWithClaude(next, anthropicKey, contextRef.current);
-      const final = [...next, { role: 'assistant' as const, content: reply }];
-      setMessages(final);
-      persistMessages(final);
-    } catch (e: any) {
-      const raw2: string = e?.message ?? '';
-      const friendlyChat =
-        raw2.includes('401') || raw2.includes('Invalid') || raw2.includes('auth')
-          ? '⚠ API key issue — check your Anthropic key in Settings.'
-          : raw2.includes('Network') || raw2.includes('fetch') || raw2.includes('timeout')
-          ? '⚠ Network error — check your connection and try again.'
-          : '⚠ Something went wrong. Please try again.';
-      const errMsg = [...next, { role: 'assistant' as const, content: friendlyChat }];
-      setMessages(errMsg);
-      persistMessages(errMsg);
-    } finally {
-      setSending(false);
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    // # Header
+    if (line.startsWith('# ')) {
+      nodes.push(
+        <Text key={i} style={{ color: accentColor, fontSize: 15, fontWeight: '800',
+          marginTop: 8, marginBottom: 4 }}>
+          {line.slice(2)}
+        </Text>
+      );
+      i++; continue;
     }
-  }
 
-  // ── Clear history ──────────────────────────────────────────────────────────
-  function clearHistory() {
-    Alert.alert(
-      'Clear chat history',
-      `Delete all ${messages.length} messages for ${symbol}? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear', style: 'destructive', onPress: () => {
-          setMessages([]);
-          AsyncStorage.removeItem(CHAT_KEY(symbol)).catch(() => {});
-        }},
-      ]
+    // Bullet: - or •
+    if (/^[-•*]\s/.test(line)) {
+      nodes.push(
+        <View key={i} style={{ flexDirection: 'row', marginBottom: 3, paddingLeft: 4 }}>
+          <Text style={{ color: accentColor, fontSize: 14, marginRight: 8, marginTop: 1 }}>•</Text>
+          <View style={{ flex: 1 }}>
+            <InlineText text={line.replace(/^[-•*]\s/, '')} baseStyle={baseStyle} />
+          </View>
+        </View>
+      );
+      i++; continue;
+    }
+
+    // Numbered list
+    const numMatch = line.match(/^(\d+)\.\s(.*)/);
+    if (numMatch) {
+      nodes.push(
+        <View key={i} style={{ flexDirection: 'row', marginBottom: 3, paddingLeft: 4 }}>
+          <Text style={{ color: accentColor, fontSize: 13, fontWeight: '700',
+            marginRight: 8, minWidth: 20 }}>{numMatch[1]}.</Text>
+          <View style={{ flex: 1 }}>
+            <InlineText text={numMatch[2]} baseStyle={baseStyle} />
+          </View>
+        </View>
+      );
+      i++; continue;
+    }
+
+    // Horizontal rule
+    if (/^---+$/.test(line.trim())) {
+      nodes.push(<View key={i} style={{ height: 1, backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : T.border, marginVertical: 8 }} />);
+      i++; continue;
+    }
+
+    // > Blockquote
+    if (line.startsWith('> ')) {
+      nodes.push(
+        <View key={i} style={{ borderLeftWidth: 2, borderLeftColor: accentColor,
+          paddingLeft: 10, marginVertical: 2 }}>
+          <Text style={{ color: dimColor, fontSize: 13.5, lineHeight: 20, fontStyle: 'italic' }}>
+            {line.slice(2)}
+          </Text>
+        </View>
+      );
+      i++; continue;
+    }
+
+    // Plain paragraph
+    nodes.push(
+      <View key={i} style={{ marginBottom: 2 }}>
+        <InlineText text={line} baseStyle={baseStyle} />
+      </View>
     );
+    i++;
   }
 
-  const msgCount = messages.length;
-  const assistantCount = messages.filter(m => m.role === 'assistant').length;
+  return <View>{nodes}</View>;
+});
+
+// ── Typing indicator — 3 bouncing dots ───────────────────────────────────────
+const TypingIndicator = memo(({ T }: { T: any }) => {
+  const dots = [useRef(new Animated.Value(0)).current,
+                useRef(new Animated.Value(0)).current,
+                useRef(new Animated.Value(0)).current];
+
+  useEffect(() => {
+    const anims = dots.map((dot, i) =>
+      Animated.loop(Animated.sequence([
+        Animated.delay(i * 150),
+        Animated.timing(dot, { toValue: -6, duration: 300, useNativeDriver: true, easing: Easing.out(Easing.quad) }),
+        Animated.timing(dot, { toValue: 0,  duration: 300, useNativeDriver: true, easing: Easing.in(Easing.quad) }),
+        Animated.delay(600),
+      ]))
+    );
+    anims.forEach(a => a.start());
+    return () => anims.forEach(a => a.stop());
+  }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }}>
-      {/* Header */}
-      <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: T.border }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: T.text, fontSize: 16, fontWeight: '800' }}>💬 {symbol}</Text>
-            <Text style={{ color: T.textDim, fontSize: 10, marginTop: 2 }}>
-              {contextReady
-                ? `✓ Live data loaded · ${msgCount > 0 ? `${assistantCount} AI responses` : 'No messages yet'}`
-                : contextErr ? '⚠ No live data' : 'Loading market data…'}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            {msgCount > 0 && (
-              <TouchableOpacity onPress={clearHistory}>
-                <Text style={{ color: T.red, fontSize: 12 }}>Clear</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={buildContext}>
-              <Text style={{ color: T.accent, fontSize: 12 }}>↻ Refresh</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={{ color: T.textSub, fontSize: 12 }}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 5, paddingVertical: 4 }}>
+      {dots.map((dot, i) => (
+        <Animated.View key={i}
+          style={{ width: 7, height: 7, borderRadius: 3.5,
+            backgroundColor: T.accent, transform: [{ translateY: dot }] }} />
+      ))}
+    </View>
+  );
+});
 
-      {!anthropicKey && (
-        <View style={{ backgroundColor: T.amber + '15', padding: 12, margin: 12, borderRadius: 8 }}>
-          <Text style={{ color: T.amber, fontSize: 11, lineHeight: 16 }}>⚙ Add your Anthropic API key in Settings to chat.</Text>
-        </View>
-      )}
-      {contextErr && (
-        <View style={{ backgroundColor: T.red + '15', padding: 12, margin: 12, borderRadius: 8 }}>
-          <Text style={{ color: T.red, fontSize: 11, lineHeight: 16 }}>{contextErr}</Text>
-          <TouchableOpacity onPress={buildContext} style={{ marginTop: 8 }}>
-            <Text style={{ color: T.accent, fontSize: 11, fontWeight: '700' }}>↻ Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {!historyLoaded && (
-        <View style={{ padding: 30, alignItems: 'center' }}>
-          <ActivityIndicator color={T.blue} />
-          <Text style={{ color: T.textDim, fontSize: 11, marginTop: 8 }}>Loading chat history…</Text>
+// ── Single message bubble ─────────────────────────────────────────────────────
+const MessageBubble = memo(({ msg, T }: { msg: ChatMessage & { streaming?: boolean }; T: any }) => {
+  const isUser = msg.role === 'user';
+  return (
+    <View style={{
+      alignSelf:    isUser ? 'flex-end' : 'flex-start',
+      maxWidth:     '88%',
+      marginBottom: 12,
+      marginLeft:   isUser ? 40 : 0,
+      marginRight:  isUser ? 0 : 40,
+    }}>
+      {/* Avatar row for assistant */}
+      {!isUser && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+          <View style={{ width: 20, height: 20, borderRadius: 10,
+            backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center',
+            marginRight: 6 }}>
+            <Text style={{ fontSize: 10 }}>✦</Text>
+          </View>
+          <Text style={{ color: T.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 0.3 }}>
+            QUANTIS AI
+          </Text>
         </View>
       )}
 
-      {/* Message list */}
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(_, i) => String(i)}
-        contentContainerStyle={{ padding: 14, paddingBottom: 6 }}
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-        renderItem={({ item }) => (
-          <View style={{
-            alignSelf: item.role === 'user' ? 'flex-end' : 'flex-start',
-            backgroundColor: item.role === 'user' ? T.accent : T.bg3,
-            borderRadius: 14,
-            borderBottomRightRadius: item.role === 'user' ? 4 : 14,
-            borderBottomLeftRadius: item.role === 'assistant' ? 4 : 14,
-            padding: 12, marginBottom: 10, maxWidth: '88%',
-          }}>
-            <Text style={{ color: item.role === 'user' ? '#fff' : T.text, fontSize: 13, lineHeight: 20 }}>
-              {item.content}
-            </Text>
+      <View style={{
+        backgroundColor: isUser ? T.accent : T.bg2,
+        borderRadius:    isUser ? 18 : 16,
+        borderTopRightRadius: isUser ? 4 : 16,
+        borderTopLeftRadius:  isUser ? 16 : 4,
+        paddingHorizontal: 14,
+        paddingVertical:   10,
+        shadowColor: isUser ? T.accent : '#000',
+        shadowOpacity: isUser ? 0.25 : 0.08,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 3,
+      }}>
+        {msg.streaming && !msg.content
+          ? <TypingIndicator T={T} />
+          : <MessageContent text={msg.content} isUser={isUser} T={T} />
+        }
+        {msg.streaming && !!msg.content && (
+          <View style={{ flexDirection: 'row', gap: 3, marginTop: 4 }}>
+            {[0,1,2].map(i => (
+              <View key={i} style={{ width: 4, height: 4, borderRadius: 2,
+                backgroundColor: T.textDim, opacity: 0.5 }} />
+            ))}
           </View>
         )}
-        ListHeaderComponent={msgCount > 0 ? (
-          <View style={{ alignItems: 'center', marginBottom: 16 }}>
-            <Text style={{ color: T.textDim, fontSize: 10, backgroundColor: T.bg2, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-              {msgCount} messages · history saved
-            </Text>
-          </View>
-        ) : null}
-        ListEmptyComponent={
-          contextReady && historyLoaded ? (
-            <View style={{ marginTop: 10 }}>
-              <Text style={{ color: T.textDim, fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
-                Ask anything about {symbol}. Grounded in live price, order book, and recent news. History is saved across sessions.
-              </Text>
-              {SUGGESTED_PROMPTS.map(p => (
-                <TouchableOpacity key={p} onPress={() => send(p)}
-                  style={{ backgroundColor: T.bg3, borderRadius: 10, padding: 11, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ color: T.accent, fontSize: 13 }}>💡</Text>
-                  <Text style={{ color: T.textSub, fontSize: 12, flex: 1 }}>{p}</Text>
+      </View>
+    </View>
+  );
+});
+
+// ── Quick suggestion chips ────────────────────────────────────────────────────
+const SUGGESTIONS = [
+  { icon: '📊', text: 'What\'s the current trend?' },
+  { icon: '🎯', text: 'Give me entry and target levels' },
+  { icon: '⚠️', text: 'What are the key risks right now?' },
+  { icon: '🔮', text: 'What does the ML model say?' },
+  { icon: '📰', text: 'How is news affecting price?' },
+  { icon: '💡', text: 'Best trade setup right now?' },
+];
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+export default function AIChatScreen({ route }: any) {
+  const { theme: T } = useTheme();
+  const { prices, aoSession, avKey, anthropicKey, allAssets, news } = useData();
+
+  const asset    = route?.params?.asset ?? allAssets[0];
+  const symbol   = asset?.symbol ?? 'NIFTY50';
+  const cp       = prices[symbol];
+  const srcLabel = SRC_LABEL[asset?.src] ?? asset?.src ?? 'Unknown';
+
+  const [messages,      setMessages]      = useState<(ChatMessage & { streaming?: boolean })[]>([]);
+  const [input,         setInput]         = useState('');
+  const [sending,       setSending]       = useState(false);
+  const [contextReady,  setContextReady]  = useState(false);
+  const [contextErr,    setContextErr]    = useState('');
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const contextRef = useRef('');
+  const listRef    = useRef<FlatList>(null);
+  const abortRef   = useRef<AbortController | null>(null);
+  const inputRef   = useRef<TextInput>(null);
+
+  // ── Persist / restore history ──────────────────────────────────────────────
+  useEffect(() => {
+    AsyncStorage.getItem(HISTORY_KEY(symbol)).then(raw => {
+      if (raw) {
+        try { setMessages(JSON.parse(raw).slice(-MAX_STORED)); } catch {}
+      }
+      setHistoryLoaded(true);
+    });
+  }, [symbol]);
+
+  const persist = useCallback((msgs: ChatMessage[]) => {
+    AsyncStorage.setItem(HISTORY_KEY(symbol), JSON.stringify(msgs.slice(-MAX_STORED)));
+  }, [symbol]);
+
+  // ── Build market context ───────────────────────────────────────────────────
+  const buildContext = useCallback(async () => {
+    setContextErr('');
+    try {
+      let candles: any[] = [];
+      const tf = '15m';
+      if (asset?.src === 'binance' && asset?.bnSym) {
+        candles = await fetchCandlesWithCache(symbol, tf,
+          async () => fetchBnKlines(asset.bnSym!, tf, 1000));
+      } else if (asset?.src === 'coindcx' && (asset as any).cdxSym) {
+        candles = await fetchCdxCandles((asset as any).cdxSym, tf);
+      } else if (asset?.src === 'av' && asset?.avSym) {
+        candles = await fetchCandlesWithCache(symbol, tf,
+          async () => fetchAVKlines(asset.avSym!, tf, avKey));
+      } else {
+        candles = await fetchCandlesWithCache(symbol, tf, async () => []);
+      }
+
+      const last = candles[candles.length - 1];
+      if (!last) throw new Error('No candle data available for this asset.');
+
+      const closes = candles.map((c: any) => c.close);
+      const rsiArr = getRSI(closes, 14);
+      const rsi    = rsiArr[rsiArr.length - 1] ?? 50;
+      const ma20   = getEMA(closes, 20)?.[closes.length - 1] ?? null;
+      const ma50   = getEMA(closes, 50)?.[closes.length - 1] ?? null;
+
+      const recent = candles.slice(-8);
+      const ohlc = recent.map((c: any) =>
+        `${new Date(c.time).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})} O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+      ).join('\n');
+
+      const newsSummary = news?.slice(0, 3).map((n: any) => n.headline).join(' | ') ?? '';
+      let fearGreedSummary = '';
+      if (asset?.src === 'binance' || asset?.src === 'coindcx') {
+        try {
+          const ctx = await fetchCryptoContextPartial(symbol, ['FEAR_GREED', 'MARKET_CAP']);
+          if (ctx?.fearGreed?.value) fearGreedSummary = `Fear&Greed: ${ctx.fearGreed.value} (${ctx.fearGreed.classification})`;
+        } catch {}
+      }
+
+      contextRef.current = buildChatContext({
+        assetName: asset.name, symbol, type: asset.type, tf, srcLabel,
+        price: last.close, chgPct: cp?.chg ?? 0,
+        rsi, ma20, ma50, ohlc,
+        newsSummary: [newsSummary, fearGreedSummary].filter(Boolean).join(' | ') || undefined,
+      });
+      setContextReady(true);
+    } catch (e: any) {
+      setContextErr(e?.message ?? 'Could not load market data. Tap retry.');
+    }
+  }, [asset, symbol, aoSession, avKey, news, cp]);
+
+  useEffect(() => { if (historyLoaded) buildContext(); }, [historyLoaded]);
+
+  // ── Send message with streaming ────────────────────────────────────────────
+  const send = useCallback(async (text?: string) => {
+    const content = (text ?? input).trim();
+    if (!content || sending || !contextReady) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setInput('');
+
+    const userMsg: ChatMessage = { role: 'user', content };
+    const withUser = [...messages, userMsg];
+    setMessages(withUser);
+    persist(withUser);
+    setSending(true);
+
+    // Add streaming placeholder
+    const streamingId = Date.now();
+    setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true } as any]);
+
+    // Scroll to bottom immediately
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+
+    abortRef.current = new AbortController();
+    let accumulated = '';
+
+    try {
+      await chatWithClaudeStream(
+        withUser,
+        anthropicKey,
+        contextRef.current,
+        (chunk) => {
+          accumulated += chunk;
+          // Update streaming message in place
+          setMessages(prev => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.streaming) {
+              next[next.length - 1] = { ...last, content: accumulated };
+            }
+            return next;
+          });
+          // Auto-scroll as content arrives
+          listRef.current?.scrollToEnd({ animated: false });
+        },
+        abortRef.current.signal,
+      );
+
+      // Finalise — remove streaming flag
+      const final = [...withUser, { role: 'assistant' as const, content: accumulated }];
+      setMessages(final);
+      persist(final);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        // User cancelled — keep what we got
+        const partial = [...withUser, { role: 'assistant' as const, content: accumulated || '_(stopped)_' }];
+        setMessages(partial);
+        persist(partial);
+      } else {
+        const msg = e?.message?.includes('401') ? '⚠️ Invalid API key — check Settings.'
+          : e?.message?.includes('429') ? '⚠️ Rate limited — wait a moment.'
+          : `⚠️ ${e?.message ?? 'Something went wrong.'}`;
+        setMessages(prev => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.streaming) next[next.length - 1] = { role: 'assistant', content: msg };
+          return next;
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } finally {
+      setSending(false);
+      abortRef.current = null;
+    }
+  }, [input, sending, contextReady, messages, anthropicKey, persist]);
+
+  const clearHistory = useCallback(() => {
+    AsyncStorage.removeItem(HISTORY_KEY(symbol));
+    setMessages([]);
+  }, [symbol]);
+
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const showSuggestions = messages.length === 0 && contextReady;
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }} edges={['bottom']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={90}>
+
+        {/* ── Message list ─────────────────────────────────────────── */}
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={(_, i) => String(i)}
+          renderItem={({ item }) => <MessageBubble msg={item} T={T} />}
+          contentContainerStyle={{ padding: 16, paddingBottom: 8, flexGrow: 1 }}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          ListHeaderComponent={showSuggestions ? null : undefined}
+          ListEmptyComponent={
+            contextReady ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ fontSize: 32, marginBottom: 12 }}>✦</Text>
+                <Text style={{ color: T.text, fontSize: 18, fontWeight: '700', marginBottom: 6 }}>
+                  Quantis AI
+                </Text>
+                <Text style={{ color: T.textDim, fontSize: 13, textAlign: 'center', maxWidth: 260 }}>
+                  Ask me anything about {asset?.name ?? symbol} — price action, trade setups, risk levels, or market context.
+                </Text>
+              </View>
+            ) : contextErr ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: T.textDim, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>{contextErr}</Text>
+                <TouchableOpacity onPress={buildContext}
+                  style={{ backgroundColor: T.accent, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 }}>
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <ActivityIndicator color={T.accent} />
+                <Text style={{ color: T.textDim, fontSize: 12, marginTop: 8 }}>Loading market context…</Text>
+              </View>
+            )
+          }
+        />
+
+        {/* ── Quick suggestions ─────────────────────────────────────── */}
+        {showSuggestions && (
+          <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {SUGGESTIONS.map(s => (
+                <TouchableOpacity key={s.text} onPress={() => send(s.text)}
+                  style={{ flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: T.bg2, borderRadius: 20, borderWidth: 1,
+                    borderColor: T.border, paddingHorizontal: 12, paddingVertical: 7 }}>
+                  <Text style={{ fontSize: 13, marginRight: 5 }}>{s.icon}</Text>
+                  <Text style={{ color: T.text, fontSize: 12, fontWeight: '500' }}>{s.text}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-          ) : null
-        }
-      />
+          </View>
+        )}
 
-      {sending && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
-          <ActivityIndicator size="small" color={T.blue} />
-          <Text style={{ color: T.textDim, fontSize: 11 }}>Thinking…</Text>
-        </View>
-      )}
+        {/* ── Input bar ─────────────────────────────────────────────── */}
+        <View style={{
+          flexDirection:    'row',
+          alignItems:       'flex-end',
+          paddingHorizontal: 12,
+          paddingVertical:   10,
+          borderTopWidth:    1,
+          borderTopColor:    T.border,
+          backgroundColor:   T.bg1,
+          gap:               8,
+        }}>
+          {/* Clear button */}
+          {messages.length > 0 && !sending && (
+            <TouchableOpacity onPress={clearHistory}
+              style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
+              <Text style={{ color: T.textDim, fontSize: 18 }}>🗑</Text>
+            </TouchableOpacity>
+          )}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={{ flexDirection: 'row', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: T.border }}>
           <TextInput
+            ref={inputRef}
             value={input}
             onChangeText={setInput}
-            onSubmitEditing={() => send()}
-            placeholder={contextReady ? `Ask about ${symbol}…` : 'Loading…'}
+            placeholder={contextReady ? `Ask about ${asset?.name ?? symbol}…` : 'Loading context…'}
             placeholderTextColor={T.textDim}
-            editable={contextReady && !sending && !!anthropicKey}
+            style={{
+              flex:            1,
+              backgroundColor: T.bg2,
+              borderRadius:    22,
+              paddingHorizontal: 16,
+              paddingVertical:   10,
+              color:           T.text,
+              fontSize:        15,
+              maxHeight:       120,
+              lineHeight:      20,
+            }}
             multiline
-            style={{ flex: 1, backgroundColor: T.bg3, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: T.text, fontSize: 13, maxHeight: 100 }}
+            editable={contextReady && !sending}
+            onSubmitEditing={() => send()}
+            blurOnSubmit={false}
+            returnKeyType="send"
           />
+
+          {/* Send / Stop button */}
           <TouchableOpacity
-            onPress={() => send()}
-            disabled={!contextReady || sending || !input.trim() || !anthropicKey}
-            style={{ backgroundColor: T.accent, borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center', opacity: (!contextReady || sending || !input.trim() || !anthropicKey) ? 0.4 : 1 }}>
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>↑</Text>
+            onPress={sending ? stopStreaming : () => send()}
+            disabled={!sending && (!input.trim() || !contextReady)}
+            style={{
+              width:           42,
+              height:          42,
+              borderRadius:    21,
+              backgroundColor: sending ? T.red : (input.trim() && contextReady ? T.accent : T.bg3),
+              alignItems:      'center',
+              justifyContent:  'center',
+            }}>
+            {sending
+              ? <Text style={{ fontSize: 16 }}>■</Text>
+              : <Text style={{ fontSize: 18, color: '#fff' }}>↑</Text>
+            }
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
