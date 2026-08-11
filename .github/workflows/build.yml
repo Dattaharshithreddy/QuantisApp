@@ -1,0 +1,36 @@
+name: Build Release APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK via EAS
+        run: eas build --platform android --profile preview --non-interactive --no-wait
+
+      - name: Download APK from EAS
+        run: |
+          echo "Build submitted to EAS servers."
+          echo "Download from: https://expo.dev/accounts/[your-account]/projects/quantis-trading/builds"
