@@ -187,7 +187,6 @@ export async function chatWithClaudeStream(
     body: JSON.stringify({
       model:      'claude-sonnet-4-6',
       max_tokens: 1200,
-      stream:     true,
       system:     systemContext,
       messages:   messages.map(m => ({ role: m.role, content: m.content })),
     }),
@@ -201,8 +200,29 @@ export async function chatWithClaudeStream(
     throw new Error(`HTTP ${res.status}${errBody ? ': ' + errBody.slice(0, 150) : ''}`);
   }
 
-  // Parse server-sent events
-  const reader = res.body!.getReader();
+  // React Native's Hermes engine does not expose ReadableStream on fetch responses.
+  // res.body is undefined on Android. Fall back to non-streaming fetch,
+  // then simulate streaming by delivering the response word-by-word
+  // so the UI still feels responsive rather than showing a blank wait.
+  if (!res.body || typeof (res.body as any).getReader !== 'function') {
+    const raw = await res.json();
+    const full = (raw.content || []).map((b: any) => b.text || '').join('').trim();
+    // Simulate streaming: deliver ~4 words at a time with tiny delays
+    const words = full.split(' ');
+    let accumulated = '';
+    for (let i = 0; i < words.length; i += 4) {
+      const chunk = (i > 0 ? ' ' : '') + words.slice(i, i + 4).join(' ');
+      accumulated += chunk;
+      onChunk(chunk);
+      // Tiny yield to keep UI responsive
+      await new Promise(r => setTimeout(r, 16));
+      if (signal?.aborted) break;
+    }
+    return accumulated.trim();
+  }
+
+  // True SSE streaming (web/Node environments)
+  const reader = (res.body as any).getReader();
   const decoder = new TextDecoder();
   let full = '';
   let buffer = '';
