@@ -36,9 +36,12 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
         with:
-          name: Quant-Release-APK
-          path: android/app/build/outputs/apk/release/app-release.apk
-          retention-days: 3
+          tag_name: build-${{ github.run_number }}
+          name: "Build #${{ github.run_number }}"
+          files: android/app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
