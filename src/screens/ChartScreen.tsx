@@ -760,9 +760,7 @@ export default function ChartScreen({ route, navigation }: any) {
             onAnalyze={runAnalysis}
             onNavigateChat={sym => navigation.navigate('AIChat', {
               symbol: sym,
-              // Pass the current ML prediction so the copilot starts with the
-              // same signal the Predict button just showed. Without this the
-              // copilot has no knowledge of the on-device model's call.
+              asset,   // Pass full asset so AIChatScreen knows src, bnSym, aoToken etc.
               mlSignal: ml.data ? {
                 action:              ml.data.action,
                 direction:           ml.data.direction,

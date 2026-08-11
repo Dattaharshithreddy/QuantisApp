@@ -262,8 +262,13 @@ export default function AIChatScreen({ route }: any) {
   const { theme: T } = useTheme();
   const { prices, aoSession, avKey, anthropicKey, allAssets, news } = useData();
 
-  const asset    = route?.params?.asset ?? allAssets[0];
-  const symbol   = asset?.symbol ?? 'NIFTY50';
+  // Resolve asset from route: prefer explicit asset param, then find by symbol
+  const routeAsset  = route?.params?.asset;
+  const routeSymbol = route?.params?.symbol;
+  const asset = routeAsset
+    ?? (routeSymbol ? allAssets.find((a: any) => a.symbol === routeSymbol) : null)
+    ?? allAssets[0];
+  const symbol = asset?.symbol ?? routeSymbol ?? 'NIFTY50';
   const cp       = prices[symbol];
   const srcLabel = SRC_LABEL[asset?.src] ?? asset?.src ?? 'Unknown';
 
@@ -373,7 +378,13 @@ export default function AIChatScreen({ route }: any) {
     }
   }, [asset, symbol, aoSession, avKey, news, cp]);
 
-  useEffect(() => { buildContext(); }, [symbol]);
+  // Reset messages when symbol changes (navigated from a different chart)
+  useEffect(() => {
+    setMessages([]);
+    setContextReady(false);
+    setContextErr('');
+    buildContext();
+  }, [symbol]);
 
   // ── Send message with streaming ────────────────────────────────────────────
   // Use refs for values accessed inside the streaming callback to avoid
