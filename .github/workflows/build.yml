@@ -27,10 +27,5 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build APK via EAS
-        run: eas build --platform android --profile preview --non-interactive --no-wait
-
-      - name: Download APK from EAS
-        run: |
-          echo "Build submitted to EAS servers."
-          echo "Download from: https://expo.dev/accounts/[your-account]/projects/quantis-trading/builds"
+      - name: Build APK via EAS (Expo servers, not GitHub minutes)
+        run: eas build --platform android --profile preview --non-interactive
