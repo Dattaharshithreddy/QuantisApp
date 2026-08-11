@@ -1,86 +1,10 @@
-name: Build Release APK
-
+# DISABLED — replaced by build.yml (EAS build)
+# This file kept to avoid git conflicts but does nothing.
+name: android (disabled)
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
-
 jobs:
-  build:
+  noop:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        # Using npm install instead of npm ci because package-lock.json
-        # predates the react-native-webview dependency added in v6.4.0.
-        # To restore npm ci: run `npm install` locally and commit the
-        # updated package-lock.json, then revert this line.
-        run: npm install
-
-      - name: Install Expo CLI
-        run: npm install -g @expo/cli
-
-      - name: Generate Android Folder
-        run: CI=1 npx expo prebuild --platform android --clean
-
-      - name: Grant Execute Permission to Gradle
-        run: chmod +x android/gradlew
-
-      # DIAGNOSTIC — outputs to CI log so you can see exactly where
-      # the sonatype URL comes from. Verified locally against
-      # @react-native/gradle-plugin@0.74.87 / react-native@0.74.5 / expo@51.
-      - name: Locate sonatype references
-        run: |
-          echo "=== In @react-native/gradle-plugin (compiled from source at build time via includeBuild) ==="
-          grep -Rn "oss.sonatype.org" node_modules/@react-native/gradle-plugin/ || echo "  (none)"
-
-          echo ""
-          echo "=== In generated android/ .gradle files ==="
-          grep -Rn "oss.sonatype.org" android/ || echo "  (none — confirming .gradle file patching would be useless)"
-
-      # PATCH — removes the one line in DependencyUtils.kt that injects
-      # sonatype into every project's repository list at Gradle config time.
-      # Safe to remove: the sonatype snapshots repo is only needed for
-      # React Native nightly builds. react-android:0.74.5 is a stable
-      # release available from Maven Central and the local npm package.
-      - name: Patch @react-native/gradle-plugin to remove sonatype
-        run: |
-          FILE="node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/DependencyUtils.kt"
-          if grep -q "oss.sonatype.org" "$FILE"; then
-            sed -i '/oss\.sonatype\.org/d' "$FILE"
-            echo "✓ Sonatype line removed from $FILE"
-          else
-            echo "⚠ Sonatype line not found — patch may not be needed for this version"
-          fi
-
-      - name: Build Release APK
-        run: |
-          cd android
-          ./gradlew assembleRelease --no-daemon --max-workers 2
-        env:
-          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
-
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk Quant.apk
-
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Quant-Release-APK
-          path: Quant.apk
+      - run: echo "Use EAS build via build.yml instead"
