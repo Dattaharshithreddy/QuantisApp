@@ -291,28 +291,30 @@ export default function AIChatScreen({ route }: any) {
   // ── Build market context ───────────────────────────────────────────────────
   const buildContext = useCallback(async () => {
     setContextErr('');
+    const tf = '15m'; // declared here so it's in scope for buildChatContext below
     try {
-      // Load history AND candles in parallel — don't wait for history before fetching
+      // Load history AND candles in parallel
       const [historyRaw, candles] = await Promise.all([
         AsyncStorage.getItem(HISTORY_KEY(symbol)).catch(() => null),
         (async () => {
-          const tf = '15m';
-          // Only fetch 50 candles — enough for RSI/MA/OHLC context, much faster
           if (asset?.src === 'binance' && asset?.bnSym) {
             return fetchCandlesWithCache(symbol, tf,
               async () => fetchBnKlines(asset.bnSym!, tf, 50), { maxCandles: 50 });
-          } else if (asset?.src === 'coindcx' && (asset as any).cdxSym) {
+          }
+          if (asset?.src === 'coindcx' && (asset as any).cdxSym) {
             return fetchCdxCandles((asset as any).cdxSym, tf, 50);
-          } else if (asset?.src === 'av' && asset?.avSym) {
+          }
+          if (asset?.src === 'av' && asset?.avSym) {
             return fetchCandlesWithCache(symbol, tf,
               async () => fetchAVKlines(asset.avSym!, tf, avKey), { maxCandles: 50 });
-          } else if ((asset?.src === 'ao' || asset?.src === 'ao_futures') &&
-                     asset?.aoToken && asset?.aoEx && aoSession?.jwtToken) {
+          }
+          if ((asset?.src === 'ao' || asset?.src === 'ao_futures') &&
+              asset?.aoToken && asset?.aoEx && aoSession?.jwtToken) {
             return fetchCandlesWithCache(symbol, tf,
               async () => aoCandles(asset.aoToken!, asset.aoEx!, tf, aoSession!),
               { maxCandles: 50 });
           }
-          // No fetcher available — use cached data if any, otherwise empty
+          // Use cached data if available (e.g. chart already loaded candles)
           return fetchCandlesWithCache(symbol, tf, async () => [], { maxCandles: 50 });
         })(),
       ]);
@@ -324,7 +326,20 @@ export default function AIChatScreen({ route }: any) {
       setHistoryLoaded(true);
 
       const last = candles[candles.length - 1];
-      if (!last) throw new Error('No candle data available for this asset.');
+      // If no candles fetched, use current price as minimal context rather than erroring
+      const fallbackPrice = cp?.price ?? (asset as any)?.base ?? 0;
+      if (!last && !fallbackPrice) throw new Error('No price data available for this asset.');
+      if (!last) {
+        // Build minimal context from live price alone
+        contextRef.current = buildChatContext({
+          assetName: asset?.name ?? symbol, symbol,
+          type: asset?.type ?? 'CRYPTO', tf, srcLabel,
+          price: fallbackPrice, chgPct: cp?.chg ?? 0,
+          rsi: null, ma20: null, ma50: null, ohlc: 'No candle data — using live price only.',
+        });
+        setContextReady(true);
+        return;
+      }
 
       const closes = candles.map((c: any) => c.close);
       const rsiArr = getRSI(closes, 14);
