@@ -27,6 +27,7 @@ import { useData } from '../context/DataContext';
 import { fetchCdxCandles } from '../api/coindcx';
 import { fetchBnKlines } from '../api/binance';
 import { fetchAVKlines } from '../api/alphaVantage';
+import { aoCandles } from '../api/angelOne';
 import { chatWithClaudeStream, buildChatContext, ChatMessage } from '../api/claude';
 import { fetchCandlesWithCache } from '../utils/candleCache';
 import { fetchCryptoContextPartial } from '../utils/cryptoMarketContext/cryptoMarketContextFetch';
@@ -305,7 +306,13 @@ export default function AIChatScreen({ route }: any) {
           } else if (asset?.src === 'av' && asset?.avSym) {
             return fetchCandlesWithCache(symbol, tf,
               async () => fetchAVKlines(asset.avSym!, tf, avKey), { maxCandles: 50 });
+          } else if ((asset?.src === 'ao' || asset?.src === 'ao_futures') &&
+                     asset?.aoToken && asset?.aoEx && aoSession?.jwtToken) {
+            return fetchCandlesWithCache(symbol, tf,
+              async () => aoCandles(asset.aoToken!, asset.aoEx!, tf, aoSession!),
+              { maxCandles: 50 });
           }
+          // No fetcher available — use cached data if any, otherwise empty
           return fetchCandlesWithCache(symbol, tf, async () => [], { maxCandles: 50 });
         })(),
       ]);
