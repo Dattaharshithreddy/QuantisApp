@@ -60,12 +60,16 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
                 : symbol}
             </Text>
             {(() => {
-              const now2       = Date.now();
-              const freshTs    = cp?.lastUpdated && (now2 - cp.lastUpdated) < 8000;
-              // Show LIVE if: websocket source OR recent REST snapshot (< 8s old)
-              // UPDATING only when stale REST (> 8s) — means data is delayed
-              const isLive     = dataSrc === 'live' && (cp?.source === 'websocket' || freshTs);
-              const isUpdating = dataSrc === 'live' && !isLive && cp?.source === 'snapshot';
+              // LIVE = websocket source OR snapshot with real price data
+              // UPDATING = snapshot but no meaningful price yet (base seed price)
+              // Never use time comparison — ChartHeader only re-renders on price change,
+              // so Date.now() in render gives stale results after first render.
+              const hasRealPrice = cp?.price > 0 && cp?.chg !== undefined;
+              const isLive     = dataSrc === 'live' && (
+                cp?.source === 'websocket' ||
+                (cp?.source === 'snapshot' && hasRealPrice)
+              );
+              const isUpdating = dataSrc === 'live' && !isLive;
               const isLoading  = dataSrc === 'live' && !isLive && (!cp?.source || cp?.source === 'cache' || cp?.status === 'stale');
               const dotColor   = isLive ? T.green : isUpdating ? '#3b82f6' : T.amber;
               const bgColor    = isLive ? T.green + '18' : isUpdating ? '#3b82f620' : T.amber + '18';
