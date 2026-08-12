@@ -382,9 +382,9 @@ export default function ChartScreen({ route, navigation }: any) {
             asset={activeLogicalAsset}
             currentExchange={exchange || activeLogicalAsset.defaultExchange}
             T={T}
-            onSelect={async (newExchange: string) => {
-              await updateExchangePreference(activeLogicalAsset.name, newExchange);
-              setExchange(newExchange);
+            onSelect={(newExchange: string) => {
+              setExchange(newExchange); // instant — don't await
+              updateExchangePreference(activeLogicalAsset.name, newExchange); // persist in background
             }}
           />
         )}

@@ -53,9 +53,10 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
                 : symbol}
             </Text>
             {(() => {
-              const isLive     = dataSrc === 'live' && cp?.source === 'websocket';
-              const isUpdating = dataSrc === 'live' && cp?.source === 'snapshot';
-              const isLoading  = dataSrc === 'live' && (!cp?.source || cp?.source === 'cache' || cp?.status === 'stale');
+              const freshTs    = cp?.lastUpdated && (Date.now() - cp.lastUpdated) < 4000;
+              const isLive     = dataSrc === 'live' && (cp?.source === 'websocket' || (freshTs && cp?.source !== 'cache' && cp?.source !== 'base'));
+              const isUpdating = dataSrc === 'live' && !isLive && cp?.source === 'snapshot';
+              const isLoading  = dataSrc === 'live' && !isLive && (!cp?.source || cp?.source === 'cache' || cp?.status === 'stale');
               const dotColor   = isLive ? T.green : isUpdating ? '#3b82f6' : T.amber;
               const bgColor    = isLive ? T.green + '18' : isUpdating ? '#3b82f620' : T.amber + '18';
               const label      = isLive ? '● LIVE' : isUpdating ? '● UPDATING' : isLoading ? '● LOADING' : '○ NO DATA';

@@ -21,7 +21,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, AppState } from 'react-native';
+import { Alert } from 'react-native';
 import { getLiveTradeSettings, LiveTradeSettings } from '../../LiveTradeSettingsScreen';
 import { getLiveTradingCredential } from '../../../utils/secureCredentials';
 import type { MLPrediction } from '../../../utils/mlSignal';
@@ -97,16 +97,8 @@ export function useLiveTrading(
     getLiveTradingCredential('cdxApiKey').then(k => setCdxConfigured(!!k)).catch(() => {});
   }, []);
 
+  // Load credentials on mount only — AppState listener removed (caused lag)
   useEffect(() => { refreshBrokerConfig(); }, []);
-
-  // Re-check when screen regains focus — user may have just connected a broker
-  // Re-check credentials when app returns to foreground (AppState, Hermes-safe)
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', s => {
-      if (s === 'active') refreshBrokerConfig();
-    });
-    return () => sub.remove();
-  }, [refreshBrokerConfig]);
 
   // Persist mode change under this provider's key only.
   // Sources mapped to 'paper' cannot be set to LIVE — guard here.
