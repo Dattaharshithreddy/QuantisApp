@@ -128,38 +128,62 @@ export async function evaluateProductionModel(
   // epochs) which is ~17% of total training time per combo.
   // Correctness: identical weights guaranteed because (candles, trainSplitPct, seed,
   // horizon=3, fitCache) are all the same. The map reuses the exact same object.
-  const horizonFittedMap = new Map<number, import('./backtest').FittedEnsemble>();
-  horizonFittedMap.set(PRIMARY_HORIZON, fitted);  // OPT A: reuse h=3 from runBacktest — no duplicate fit
-  for (const h of [1, 5, 10, 20]) {  // OPT A: skip h=3 (PRIMARY_HORIZON=3) already in map
+  // Memory fix: fit one horizon at a time, evaluate immediately, discard.
+  // Previous approach built all 5 FittedEnsembles simultaneously → OOM on device.
+  // Each FittedEnsemble holds ~272K numbers. 5 at once = 1.4M numbers → native crash.
+  _stage('S4+S5 horizon fit+eval (memory-efficient: one at a time)');
+  logger.info('productionEval', `${symbol}/${timeframe}: starting horizon evaluation (memory-efficient)`);
+
+  const horizons: HorizonEvalEntry[] = [];
+  const ALL_HORIZONS = [1, 3, 5, 10, 20];
+
+  for (let hi = 0; hi < ALL_HORIZONS.length; hi++) {
+    const h = ALL_HORIZONS[hi];
     await tick();
-    const f = await fitEnsemble(candles, config.trainSplitPct, config.seed, h, fitCache);
-    if (f) horizonFittedMap.set(h, f);
+    // Reuse h=3 from runBacktest (no re-fit), fit the rest fresh
+    const f = h === PRIMARY_HORIZON
+      ? fitted
+      : await fitEnsemble(candles, config.trainSplitPct, config.seed, h, fitCache);
+    if (!f) continue;
+
+    // Evaluate immediately using horizonEvaluation's per-horizon logic
+    const entry = await (async () => {
+      const { simulateSignalStrategy } = await import('./strategyExecutor');
+      const { computeMetrics } = await import('./backtest');
+      const execCfg = { startingCapital: config.startingCapital,
+        buyThreshold: config.buyThreshold, stopLossPct: config.stopLossPct,
+        takeProfitPct: config.takeProfitPct, holdingPeriod: config.holdingPeriod,
+        direction: 'LONG' as const, seed: config.seed, feeRate: config.feeRate ?? 0.001 };
+      const { trades, equityCurve } = simulateSignalStrategy(
+        candles, f.walkIndices,
+        (idx) => { const { ensembleProb, agree } = f.predictProb(idx);
+          return { enter: ensembleProb > config.buyThreshold && agree, reason: `h=${h}` }; },
+        f.atrAt, execCfg);
+      const metrics = computeMetrics(trades, equityCurve, config.startingCapital);
+      return { horizon: h, metrics, trainSampleCount: f.trainSampleCount, trades };
+    })();
+
+    horizons.push(entry);
+
+    // Report incremental progress
+    if (onProgress) {
+      const pct = Math.round(20 + ((hi + 1) / ALL_HORIZONS.length) * 45);
+      onProgress({ symbol, timeframe, candleCount: candles.length,
+        primaryMetrics: primaryResult.metrics, regimes: primaryResult.regimes ?? [],
+        horizons: [...horizons], bestHorizon: null, thresholds: [],
+        modelComparison: [], ensembleHelps: { helps: false, reasoning: 'Computing…' },
+        featureContribution: null, baselines: [], beatsAllBaselines: false,
+      }, { stage: `horizon${h}`, percent: pct });
+    }
+
+    // Explicitly null out non-h3 fitted models so GC can reclaim before next horizon
+    if (h !== PRIMARY_HORIZON) { try { (f as any).predictProb = null; (f as any).atrAt = null; } catch {} }
   }
 
-  _stage('S4 horizonFittedMap build (4 fits: h=1,5,10,20 — h=3 reused from S2)');
-
-  // 4. Horizon evaluation — Opt 1: uses horizonFittedMap (no new fits).
-  //    Opt 2: includes trades (evaluateAllHorizonsWithTrades is now an alias).
-  //    Opt 4: cache eliminates precomputeSeries inside any fallback fit.
-  await tick();
-  logger.info('productionEval', `${symbol}/${timeframe}: starting horizon evaluation, fitCache=${!!fitCache}, horizonFittedMap size=${horizonFittedMap.size}`);
-  const horizons = await evaluateAllHorizons(candles, config,
-    onProgress ? (horizon, idx, total, entry) => {
-      const pct = Math.round(20 + ((idx + 1) / total) * 45);
-      const partialHorizons = horizons ? [...horizons] : [];
-      partialHorizons[idx] = entry;
-      onProgress({
-        symbol, timeframe, candleCount: candles.length,
-        primaryMetrics: primaryResult.metrics,
-        regimes: primaryResult.regimes ?? [], horizons: partialHorizons, bestHorizon: null,
-        thresholds: [], modelComparison: [], ensembleHelps: { helps: false, reasoning: 'Computing…' },
-        featureContribution: null, baselines: [], beatsAllBaselines: false}, { stage: `horizon${entry.horizon}`, percent: pct });
-    } : undefined,
-    fitCache,
-    horizonFittedMap,   // Opt 1: reuse pre-fitted models, only re-run simulateSignalStrategy
-  );
   const bestHorizon = pickBestHorizon(horizons);
-  _stage('S5 evaluateAllHorizons (5 simulations, 0 new fits)');
+  // Minimal map for strategyEvaluation — only h=3 needed downstream
+  const horizonFittedMap = new Map<number, import('./backtest').FittedEnsemble>();
+  horizonFittedMap.set(PRIMARY_HORIZON, fitted);
 
   if (onProgress) onProgress({
     symbol, timeframe, candleCount: candles.length,
