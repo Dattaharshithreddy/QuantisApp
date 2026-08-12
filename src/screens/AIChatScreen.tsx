@@ -487,24 +487,14 @@ export default function AIChatScreen({ route }: any) {
       } else {
         const rawMsg = e?.message ?? 'Something went wrong.';
         const msg = e?.message?.includes('401')
-          ? '**API key invalid**
-
-Please check your Anthropic API key in More → Settings.'
+          ? '**API key invalid**\n\nPlease check your Anthropic API key in More → Settings.'
           : e?.message?.includes('429')
-          ? '**Rate limited**
-
-You've sent too many messages. Wait a moment before trying again.'
+          ? '**Rate limited**\n\nYou sent too many messages. Wait a moment and try again.'
           : e?.message?.includes('network') || e?.message?.includes('fetch') || e?.message?.includes('Network')
-          ? '**Connection failed**
-
-Check your internet connection and try again.'
+          ? '**Connection failed**\n\nCheck your internet connection and try again.'
           : e?.message?.includes('503') || e?.message?.includes('overloaded')
-          ? '**Claude is busy**
-
-High demand right now. Try again in a few seconds.'
-          : `**Error**
-
-${rawMsg}`;
+          ? '**Claude is busy**\n\nHigh demand right now. Try again in a few seconds.'
+          : `**Error**\n\n${rawMsg}`;
         setMessages(prev => {
           const next = [...prev];
           const last = next[next.length - 1];
