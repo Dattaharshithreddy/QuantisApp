@@ -479,9 +479,7 @@ export default function AIChatScreen({ route }: any) {
       if (e?.name === 'AbortError') {
         // User stopped — keep what arrived, add a clean note
         const stoppedContent = accumulated
-          ? accumulated + '
-
-*— stopped*'
+          ? accumulated + '\n\n*— stopped*'
           : '*Stopped before any response arrived.*';
         const partial = [...withUser, { role: 'assistant' as const, content: stoppedContent }];
         setMessages(partial);
