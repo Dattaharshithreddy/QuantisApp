@@ -412,9 +412,13 @@ export default function AIChatScreen({ route }: any) {
 
   const send = useCallback(async (text?: string) => {
     const content = (text ?? inputRef2.current).trim();
-    if (!content || sendingRef.current || !contextReady) return;
+    if (!content || sendingRef.current) return;
+    if (!contextReady) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return; // still loading context — haptic feedback so user knows
+    }
 
-    // Instant haptic + clear input before any async work
+    // Instant haptic + clear input before any async work (feels instant)
     sendingRef.current = true;
     setSending(true);
     setInput('');
@@ -458,7 +462,7 @@ export default function AIChatScreen({ route }: any) {
           // Throttle: schedule one update per 50ms window, not per chunk
           if (!pendingUpdate) {
             pendingUpdate = true;
-            throttleRef.current = setTimeout(flushUpdate, 50);
+            throttleRef.current = setTimeout(flushUpdate, 30);
           }
         },
         abortRef.current.signal,
@@ -473,14 +477,36 @@ export default function AIChatScreen({ route }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       if (e?.name === 'AbortError') {
-        // User cancelled — keep what we got
-        const partial = [...withUser, { role: 'assistant' as const, content: accumulated || '_(stopped)_' }];
+        // User stopped — keep what arrived, add a clean note
+        const stoppedContent = accumulated
+          ? accumulated + '
+
+*— stopped*'
+          : '*Stopped before any response arrived.*';
+        const partial = [...withUser, { role: 'assistant' as const, content: stoppedContent }];
         setMessages(partial);
         persist(partial);
       } else {
-        const msg = e?.message?.includes('401') ? '⚠️ Invalid API key — check Settings.'
-          : e?.message?.includes('429') ? '⚠️ Rate limited — wait a moment.'
-          : `⚠️ ${e?.message ?? 'Something went wrong.'}`;
+        const rawMsg = e?.message ?? 'Something went wrong.';
+        const msg = e?.message?.includes('401')
+          ? '**API key invalid**
+
+Please check your Anthropic API key in More → Settings.'
+          : e?.message?.includes('429')
+          ? '**Rate limited**
+
+You've sent too many messages. Wait a moment before trying again.'
+          : e?.message?.includes('network') || e?.message?.includes('fetch') || e?.message?.includes('Network')
+          ? '**Connection failed**
+
+Check your internet connection and try again.'
+          : e?.message?.includes('503') || e?.message?.includes('overloaded')
+          ? '**Claude is busy**
+
+High demand right now. Try again in a few seconds.'
+          : `**Error**
+
+${rawMsg}`;
         setMessages(prev => {
           const next = [...prev];
           const last = next[next.length - 1];
@@ -504,7 +530,13 @@ export default function AIChatScreen({ route }: any) {
   }, [symbol]);
 
   const stopStreaming = useCallback(() => {
-    abortRef.current?.abort();
+    if (!abortRef.current) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    abortRef.current.abort();
+    abortRef.current = null;
+    // Immediately show stopped state without waiting for the catch block
+    setSending(false);
+    sendingRef.current = false;
   }, []);
 
   // ── Render ─────────────────────────────────────────────────────────────────
