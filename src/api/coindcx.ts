@@ -285,14 +285,14 @@ export function openCdxPriceStream(
   getSocket()
     .then(socket => {
       if (closed) { releaseSocket(); return; }
-      // CoinDCX socket.io v2 event names (try all known variants)
+      // CoinDCX socket.io v2 — listen on ALL known event names
       socket.on('coindcx-ticker', onTickerEvent);
       socket.on('coindcx', onTickerEvent);
       socket.on('ticker', onTickerEvent);
       socket.on('tickers', onTickerEvent);
-      // Emit join/subscribe for channel-based subscriptions
+      socket.on('market-data', onTickerEvent);
+      // Subscribe to global ticker channel (singular channelName, not array)
       socket.emit('join', { channelName: 'coindcx' });
-      socket.emit('subscribe', { channelNames: [...set] });
       onStatus('live');
       logger.info('cdx-stream', `Subscribed to coindcx-ticker + ticker for ${markets.length} markets`);
 
