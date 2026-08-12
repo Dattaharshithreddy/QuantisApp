@@ -186,7 +186,7 @@ export async function chatWithClaudeStream(
     },
     body: JSON.stringify({
       model:      'claude-sonnet-4-6',
-      max_tokens: 1200,
+      max_tokens: 2400,
       system:     systemContext,
       messages:   messages.map(m => ({ role: m.role, content: m.content })),
     }),
@@ -261,7 +261,7 @@ export async function chatWithClaude(messages: ChatMessage[], apiKey: string, sy
       'anthropic-version': '2023-06-01'},
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
+      max_tokens: 2400,
       system: systemContext,
       messages: messages.map(m => ({ role: m.role, content: m.content }))})});
   if (!res.ok) {
@@ -280,26 +280,101 @@ export async function chatWithClaude(messages: ChatMessage[], apiKey: string, sy
 // earlier turn or, worse, no real data at all.
 export function buildChatContext(opts: {
   assetName: string; symbol: string; type: string; tf: string; srcLabel: string;
-  price: number; chgPct: number; rsi: number; ma20: number | null; ma50: number | null;
-  ohlc: string; mlSummary?: string; obSummary?: string; newsSummary?: string;
+  price: number; chgPct: number; rsi: number | null; ma20: number | null; ma50: number | null;
+  ohlc: string;
+  mlSignal?: any; vpSnap?: any; regimeSnap?: any; mtfSnap?: any;
+  techSummary?: any; openPosition?: any; newsSummary?: string;
 }): string {
-  const { assetName, symbol, type, tf, srcLabel, price, chgPct, rsi, ma20, ma50, ohlc, mlSummary, obSummary, newsSummary } = opts;
-  return `You are a top-1% institutional trader, quant analyst, and options strategist with 20+ years at elite hedge funds, chatting directly with a retail trader who is using your reasoning to inform real trading decisions.
+  const { assetName, symbol, type, tf, srcLabel, price, chgPct, rsi, ma20, ma50, ohlc,
+    mlSignal, vpSnap, regimeSnap, mtfSnap, techSummary, openPosition, newsSummary } = opts;
 
-LIVE MARKET CONTEXT (current as of this message):
-ASSET: ${assetName} (${symbol}) | ${type} | Timeframe: ${tf} | Data source: ${srcLabel}
-CURRENT PRICE: ${price} | TODAY'S CHANGE: ${chgPct}% | RSI(14): ${rsi} | MA20: ${ma20 ?? 'n/a'} | MA50: ${ma50 ?? 'n/a'}
-RECENT BARS:\n${ohlc}
-${mlSummary ? `\nON-DEVICE ML SIGNAL: ${mlSummary}` : ''}
-${obSummary ? `\nORDER BOOK: ${obSummary}` : ''}
-${newsSummary ? `\nRECENT NEWS: ${newsSummary}` : ''}
+  const priceFmt = (n: number | null | undefined) => n != null ? n.toFixed(2) : 'n/a';
 
-Ground every answer in the real numbers above — never invent prices, news, or data not given to you. When asked for a trade idea, prediction, or entry/target/stop-loss levels, ALWAYS give:
-1. A clear directional view (or explicitly say "no clean setup right now" if that's honestly the case — don't force a trade call)
-2. Specific entry, stop-loss, and 1-2 target levels as real numbers derived from the price/levels above
-3. Your reasoning: what in the data above supports this (trend, momentum, levels, ML signal, order flow if given)
-4. The key risk that would invalidate the idea
-5. A brief note on position sizing or risk management if relevant
+  // ML Signal + Memory Engine
+  let mlSection = '';
+  if (mlSignal) {
+    const mem = mlSignal.memoryResult;
+    const features = (mlSignal.topFeatures ?? [])
+      .map((f: any) => typeof f === 'string' ? f : f?.name ?? '').filter(Boolean).join(', ') || 'n/a';
+    mlSection = `
+ON-DEVICE ML MODEL:
+  Signal: ${mlSignal.action ?? 'n/a'} ${mlSignal.direction ?? ''} | Confidence: ${mlSignal.confidence?.toFixed(0) ?? '?'}/100
+  Probability up: ${((mlSignal.ensembleProbUp ?? 0.5) * 100).toFixed(1)}% | Walk-forward accuracy: ${mlSignal.walkForwardAccuracy?.toFixed(1) ?? '?'}%
+  Suggested entry: ${priceFmt(mlSignal.suggestedEntry)} | SL: ${priceFmt(mlSignal.suggestedStopLoss)} | TP: ${priceFmt(mlSignal.suggestedTakeProfit)}
+  Top driving features: ${features}`;
+    if (mem?.available) {
+      const adj = mem.confidenceAdjust ?? 0;
+      mlSection += `
+MEMORY ENGINE (${mem.similarCount} similar past setups found):
+  Win rate on similar setups: ${((mem.topKWinRate ?? 0) * 100).toFixed(0)}% | Avg return: ${mem.topKAvgReturn?.toFixed(2) ?? '?'}%
+  Regime match rate: ${((mem.regimeMatchRate ?? 0) * 100).toFixed(0)}% | Confidence adjustment: ${adj > 0 ? '+' : ''}${adj}pts
+  ${mem.failurePatterns?.length
+    ? 'Warning patterns: ' + mem.failurePatterns.map((p: any) =>
+        `${p.attribute} (${((p.lossRate ?? 0) * 100).toFixed(0)}% loss rate)`).join(', ')
+    : 'No dominant failure patterns in similar history'}`;
+    } else {
+      mlSection += '\nMEMORY ENGINE: Insufficient similar history yet — model is still learning your patterns';
+    }
+  }
 
-If the ML signal is mentioned above, treat it as one minor input among several — never as the sole basis for a call, and say so explicitly if you lean on it. Be direct and concise; this is a chat, not a report — use short paragraphs, not heavy markdown formatting.`;
+  // Volume Profile
+  let vpSection = '';
+  if (vpSnap?.poc) {
+    const inValue = vpSnap.vah && vpSnap.val
+      ? (price > vpSnap.vah ? 'ABOVE VALUE AREA' : price < vpSnap.val ? 'BELOW VALUE AREA' : 'INSIDE VALUE AREA')
+      : 'n/a';
+    vpSection = `
+VOLUME PROFILE:
+  POC: ${priceFmt(vpSnap.poc)} | VAH: ${priceFmt(vpSnap.vah)} | VAL: ${priceFmt(vpSnap.val)}
+  Session VWAP: ${priceFmt(vpSnap.sessionVwap)} | Price position: ${price > (vpSnap.poc ?? 0) ? 'ABOVE POC' : 'BELOW POC'} | ${inValue}`;
+  }
+
+  // Regime + MTF
+  let regimeSection = '';
+  if (regimeSnap?.label) {
+    regimeSection = `\nMARKET REGIME: ${regimeSnap.label} (confidence: ${regimeSnap.confidence?.toFixed(0) ?? '?'}%)`;
+  }
+  if (mtfSnap?.trend) {
+    regimeSection += `\nMULTI-TIMEFRAME: Trend=${mtfSnap.trend} | Alignment=${mtfSnap.alignment ?? 'n/a'}`;
+  }
+
+  // Technicals
+  let techSection = '';
+  if (techSummary) {
+    techSection = `
+TECHNICALS:
+  ATR: ${priceFmt(techSummary.atr)} | RSI: ${rsi?.toFixed(1) ?? 'n/a'} | MA20: ${priceFmt(ma20)} | MA50: ${priceFmt(ma50)}
+  BB position: ${techSummary.bbPosition ?? 'n/a'} | MACD: ${techSummary.macdState ?? 'n/a'} | Trend: ${techSummary.trend ?? 'n/a'}`;
+  } else {
+    techSection = `\nTECHNICALS: RSI=${rsi?.toFixed(1) ?? 'n/a'} | MA20=${priceFmt(ma20)} | MA50=${priceFmt(ma50)}`;
+  }
+
+  // Open position
+  let posSection = '';
+  if (openPosition) {
+    posSection = `
+OPEN POSITION:
+  Direction: ${openPosition.direction} | Entry: ${priceFmt(openPosition.entryPrice)}
+  SL: ${priceFmt(openPosition.stopLoss)} | TP: ${priceFmt(openPosition.takeProfit)}
+  Current P&L: ${openPosition.pnlPct?.toFixed(2) ?? '?'}%`;
+  }
+
+  return `You are a top-1% institutional trader and quant analyst with 20+ years experience. The trader using this app makes real decisions from your analysis — give them professional-grade reasoning.
+
+LIVE MARKET DATA:
+Asset: ${assetName} (${symbol}) | ${type} | Timeframe: ${tf} | Exchange: ${srcLabel}
+Price: ${price} | Change: ${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(2)}%
+${techSection}${regimeSection}${vpSection}${mlSection}${posSection}
+
+RECENT ${tf.toUpperCase()} BARS (newest last):
+${ohlc}
+${newsSummary ? '\nRECENT NEWS: ' + newsSummary : ''}
+
+RULES:
+- Ground every answer in the real numbers above. Never invent prices or indicators.
+- Trade ideas: give direction, specific entry/SL/TP as real numbers, reasoning, and key invalidation risk.
+- Open position detected: focus on management (trail stop, partial profit, hold) not new entries.
+- Memory engine shows how similar historical setups performed — weight alongside current price action.
+- ML signal is one input — say so explicitly when you reference it.
+- Be direct. Short paragraphs. Real numbers. Conversational tone.`;
 }

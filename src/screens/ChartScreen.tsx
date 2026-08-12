@@ -760,14 +760,47 @@ export default function ChartScreen({ route, navigation }: any) {
             onAnalyze={runAnalysis}
             onNavigateChat={sym => navigation.navigate('AIChat', {
               symbol: sym,
-              asset,   // Pass full asset so AIChatScreen knows src, bnSym, aoToken etc.
+              asset,
+              tf,
+              // Full ML signal + memory engine result
               mlSignal: ml.data ? {
                 action:              ml.data.action,
                 direction:           ml.data.direction,
                 ensembleProbUp:      ml.data.ensembleProbUp,
                 confidence:          ml.data.confidence,
                 walkForwardAccuracy: ml.data.walkForwardAccuracy,
-                topFeatures:         ml.data.topFeatures?.slice(0, 4) ?? [],
+                topFeatures:         ml.data.topFeatures?.slice(0, 6) ?? [],
+                memoryResult:        ml.data.memoryResult ?? null,
+                suggestedEntry:      ml.data.suggestedEntry,
+                suggestedStopLoss:   ml.data.suggestedStopLoss,
+                suggestedTakeProfit: ml.data.suggestedTakeProfit,
+              } : null,
+              // Volume profile
+              vpSnap: vpSnap ? {
+                poc: vpSnap.poc, vah: vpSnap.vah, val: vpSnap.val,
+                sessionVwap: vwapSnap?.sessionVwap,
+              } : null,
+              // Market structure & regime
+              regimeSnap: regimeSnap ? {
+                label: regimeSnap.label, confidence: regimeSnap.confidence,
+              } : null,
+              // MTF alignment
+              mtfSnap: mtfSnap ? {
+                trend: mtfSnap.trend, alignment: mtfSnap.alignment,
+              } : null,
+              // Technical summary (ATR, RSI, MACD state etc.)
+              techSummary: techSummary ? {
+                atr: techSummary.atr, rsi: techSummary.rsi,
+                bbPosition: techSummary.bbPosition, macdState: techSummary.macdState,
+                trend: techSummary.trend,
+              } : null,
+              // Open positions on this symbol
+              openPosition: overlays.openPosition ? {
+                direction:  overlays.openPosition.direction,
+                entryPrice: overlays.openPosition.entryPrice,
+                stopLoss:   overlays.openPosition.stopLoss,
+                takeProfit: overlays.openPosition.takeProfit,
+                pnlPct:     overlays.openPosition.pnlPct,
               } : null,
             })}
             T={T}

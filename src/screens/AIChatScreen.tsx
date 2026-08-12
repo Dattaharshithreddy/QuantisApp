@@ -341,6 +341,12 @@ export default function AIChatScreen({ route }: any) {
           type: asset?.type ?? 'CRYPTO', tf, srcLabel,
           price: fallbackPrice, chgPct: cp?.chg ?? 0,
           rsi: null, ma20: null, ma50: null, ohlc: 'No candle data — using live price only.',
+          mlSignal:     (route?.params as any)?.mlSignal ?? null,
+          vpSnap:       (route?.params as any)?.vpSnap ?? null,
+          regimeSnap:   (route?.params as any)?.regimeSnap ?? null,
+          mtfSnap:      (route?.params as any)?.mtfSnap ?? null,
+          techSummary:  (route?.params as any)?.techSummary ?? null,
+          openPosition: (route?.params as any)?.openPosition ?? null,
         });
         setContextReady(true);
         return;
@@ -371,6 +377,12 @@ export default function AIChatScreen({ route }: any) {
         price: last.close, chgPct: cp?.chg ?? 0,
         rsi, ma20, ma50, ohlc,
         newsSummary: [newsSummary, fearGreedSummary].filter(Boolean).join(' | ') || undefined,
+        mlSignal:     (route?.params as any)?.mlSignal ?? null,
+        vpSnap:       (route?.params as any)?.vpSnap ?? null,
+        regimeSnap:   (route?.params as any)?.regimeSnap ?? null,
+        mtfSnap:      (route?.params as any)?.mtfSnap ?? null,
+        techSummary:  (route?.params as any)?.techSummary ?? null,
+        openPosition: (route?.params as any)?.openPosition ?? null,
       });
       setContextReady(true);
     } catch (e: any) {
