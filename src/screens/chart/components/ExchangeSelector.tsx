@@ -24,6 +24,7 @@ const SRC_LABELS: Record<string, string> = {
   binance:         'Binance',
   binance_futures: 'Binance Perp',
   coindcx:         'CoinDCX',
+  coindcx_futures: 'CDX Perps',
   av:              'Alpha Vantage',
   forex:           'Forex',
 };

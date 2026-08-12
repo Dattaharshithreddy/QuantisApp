@@ -49,7 +49,7 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
             <Text style={{ color: T.text, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 }}>
               {/* Show clean display name for internal symbols like ETH-PERP-CDX */}
               {(asset as any)?.src === 'coindcx_futures'
-                ? ((asset as any)?.cdxSym ?? symbol)?.replace('B-','')?.replace('_','/')?.replace('USDT', '/USDT Perp')?.split('/').slice(0,2).join('/') + ' Perp'
+                ? ((asset as any)?.cdxSym ?? symbol)?.replace('USDT','') + '/USDT Perp'
                 : symbol}
             </Text>
             {(() => {

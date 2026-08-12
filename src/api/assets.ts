@@ -131,7 +131,7 @@ export const ASSETS: LogicalAsset[] = [
     exchanges: {
       binance:         { src:'binance',         symbol:'BTCUSD',       bnSym:'BTCUSDT',               base:67420, vol:0.028 },
       coindcx:         { src:'coindcx',         symbol:'BTCUSDT',      cdxSym:'B-BTC_USDT', cdxMkt:'BTCUSDT', base:67420, vol:0.028 },
-      coindcx_futures: { src:'coindcx_futures', symbol:'BTC-PERP-CDX', cdxSym:'B-BTC_USDT', cdxMkt:'B-BTC_USDT', base:67420, vol:0.028 },
+      coindcx_futures: { src:'coindcx_futures', symbol:'BTC-PERP-CDX', cdxSym:'BTCUSDT', cdxMkt:'BTCUSDT', base:67420, vol:0.028 },
     } },
 
   // Ethereum
@@ -139,7 +139,7 @@ export const ASSETS: LogicalAsset[] = [
     exchanges: {
       binance:         { src:'binance',         symbol:'ETHUSD',       bnSym:'ETHUSDT',               base:3485, vol:0.032 },
       coindcx:         { src:'coindcx',         symbol:'ETHUSDT',      cdxSym:'B-ETH_USDT', cdxMkt:'ETHUSDT', base:3485, vol:0.032 },
-      coindcx_futures: { src:'coindcx_futures', symbol:'ETH-PERP-CDX', cdxSym:'B-ETH_USDT', cdxMkt:'B-ETH_USDT', base:3485, vol:0.032 },
+      coindcx_futures: { src:'coindcx_futures', symbol:'ETH-PERP-CDX', cdxSym:'ETHUSDT', cdxMkt:'ETHUSDT', base:3485, vol:0.032 },
     } },
 
   // BNB
