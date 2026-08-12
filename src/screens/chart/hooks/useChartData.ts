@@ -28,8 +28,8 @@ import { invalidateCorrelationCache } from '../../../utils/correlationEngine';
 import { logger } from '../../../utils/logger';
 
 const TF_MS: Record<string, number> = {
-  '5m': 300000, '15m': 900000, '30m': 1800000,
-  '1h': 3600000, '4h': 14400000, '1D': 86400000,
+  '1m': 60000, '5m': 300000, '15m': 900000, '30m': 1800000,
+  '1h': 3600000, '4h': 14400000, '1D': 86400000, '1W': 604800000,
 };
 export const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
 
@@ -244,6 +244,12 @@ export function useChartData(
         setDataSrc('live');
       } else if (variant?.src === 'coindcx_futures' && variant?.cdxSym) {
         data = await fetchCdxFuturesCandles(variant!.cdxSym!, tf, 500);
+        // If futures candles empty, try spot pair (same underlying price data)
+        if (!data.length) {
+          const spotSym = variant!.cdxSym!.startsWith('B-')
+            ? variant!.cdxSym! : 'B-' + variant!.cdxSym!.replace('USDT','') + '_USDT';
+          data = await fetchCdxCandles(spotSym, tf, 500).catch(() => []);
+        }
         setDataSrc('live');
       } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
         // ao_futures uses the same Angel One API as ao — only the exchange (NFO) differs,
