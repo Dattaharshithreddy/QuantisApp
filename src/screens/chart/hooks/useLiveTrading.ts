@@ -90,12 +90,17 @@ export function useLiveTrading(
       .catch(() => setTradingModeState('PAPER'));
   }, [asset?.src]);  // re-runs on every source change (AO → Binance, etc.)
 
-  // Broker settings — refresh on mount.
-  useEffect(() => {
+  // Broker settings — refresh on mount and on screen focus.
+  const refreshBrokerConfig = useCallback(() => {
     getLiveTradeSettings().then(setLiveSettings).catch(() => {});
     getLiveTradingCredential('binanceApiKey').then(k => setBnConfigured(!!k)).catch(() => {});
     getLiveTradingCredential('cdxApiKey').then(k => setCdxConfigured(!!k)).catch(() => {});
   }, []);
+
+  useEffect(() => { refreshBrokerConfig(); }, []);
+
+  // Re-check when screen regains focus — user may have just connected a broker
+  useFocusEffect(useCallback(() => { refreshBrokerConfig(); }, [refreshBrokerConfig]));
 
   // Persist mode change under this provider's key only.
   // Sources mapped to 'paper' cannot be set to LIVE — guard here.

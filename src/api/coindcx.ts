@@ -280,17 +280,24 @@ export function openCdxPriceStream(
   }
 
   // Ticker event handler
-  function onTickerEvent(tickerArray: any[]) {
+  function onTickerEvent(payload: any) {
     if (!appActive || closed) return;
-    if (!Array.isArray(tickerArray)) return;
-    onStatus('live');
+    // Handle both array payload and single object payload
+    const tickerArray = Array.isArray(payload) ? payload : [payload];
+    if (!tickerArray.length) return;
+    let matched = false;
     tickerArray.forEach(t => {
+      if (!t || typeof t !== 'object') return;
       const parsed = parseTicker(t);
       if (parsed && set.has(parsed.market)) {
         onTick(parsed.market, parsed.price, parsed.chg);
-        stopFallbackPoll(); // stop REST poll if socket is working
+        matched = true;
       }
     });
+    if (matched) {
+      onStatus('live');
+      stopFallbackPoll();
+    }
   }
 
   _socketRefCount++;
@@ -298,10 +305,13 @@ export function openCdxPriceStream(
   getSocket()
     .then(socket => {
       if (closed) { releaseSocket(); return; }
+      // CoinDCX socket.io v2 event names (try all known variants)
       socket.on('coindcx-ticker', onTickerEvent);
-      // Also listen to 'ticker' (alternative event name some versions use)
+      socket.on('coindcx', onTickerEvent);
       socket.on('ticker', onTickerEvent);
-      // Emit 'subscribe' in case CoinDCX requires explicit subscription
+      socket.on('tickers', onTickerEvent);
+      // Emit join/subscribe for channel-based subscriptions
+      socket.emit('join', { channelName: 'coindcx' });
       socket.emit('subscribe', { channelNames: [...set] });
       onStatus('live');
       logger.info('cdx-stream', `Subscribed to coindcx-ticker + ticker for ${markets.length} markets`);

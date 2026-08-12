@@ -242,7 +242,7 @@ export default function BrokerConnectionScreen() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <View>
               <Text style={{ color: T.text, fontWeight: '700', fontSize: 15 }}>CoinDCX</Text>
-              <Text style={{ color: T.textDim, fontSize: 10, marginTop: 2 }}>Spot trading · INR/USDT pairs</Text>
+              <Text style={{ color: T.textDim, fontSize: 10, marginTop: 2 }}>Spot + Futures trading · Same API key for both</Text>
             </View>
             <StatusBadge connected={cdxConnected} T={T} />
           </View>
@@ -251,7 +251,7 @@ export default function BrokerConnectionScreen() {
             <>
               <Text style={{ color: T.textDim, fontSize: 11, marginBottom: 4, lineHeight: 16 }}>
                 Create an API key at CoinDCX → Settings → API & Security.
-              Works for both Spot and Futures trading.
+              One key covers Spot AND Futures (perpetuals up to 100x).
               </Text>
               <Text style={{ color: T.textDim, fontSize: 11, marginBottom: 12, lineHeight: 16 }}>
                 Enable: Read Info, Trade Orders. Do NOT enable Withdrawal.
