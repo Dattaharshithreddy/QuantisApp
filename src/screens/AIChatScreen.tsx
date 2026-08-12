@@ -193,8 +193,9 @@ const TypingIndicator = memo(({ T }: { T: any }) => {
 });
 
 // ── Single message bubble ─────────────────────────────────────────────────────
-const MessageBubble = memo(({ msg, T }: { msg: ChatMessage & { streaming?: boolean }; T: any }) => {
+const MessageBubble = memo(({ msg, T }: { msg: ChatMessage & { streaming?: boolean; stopped?: boolean }; T: any }) => {
   const isUser = msg.role === 'user';
+  const wasStopped = (msg as any).stopped === true;
   return (
     <View style={{
       alignSelf:    isUser ? 'flex-end' : 'flex-start',
@@ -232,7 +233,9 @@ const MessageBubble = memo(({ msg, T }: { msg: ChatMessage & { streaming?: boole
       }}>
         {msg.streaming && !msg.content
           ? <TypingIndicator T={T} />
-          : <MessageContent text={msg.content} isUser={isUser} T={T} />
+          : msg.content
+            ? <MessageContent text={msg.content} isUser={isUser} T={T} />
+            : null
         }
         {msg.streaming && !!msg.content && (
           <View style={{ flexDirection: 'row', gap: 3, marginTop: 4 }}>
@@ -240,6 +243,17 @@ const MessageBubble = memo(({ msg, T }: { msg: ChatMessage & { streaming?: boole
               <View key={i} style={{ width: 4, height: 4, borderRadius: 2,
                 backgroundColor: T.textDim, opacity: 0.5 }} />
             ))}
+          </View>
+        )}
+        {/* Clean stopped badge — only shows when user tapped stop */}
+        {wasStopped && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: msg.content ? 8 : 0,
+            paddingTop: msg.content ? 8 : 0,
+            borderTopWidth: msg.content ? 0.5 : 0,
+            borderTopColor: T.border + '60' }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3,
+              backgroundColor: T.textDim, marginRight: 6, opacity: 0.5 }} />
+            <Text style={{ color: T.textDim, fontSize: 10, opacity: 0.7 }}>Stopped</Text>
           </View>
         )}
       </View>
@@ -477,11 +491,13 @@ export default function AIChatScreen({ route }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       if (e?.name === 'AbortError') {
-        // User stopped — keep what arrived, add a clean note
-        const stoppedContent = accumulated
-          ? accumulated + '\n\n*— stopped*'
-          : '*Stopped before any response arrived.*';
-        const partial = [...withUser, { role: 'assistant' as const, content: stoppedContent }];
+        // Keep partial response clean — no ugly text appended
+        // The stopped badge is rendered by MessageBubble via the stopped flag
+        const partial = [...withUser, {
+          role: 'assistant' as const,
+          content: accumulated || '',
+          stopped: true,
+        } as any];
         setMessages(partial);
         persist(partial);
       } else {
