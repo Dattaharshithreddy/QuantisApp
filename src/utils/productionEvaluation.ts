@@ -112,7 +112,7 @@ export async function evaluateProductionModel(
 
   // 3. Regime breakdown — reuses `fitted` from Step 1
   await tick();
-  const regimes = bucketTradesByRegime(candles, fitted.walkIndices, primaryResult.trades, config.startingCapital);
+  const regimes = bucketTradesByRegime(candles, fitted.walkIndices, primaryResult.trades, config.startingCapital, fitCache.S);
   _stage('S3 bucketTradesByRegime');
 
   // ── Opt 1+4: build the horizon map ONCE here for sharing across all consumers ─

@@ -1,6 +1,5 @@
 import { Candle } from './indicators';
 import { ExecTrade } from './strategyExecutor';
-import { precomputeSeries } from './mlSignal';
 import { detectTrendDirection, detectVolatilityRegime, TrendDirection, VolatilityRegime } from './marketStructure';
 import { computeMetrics, BacktestMetrics } from './backtest';
 
@@ -22,8 +21,7 @@ export type RegimeLabel = 'TRENDING_BULL' | 'TRENDING_BEAR' | 'RANGING' | 'HIGH_
 
 export type RegimeBucket = { label: RegimeLabel; trades: ExecTrade[]; metrics: BacktestMetrics; barCount: number };
 
-export async function classifyRegimePerBar(candles: Candle[], walkIndices: number[]): Promise<Map<number, RegimeLabel>> {
-  const S = await precomputeSeries(candles);
+export function classifyRegimePerBar(candles: Candle[], walkIndices: number[], S: Awaited<ReturnType<typeof precomputeSeries>>): Map<number, RegimeLabel> {
   const labels = new Map<number, RegimeLabel>();
 
   // Average historical volatility across the walk window, used as the
@@ -47,8 +45,8 @@ export async function classifyRegimePerBar(candles: Candle[], walkIndices: numbe
   return labels;
 }
 
-export function bucketTradesByRegime(candles: Candle[], walkIndices: number[], trades: ExecTrade[], startingCapital: number): RegimeBucket[] {
-  const barLabels = classifyRegimePerBar(candles, walkIndices);
+export function bucketTradesByRegime(candles: Candle[], walkIndices: number[], trades: ExecTrade[], startingCapital: number, S: any): RegimeBucket[] {
+  const barLabels = classifyRegimePerBar(candles, walkIndices, S);
   const allLabels: RegimeLabel[] = ['TRENDING_BULL', 'TRENDING_BEAR', 'RANGING', 'HIGH_VOL', 'LOW_VOL'];
 
   return allLabels.map(label => {
