@@ -17,7 +17,7 @@ import React, {
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   KeyboardAvoidingView, Platform, ActivityIndicator,
-  Animated, Easing,
+  Animated, Easing, unstable_batchedUpdates,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -432,21 +432,23 @@ export default function AIChatScreen({ route }: any) {
       return; // still loading context — haptic feedback so user knows
     }
 
-    // Instant haptic + clear input before any async work (feels instant)
-    sendingRef.current = true;
-    setSending(true);
-    setInput('');
+    // Fire haptic FIRST — before any state update (most instant possible)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    sendingRef.current = true;
 
     const userMsg: ChatMessage = { role: 'user', content };
     const withUser = [...messagesRef.current, userMsg];
-    // Show user bubble + typing indicator atomically
     const withTyping = [...withUser, { role: 'assistant' as const, content: '', streaming: true }];
-    setMessages(withTyping);
+
+    // Batch ALL state updates into a single render pass
+    unstable_batchedUpdates(() => {
+      setInput('');
+      setSending(true);
+      setMessages(withTyping);
+    });
     messagesRef.current = withTyping;
     persist(withUser);
 
-    // Scroll to bottom immediately
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
 
     abortRef.current = new AbortController();
@@ -561,6 +563,8 @@ export default function AIChatScreen({ route }: any) {
           renderItem={({ item }) => <MessageBubble msg={item} T={T} />}
           contentContainerStyle={{ padding: 16, paddingBottom: 8, flexGrow: 1 }}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
           ListHeaderComponent={showSuggestions ? null : undefined}
           ListEmptyComponent={
             contextReady ? (
@@ -653,6 +657,10 @@ export default function AIChatScreen({ route }: any) {
           {/* Send / Stop button */}
           <TouchableOpacity
             onPress={sending ? stopStreaming : () => send()}
+            onPressIn={!sending && input.trim() && contextReady ? () => {
+              // Fire haptic on press-in (before onPress) for instant feel
+              Haptics.selectionAsync();
+            } : undefined}
             disabled={!sending && (!input.trim() || !contextReady)}
             style={{
               width:           42,
