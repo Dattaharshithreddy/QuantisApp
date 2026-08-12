@@ -51,40 +51,21 @@ const TF_CDX: Record<string, string> = {
 
 // ── Candles (unchanged from Phase 1) ─────────────────────────────────────────
 // ── CoinDCX Futures candle fetch ─────────────────────────────────────────────
-// CoinDCX futures uses the same candle endpoint as spot but with futures pair format
-// Pair format for futures: 'B-ETH_USDT' (same as spot market identifier)
-// If the main endpoint returns empty, try the derivatives endpoint
+// CoinDCX perpetual futures track spot price almost exactly (basis < 0.1%).
+// Use the spot candle endpoint which is reliable and supports all timeframes.
+// pair: the cdxSym value, e.g. 'B-ETH_USDT'
+// We convert to spot format for the candle API: 'B-ETH_USDT' → 'ETHUSDT'
 export async function fetchCdxFuturesCandles(
   pair: string,
   tf: string,
   limit = 500,
   endTime?: number,
 ): Promise<Candle[]> {
-  // First try the same public candles endpoint — works for futures pairs too
-  try {
-    const candles = await fetchCdxCandles(pair, tf, limit, endTime);
-    if (candles.length > 1) return candles;
-  } catch { /* fall through to derivatives endpoint */ }
-
-  // Fallback: try derivatives futures candles endpoint
-  return withRetry(async () => {
-    const interval = TF_CDX[tf] ?? '15m';
-    let url = `${CDX_BASE}/exchange/v1/derivatives/futures/klines?pair=${encodeURIComponent(pair)}&interval=${interval}&limit=${limit}`;
-    if (endTime) url += `&endTime=${endTime}`;
-    const r = await fetch(url, { signal: timeoutSignal(10_000) });
-    if (!r.ok) return [];
-    const json: any[] = await r.json();
-    const candles: Candle[] = json.map(k => ({
-      time:   k.time ?? k[0],
-      open:   Number(k.open ?? k[1]),
-      high:   Number(k.high ?? k[2]),
-      low:    Number(k.low  ?? k[3]),
-      close:  Number(k.close ?? k[4]),
-      volume: Number(k.volume ?? k[5]),
-    }));
-    candles.sort((a, b) => a.time - b.time);
-    return candles;
-  }, { tag: 'cdx-futures-candles', retries: 2 });
+  // Convert to spot pair format: 'B-ETH_USDT' → 'ETHUSDT', 'ETHUSDT' → 'ETHUSDT'
+  const spotPair = pair.startsWith('B-')
+    ? pair.slice(2).replace('_', '')   // 'B-ETH_USDT' → 'ETHUSDT'
+    : pair;
+  return fetchCdxCandles(spotPair, tf, limit, endTime);
 }
 
 export async function fetchCdxCandles(

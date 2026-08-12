@@ -49,12 +49,22 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
             <Text style={{ color: T.text, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 }}>
               {/* Show clean display name for internal symbols like ETH-PERP-CDX */}
               {(asset as any)?.src === 'coindcx_futures'
-                ? ((asset as any)?.cdxSym ?? symbol)?.replace('USDT','') + '/USDT Perp'
+                ? (() => {
+                    const s = (asset as any)?.cdxSym ?? symbol;
+                    // B-ETH_USDT → ETH/USDT Perp, ETHUSDT → ETH/USDT Perp
+                    const base = s.startsWith('B-')
+                      ? s.slice(2).replace('_USDT','').replace('_','')
+                      : s.replace('USDT','');
+                    return base + '/USDT Perp';
+                  })()
                 : symbol}
             </Text>
             {(() => {
-              const freshTs    = cp?.lastUpdated && (Date.now() - cp.lastUpdated) < 4000;
-              const isLive     = dataSrc === 'live' && (cp?.source === 'websocket' || (freshTs && cp?.source !== 'cache' && cp?.source !== 'base'));
+              const now2       = Date.now();
+              const freshTs    = cp?.lastUpdated && (now2 - cp.lastUpdated) < 8000;
+              // Show LIVE if: websocket source OR recent REST snapshot (< 8s old)
+              // UPDATING only when stale REST (> 8s) — means data is delayed
+              const isLive     = dataSrc === 'live' && (cp?.source === 'websocket' || freshTs);
               const isUpdating = dataSrc === 'live' && !isLive && cp?.source === 'snapshot';
               const isLoading  = dataSrc === 'live' && !isLive && (!cp?.source || cp?.source === 'cache' || cp?.status === 'stale');
               const dotColor   = isLive ? T.green : isUpdating ? '#3b82f6' : T.amber;

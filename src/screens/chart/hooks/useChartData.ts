@@ -243,13 +243,9 @@ export function useChartData(
         data = await fetchCdxCandles(variant!.cdxSym!, tf, 500);
         setDataSrc('live');
       } else if (variant?.src === 'coindcx_futures' && variant?.cdxSym) {
+        // fetchCdxFuturesCandles internally converts to spot pair format (ETHUSDT)
+        // CoinDCX perp tracks spot price exactly — spot candles are correct
         data = await fetchCdxFuturesCandles(variant!.cdxSym!, tf, 500);
-        // If futures candles empty, try spot pair (same underlying price data)
-        if (!data.length) {
-          const spotSym = variant!.cdxSym!.startsWith('B-')
-            ? variant!.cdxSym! : 'B-' + variant!.cdxSym!.replace('USDT','') + '_USDT';
-          data = await fetchCdxCandles(spotSym, tf, 500).catch(() => []);
-        }
         setDataSrc('live');
       } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
         // ao_futures uses the same Angel One API as ao — only the exchange (NFO) differs,
