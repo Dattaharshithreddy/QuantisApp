@@ -147,17 +147,13 @@ export async function evaluateProductionModel(
       : await fitEnsemble(candles, config.trainSplitPct, config.seed, h, fitCache);
     if (!f) continue;
 
-    // Evaluate immediately using horizonEvaluation's per-horizon logic
+    // Evaluate immediately — config IS a BacktestConfig which extends ExecConfig
     const entry = await (async () => {
-      const execCfg = { startingCapital: config.startingCapital,
-        buyThreshold: config.buyThreshold, stopLossPct: config.stopLossPct,
-        takeProfitPct: config.takeProfitPct, holdingPeriod: config.holdingPeriod,
-        direction: 'LONG' as const, seed: config.seed, feeRate: config.feeRate ?? 0.001 };
       const { trades, equityCurve } = simulateSignalStrategy(
         candles, f.walkIndices,
         (idx) => { const { ensembleProb, agree } = f.predictProb(idx);
           return { enter: ensembleProb > config.buyThreshold && agree, reason: `h=${h}` }; },
-        f.atrAt, execCfg);
+        f.atrAt, config);  // pass config directly — same as evaluateAllHorizons does
       const metrics = computeMetrics(trades, equityCurve, config.startingCapital);
       return { horizon: h, metrics, trainSampleCount: f.trainSampleCount, trades };
     })();
