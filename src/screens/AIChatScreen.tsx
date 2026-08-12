@@ -36,7 +36,7 @@ const SRC_LABEL: Record<string, string> = {
   binance: 'Binance', binance_futures: 'Binance Futures',
   coindcx: 'CoinDCX', coindcx_futures: 'CoinDCX Futures', forex: 'Forex',
 };
-import { getRSI, getEMA } from '../utils/indicators';
+import { calcRSI, calcMA } from '../utils/indicators';
 
 const HISTORY_KEY = (sym: string) => `aichat_v1_${sym}`;
 const MAX_STORED   = 50;
@@ -346,11 +346,11 @@ export default function AIChatScreen({ route }: any) {
         return;
       }
 
-      const closes = candles.map((c: any) => c.close);
-      const rsiArr = getRSI(closes, 14);
-      const rsi    = rsiArr[rsiArr.length - 1] ?? 50;
-      const ma20   = getEMA(closes, 20)?.[closes.length - 1] ?? null;
-      const ma50   = getEMA(closes, 50)?.[closes.length - 1] ?? null;
+      const rsi  = calcRSI(candles, 14);
+      const ma20Arr = calcMA(candles, 20);
+      const ma50Arr = calcMA(candles, 50);
+      const ma20 = ma20Arr[ma20Arr.length - 1] ?? null;
+      const ma50 = ma50Arr[ma50Arr.length - 1] ?? null;
 
       const recent = candles.slice(-8);
       const ohlc = recent.map((c: any) =>
