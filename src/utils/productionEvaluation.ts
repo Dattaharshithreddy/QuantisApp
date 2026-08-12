@@ -12,6 +12,7 @@ import { analyzeFeatureContribution, FeatureContributionReport } from './feature
 import { createRNG } from './seededRandom';
 import { logger } from './logger';
 import { evaluateStrategies, StrategyEvalResult, StrategyEvalMode } from './strategyEvaluation';
+import { simulateSignalStrategy } from './strategyExecutor';
 import type { StrategyId } from './strategy/strategyTypes';
 import { evaluateRegimes, RegimeEvalResult } from './regimeEvaluation';
 
@@ -148,8 +149,6 @@ export async function evaluateProductionModel(
 
     // Evaluate immediately using horizonEvaluation's per-horizon logic
     const entry = await (async () => {
-      const { simulateSignalStrategy } = await import('./strategyExecutor');
-      const { computeMetrics } = await import('./backtest');
       const execCfg = { startingCapital: config.startingCapital,
         buyThreshold: config.buyThreshold, stopLossPct: config.stopLossPct,
         takeProfitPct: config.takeProfitPct, holdingPeriod: config.holdingPeriod,
