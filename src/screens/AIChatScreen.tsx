@@ -81,7 +81,18 @@ const MessageContent = memo(({ text, isUser, T }: { text: string; isUser: boolea
     // Blank line
     if (!line.trim()) { nodes.push(<View key={i} style={{ height: 6 }} />); i++; continue; }
 
-    // ## Header
+    // ### h3 Header
+    if (line.startsWith('### ')) {
+      nodes.push(
+        <Text key={i} style={{ color: baseColor, fontSize: 12, fontWeight: '700',
+          letterSpacing: 0.4, marginTop: 8, marginBottom: 3, opacity: 0.85 }}>
+          {line.slice(4).toUpperCase()}
+        </Text>
+      );
+      i++; continue;
+    }
+
+    // ## h2 Header
     if (line.startsWith('## ')) {
       nodes.push(
         <Text key={i} style={{ color: baseColor, fontSize: 13, fontWeight: '800',
@@ -92,7 +103,7 @@ const MessageContent = memo(({ text, isUser, T }: { text: string; isUser: boolea
       i++; continue;
     }
 
-    // # Header
+    // # h1 Header
     if (line.startsWith('# ')) {
       nodes.push(
         <Text key={i} style={{ color: accentColor, fontSize: 15, fontWeight: '800',
@@ -310,7 +321,7 @@ export default function AIChatScreen({ route }: any) {
   // ── Build market context ───────────────────────────────────────────────────
   const buildContext = useCallback(async () => {
     setContextErr('');
-    const tf = '15m'; // declared here so it's in scope for buildChatContext below
+    const tf = (route?.params as any)?.tf || '15m'; // use chart's current tf if passed
     try {
       // Load history AND candles in parallel
       const [historyRaw, candles] = await Promise.all([
@@ -318,7 +329,8 @@ export default function AIChatScreen({ route }: any) {
         (async () => {
           if (asset?.src === 'binance' && asset?.bnSym) {
             return fetchCandlesWithCache(symbol, tf,
-              async () => fetchBnKlines(asset.bnSym!, tf, 50), { maxCandles: 50 });
+              async () => fetchBnKlines(asset.bnSym!, tf, 50), { maxCandles: 50 })
+              .catch(() => [] as any[]);
           }
           if (asset?.src === 'coindcx' && (asset as any).cdxSym) {
             return fetchCdxCandles((asset as any).cdxSym, tf, 50);
