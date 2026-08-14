@@ -21,7 +21,7 @@ const KEY = 'livePortfolio_v1';
 export type LivePosition = PaperPosition & {
   // Additional fields for live trading
   liveOrderId:   string;                     // broker-assigned order ID
-  broker:        'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE' | 'BINANCE_FUTURES';
+  broker:        'ANGEL_ONE' | 'ANGEL_ONE_FUTURES' | 'BINANCE' | 'BINANCE_FUTURES' | 'COINDCX' | 'COINDCX_FUTURES';
   filledPrice:   number;                     // actual execution price from broker
   filledAt:      number;                     // when the broker confirmed fill
   estimatedFees: number;                     // fees at entry
