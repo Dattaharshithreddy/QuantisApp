@@ -289,6 +289,8 @@ const SUGGESTIONS = [
 export default function AIChatScreen({ route }: any) {
   const { theme: T } = useTheme();
   const { prices, aoSession, avKey, anthropicKey, allAssets, news } = useData();
+  const pricesRef = useRef(prices);
+  useEffect(() => { pricesRef.current = prices; }, [prices]);
 
   // Resolve asset from route: prefer explicit asset param, then find by symbol
   const routeAsset  = route?.params?.asset;
@@ -322,6 +324,48 @@ export default function AIChatScreen({ route }: any) {
   }, [symbol]);
 
   // ── Build market context ───────────────────────────────────────────────────
+  // Lightweight refresh using cached candles — runs before every message
+  const refreshContextFromCache = useCallback(async () => {
+    try {
+      const tf = (route?.params as any)?.tf || '15m';
+      const srcLabel = SRC_LABEL[asset?.src ?? ''] ?? asset?.src ?? 'Unknown';
+      const liveCp = pricesRef.current[symbol];
+      const livePrice = liveCp?.price ?? (asset as any)?.base ?? 0;
+      const liveChg   = liveCp?.chg ?? 0;
+
+      // Read from candle cache (fast AsyncStorage read, no network)
+      const { getCachedCandles } = await import('../utils/candleCache');
+      const cacheResult = await getCachedCandles(symbol, tf);
+      const candles = cacheResult?.candles ?? null;
+
+      if (!candles || !livePrice) return; // no cache yet — keep existing context
+
+      const rsi   = calcRSI(candles, 14);
+      const ma20Arr = calcMA(candles, 20);
+      const ma50Arr = calcMA(candles, 50);
+      const ma20 = ma20Arr[ma20Arr.length - 1] ?? null;
+      const ma50 = ma50Arr[ma50Arr.length - 1] ?? null;
+      const recent = candles.slice(-8);
+      const ohlc = recent.map((c: any) =>
+        `${new Date(c.time * 1000 > 1e12 ? c.time : c.time * 1000)
+          .toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})} O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+      ).join('\n');
+
+      contextRef.current = buildChatContext({
+        assetName: asset?.name ?? symbol, symbol,
+        type: asset?.type ?? 'CRYPTO', tf, srcLabel,
+        price: livePrice, chgPct: liveChg,
+        rsi, ma20, ma50, ohlc,
+        mlSignal:     (route?.params as any)?.mlSignal ?? null,
+        vpSnap:       (route?.params as any)?.vpSnap ?? null,
+        regimeSnap:   (route?.params as any)?.regimeSnap ?? null,
+        mtfSnap:      (route?.params as any)?.mtfSnap ?? null,
+        techSummary:  (route?.params as any)?.techSummary ?? null,
+        openPosition: (route?.params as any)?.openPosition ?? null,
+      });
+    } catch { /* keep existing context on error */ }
+  }, [asset, symbol, route?.params]);
+
   const buildContext = useCallback(async () => {
     setContextErr('');
     const tf = (route?.params as any)?.tf || '15m'; // use chart's current tf if passed
@@ -472,6 +516,9 @@ export default function AIChatScreen({ route }: any) {
     // Fire haptic FIRST — before any state update (most instant possible)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     sendingRef.current = true;
+
+    // Refresh context with latest price + cached candles (instant, no network)
+    await refreshContextFromCache();
 
     const userMsg: ChatMessage = { role: 'user', content };
     const withUser = [...messagesRef.current, userMsg];
