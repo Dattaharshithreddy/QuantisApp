@@ -481,14 +481,6 @@ export default function AIChatScreen({ route }: any) {
   const mountedRef      = useRef(true);
   const appActiveRef    = useRef(true);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    const _sub = AppState.addEventListener('change', s => { appActiveRef.current = s === 'active'; });
-    return () => { mountedRef.current = false; _sub.remove(); };
-  }, []);
-  const mountedRef      = useRef(true);
-  const appActiveRef    = useRef(true);
-
   // Track mount/unmount to cancel pending updates
   useEffect(() => {
     mountedRef.current = true;
