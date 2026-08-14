@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "758343320732",
+    "project_id": "quantis-trading",
+    "storage_bucket": "quantis-trading.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:758343320732:android:0ca94517f83d191ba1d959",
+        "android_client_info": {
+          "package_name": "com.quantis.tradingapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "758343320732-qiqeq3d2t12et9vbvdk94st0ue62s1dr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.quantis.tradingapp",
+            "certificate_hash": "7c72a7d0a080b12620d062d30a8d3ab8dbbaf9e5"
+          }
+        },
+        {
+          "client_id": "758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhl37WJv2ryf9_yAxFvO_tp2yIDkjz5Qw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

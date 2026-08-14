@@ -13,4 +13,3 @@ web-build/
 *.log
 android/
 ios/
-google-services.json
