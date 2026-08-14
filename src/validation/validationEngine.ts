@@ -1,6 +1,6 @@
 // STATUS: DISCONNECTED — not currently imported by any screen.
-Wire into VerificationScreen.tsx or PaperAnalyticsScreen.tsx to surface
-prediction accuracy, false signal rates, and calibration curves.
+// Wire into VerificationScreen.tsx or PaperAnalyticsScreen.tsx to surface
+// prediction accuracy, false signal rates, and calibration curves.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // VALIDATION ENGINE  (v5.6.0)

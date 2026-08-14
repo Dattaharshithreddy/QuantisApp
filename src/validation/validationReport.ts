@@ -1,5 +1,5 @@
 // STATUS: DISCONNECTED — companion formatter to validationEngine.ts.
-Wire alongside validationEngine.ts when it is connected to a screen.
+// Wire alongside validationEngine.ts when it is connected to a screen.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // VALIDATION REPORT FORMATTER  (v5.6.0)
