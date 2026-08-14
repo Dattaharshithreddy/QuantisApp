@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase 1: allow all reads/writes (single user, no auth yet)
+    // Phase 2: will restrict to authenticated user only
+    match /kvstore/{key} {
+      allow read, write: if true;
+    }
+  }
+}
