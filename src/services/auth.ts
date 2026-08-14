@@ -1,13 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AUTH SERVICE  (Phase 3)
+// AUTH SERVICE  (Phase 8)
 //
 // Strategy:
-//   1. On first launch: sign in anonymously (instant, no friction, no UI)
-//   2. User can optionally sign in with Google to sync across devices
-//   3. On Google sign-in: link anonymous account → Google (data preserved)
+//   1. Auto sign-in anonymously on first launch (no friction)
+//   2. Optional Google Sign-In via expo-auth-session
+//   3. Anonymous → Google account link (data preserved)
 //
-// Auth state is exposed via useAuth() hook (AuthContext).
-// All Firestore data is scoped under /users/{uid}/ so data is per-user.
+// Web Client ID: 758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.googleusercontent.com
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   signInAnonymously,
@@ -21,7 +20,9 @@ import {
 import { auth } from './firebase';
 import { logger } from '../utils/logger';
 
-// ── Anonymous sign-in (called on app start) ───────────────────────────────────
+const WEB_CLIENT_ID = '758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.googleusercontent.com';
+
+// ── Anonymous sign-in ─────────────────────────────────────────────────────────
 export async function signInAnon(): Promise<User | null> {
   try {
     if (auth.currentUser) return auth.currentUser;
@@ -34,26 +35,31 @@ export async function signInAnon(): Promise<User | null> {
   }
 }
 
-// ── Google Sign-In using expo-auth-session ────────────────────────────────────
-// Returns the signed-in user or null on failure/cancel.
+// ── Google Sign-In via expo-auth-session ──────────────────────────────────────
 export async function signInWithGoogle(): Promise<User | null> {
   try {
-    const { makeRedirectUri, startAsync } = await import('expo-auth-session');
+    const AuthSession = await import('expo-auth-session');
+    const { makeRedirectUri, startAsync } = AuthSession;
 
-    const redirectUri = makeRedirectUri({ scheme: 'quantis' });
-    const clientId    = '758343320732-web-client-id.apps.googleusercontent.com'; // replace with real web client ID
-
-    const result = await startAsync({
-      authUrl:
-        `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${clientId}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=token` +
-        `&scope=profile%20email`,
+    const redirectUri = makeRedirectUri({
+      scheme:   'quantis',
+      path:     'auth',
+      useProxy: false,
     });
 
+    logger.info('auth', `Google Sign-In redirect URI: ${redirectUri}`);
+
+    const authUrl =
+      `https://accounts.google.com/o/oauth2/v2/auth` +
+      `?client_id=${WEB_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=token` +
+      `&scope=${encodeURIComponent('profile email')}`;
+
+    const result = await startAsync({ authUrl });
+
     if (result.type !== 'success') {
-      logger.info('auth', `Google sign-in ${result.type}`);
+      logger.info('auth', `Google sign-in result: ${result.type}`);
       return null;
     }
 
@@ -62,10 +68,9 @@ export async function signInWithGoogle(): Promise<User | null> {
 
     let user: User;
     if (auth.currentUser?.isAnonymous) {
-      // Link anonymous account to Google (preserves all data)
       const linked = await linkWithCredential(auth.currentUser, credential);
       user = linked.user;
-      logger.info('auth', `Anonymous account linked to Google: ${user.email}`);
+      logger.info('auth', `Anonymous → Google linked: ${user.email}`);
     } else {
       const signed = await signInWithCredential(auth, credential);
       user = signed.user;
@@ -82,19 +87,17 @@ export async function signInWithGoogle(): Promise<User | null> {
 export async function signOut(): Promise<void> {
   try {
     await auth.signOut();
-    // Re-sign in anonymously so app still works without account
-    await signInAnon();
+    await signInAnon(); // re-sign anonymously so app keeps working
   } catch (e: any) {
     logger.error('auth', `Sign out failed: ${e.message}`);
   }
 }
 
-// ── Get current user UID (for Firestore path scoping) ─────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 export function getCurrentUid(): string | null {
   return auth.currentUser?.uid ?? null;
 }
 
-// ── Subscribe to auth state changes ──────────────────────────────────────────
 export function subscribeToAuthState(callback: (user: User | null) => void): () => void {
   return onAuthStateChanged(auth, callback);
 }
