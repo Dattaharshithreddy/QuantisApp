@@ -32,6 +32,8 @@ jobs:
 
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean
+        env:
+          EXPO_NO_TYPESCRIPT_SETUP: 1
 
       - name: Build Release APK
         run: |
