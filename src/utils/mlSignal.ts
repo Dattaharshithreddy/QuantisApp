@@ -568,7 +568,7 @@ async function precomputeSeriesImpl(candles: Candle[]) {
   // Async with yields so the JS thread is not blocked continuously.
   // This lets the 45s timeout setTimeout fire even on slow devices,
   // preventing the "stuck forever on Predicting..." issue.
-  const yield_ = () => new Promise<void>(r => setTimeout(r, 0));
+  const yield_ = () => new Promise<void>(r => setTimeout(r, 8)); // 8ms — allows touch events to be processed
 
   const cl = candles.map(c => c.close);
   const ema20 = ema(cl, 20), ema50 = ema(cl, 50), ema200 = ema(cl, 200);

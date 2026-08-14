@@ -159,7 +159,7 @@ export async function buildFitCache(candles: Candle[]): Promise<PrecomputedFitCa
 // Higher = less overhead, UI updates less frequently during long evaluations.
 // 25 is the production default — reduces yield count from 20 to 8 per fitEnsemble.
 // Set to 10 for debugging if you need finer-grained progress feedback.
-const FIT_YIELD_INTERVAL = 25;
+const FIT_YIELD_INTERVAL = 5; // yield every 5 epochs (was 25) — keeps UI responsive
 
 export async function fitEnsemble(
   candles:      Candle[],
@@ -243,14 +243,14 @@ export async function fitEnsemble(
   const mlp = new MLP(trainX[0].length, 8, rng);
   for (let e = 0; e < 100; e++) {
     mlp.trainEpoch(normTrainX, trainY, 0.08);
-    if (e % FIT_YIELD_INTERVAL === FIT_YIELD_INTERVAL - 1) await new Promise<void>(r => setTimeout(r, 0));
+    if (e % FIT_YIELD_INTERVAL === FIT_YIELD_INTERVAL - 1) await new Promise<void>(r => setTimeout(r, 32));
   }
   logger.info('backtest:perf', `[FIT] h=${horizon} MLP 100ep: ${Date.now()-_fitT0}ms (N=${trainX.length},D=${trainX[0].length})`);
   const _lrT0 = Date.now();
   const lr = new LogisticRegression(trainX[0].length, rng);
   for (let e = 0; e < 100; e++) {
     lr.trainEpoch(normTrainX, trainY, 0.15);
-    if (e % FIT_YIELD_INTERVAL === FIT_YIELD_INTERVAL - 1) await new Promise<void>(r => setTimeout(r, 0));
+    if (e % FIT_YIELD_INTERVAL === FIT_YIELD_INTERVAL - 1) await new Promise<void>(r => setTimeout(r, 32));
   }
   logger.info('backtest:perf', `[FIT] h=${horizon} LR  100ep: ${Date.now()-_lrT0}ms`);
 

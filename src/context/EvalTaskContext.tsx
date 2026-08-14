@@ -94,7 +94,7 @@ const EvalTaskContext = createContext<AppTaskContextValue>({
 export function useEvalTasks() { return useContext(EvalTaskContext); }
 
 // One event-loop tick — yields to React, navigation, and native animations
-const tick = () => new Promise<void>(r => setTimeout(r, 0));
+const tick = () => new Promise<void>(r => setTimeout(r, 16)); // 1 frame — lets UI process touch events
 
 function makeComboId(type: TaskType, combos: ComboSpec[]): string {
   const key = combos.map(c => `${c.asset.symbol}_${c.tf}`).sort().join('|');
