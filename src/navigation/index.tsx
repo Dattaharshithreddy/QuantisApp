@@ -240,6 +240,11 @@ export default function RootNavigator({ navigationRef }: { navigationRef?: any }
         <RootStack.Screen name="PaperAnalytics" component={WrappedPaperAnalytics} />
         <RootStack.Screen name="PaperReplay" component={WrappedPaperReplay} />
         <RootStack.Screen name="ScannerDashboard" component={WrappedScannerDashboard} />
+        <RootStack.Screen
+          name="OrderConfirmation"
+          component={OrderConfirmationScreen}
+          options={{ presentation: 'modal', headerShown: true, title: 'Confirm Order' }}
+        />
       </RootStack.Navigator>
     </NavigationContainer>
   );
