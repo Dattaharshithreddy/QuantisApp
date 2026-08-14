@@ -149,8 +149,9 @@ export async function placeLiveOrder(
                         fill.broker === 'BINANCE_FUTURES' ? 'Binance Perps' :
                         fill.broker === 'COINDCX' ? (req.assetSrc === 'coindcx_futures' ? 'CoinDCX Futures' : 'CoinDCX') : 'Binance';
     // Push notification for live fill
-    import('../services/notifications').then(({ notifyLiveFill }) => {
-      notifyLiveFill(fill.symbol, fill.direction, fill.filledQty, fill.filledPrice, fill.orderId).catch(() => {});
+    import('../services/notifications').then(({ cloudNotifyLiveFill }) => {
+      // cloudNotifyLiveFill uses FCM — works even when app is killed
+      cloudNotifyLiveFill(fill.symbol, fill.direction, fill.filledQty, fill.filledPrice, fill.orderId).catch(() => {});
     }).catch(() => {});
     notifyLiveOrderFilled(
       fill.symbol, fill.direction, fill.filledQty, fill.filledPrice,

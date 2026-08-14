@@ -23,6 +23,9 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { KVStore } from './storage';
+import { db, auth } from './firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { navigationRef } from '../utils/navigationRef';
 import { logger } from '../utils/logger';
 
@@ -63,14 +66,72 @@ Notifications.setNotificationHandler({
 // ── Permission ────────────────────────────────────────────────────────────────
 export async function requestPermission(): Promise<boolean> {
   const { status: existing } = await Notifications.getPermissionsAsync();
-  if (existing === 'granted') return true;
+  if (existing === 'granted') {
+    await registerFCMToken(); // refresh token on each launch
+    return true;
+  }
   const { status } = await Notifications.requestPermissionsAsync();
   if (status !== 'granted') {
     logger.warn('notifications', 'Permission not granted');
     return false;
   }
   logger.info('notifications', 'Permission granted');
+  await registerFCMToken();
   return true;
+}
+
+// Register FCM push token with Firestore so Cloud Functions can reach this device
+async function registerFCMToken(): Promise<void> {
+  try {
+    if (Platform.OS !== 'android') return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId: 'quantis-trading',
+    });
+    const token = tokenData.data;
+    if (!token) return;
+    await setDoc(doc(db, `users/${uid}/profile/fcmToken`), {
+      token,
+      updatedAt: serverTimestamp(),
+      platform: Platform.OS,
+    });
+    logger.info('notifications', `FCM token registered: ${token.slice(0, 20)}...`);
+  } catch (e: any) {
+    logger.warn('notifications', `FCM token registration failed: ${e.message}`);
+  }
+}
+
+// ── Cloud Function callers (for background notifications) ─────────────────────
+// These call Firebase Cloud Functions which send FCM pushes even when app is killed.
+
+export async function cloudNotifyEvalComplete(
+  symbol: string, timeframe: string, returnPct: number, bestHorizon: number
+): Promise<void> {
+  try {
+    const fns = getFunctions(undefined, 'asia-south1');
+    const fn  = httpsCallable(fns, 'notifyEvalComplete');
+    await fn({ symbol, timeframe, returnPct, bestHorizon });
+    logger.info('notifications', `Cloud eval complete sent for ${symbol}/${timeframe}`);
+  } catch (e: any) {
+    logger.warn('notifications', `Cloud eval notify failed: ${e.message}`);
+    // Fall back to local notification
+    await notifyEvalComplete(symbol, timeframe, returnPct, bestHorizon);
+  }
+}
+
+export async function cloudNotifyLiveFill(
+  symbol: string, direction: string, qty: number, price: number, orderId: string
+): Promise<void> {
+  try {
+    const fns = getFunctions(undefined, 'asia-south1');
+    const fn  = httpsCallable(fns, 'notifyLiveFill');
+    await fn({ symbol, direction, qty, price: String(price), orderId });
+    logger.info('notifications', `Cloud live fill sent: ${orderId}`);
+  } catch (e: any) {
+    logger.warn('notifications', `Cloud live fill notify failed: ${e.message}`);
+    await notifyLiveFill(symbol, direction, qty, price, orderId);
+  }
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
