@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { Candle } from './indicators';
 import { precomputeSeries } from './mlSignal';
 import { detectTrendDirection, detectVolatilityRegime } from './marketStructure';
@@ -16,12 +17,12 @@ const KEY = 'regimeFilterMode';
 
 export async function getRegimeFilterMode(): Promise<RegimeFilterMode> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     return (raw as RegimeFilterMode) || 'DISABLED';
   } catch { return 'DISABLED'; }
 }
 export async function setRegimeFilterMode(mode: RegimeFilterMode): Promise<void> {
-  try { await AsyncStorage.setItem(KEY, mode); } catch { /* non-fatal */ }
+  try { await KVStore.set(KEY, mode); } catch { /* non-fatal */ }
 }
 
 export type RegimeCheckResult = { allowed: boolean; currentRegime: string; skipMessage?: string };

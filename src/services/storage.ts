@@ -43,9 +43,38 @@ const KEY_MODES: Record<string, MigrationMode> = {
   'hiddenBuiltinAssets':     'DUAL_WRITE',
   'customWatchlist':         'DUAL_WRITE',
   // ── Dynamic key prefixes ──────────────────────────────────────────────────
-  'aichat_v1_':              'DUAL_WRITE',  // aichat_v1_BTCUSD etc
-  'predictionHistory_':      'DUAL_WRITE',  // predictionHistory_BTCUSD_15m etc
-  'dailyPnL_':               'DUAL_WRITE',  // dailyPnL_2026-08-14 etc
+  'aichat_v1_':              'DUAL_WRITE',
+  'predictionHistory_':      'DUAL_WRITE',
+  'dailyPnL_':               'DUAL_WRITE',
+  'notifDedup_':             'DUAL_WRITE',
+  'perfMetrics_v1_':         'DUAL_WRITE',
+  'memoryEngine_episodes_':  'DUAL_WRITE',
+  // ── Phase 5: task/scanner/trading state ──────────────────────────────────
+  'backgroundTaskContext__runningIds': 'DUAL_WRITE',
+  'scannerEnabled':          'DUAL_WRITE',
+  'scannerStatus':           'DUAL_WRITE',
+  'scannerConfig':           'DUAL_WRITE',
+  'liveTradeSettings_v1':    'DUAL_WRITE',
+  'liveOrderLog_v1':         'DUAL_WRITE',
+  'liveReconciliationLog_v1': 'DUAL_WRITE',
+  'priceAlerts':             'DUAL_WRITE',
+  'bnFuturesPortfolio_v1':   'DUAL_WRITE',
+  'bnFundingLog_v1':         'DUAL_WRITE',
+  'futuresContracts_v2':     'DUAL_WRITE',
+  'futuresPortfolio_v1':     'DUAL_WRITE',
+  'futuresMtmLog_v1':        'DUAL_WRITE',
+  'tradeJournal':            'DUAL_WRITE',
+  'namedWatchlists':         'DUAL_WRITE',
+  'activeWatchlistName':     'DUAL_WRITE',
+  'quantis_override_log':    'DUAL_WRITE',
+  'paperRiskExtras':         'DUAL_WRITE',
+  'patternOutcomes_v1':      'DUAL_WRITE',
+  'regimeFilterMode':        'DUAL_WRITE',
+  'securityAuditResult_v1':  'DUAL_WRITE',
+  'activeStrategyId':        'DUAL_WRITE',
+  'previousOpportunityRanking': 'DUAL_WRITE',
+  'lastDailySummaryDate':    'DUAL_WRITE',
+  'symbolSearchCache':       'DUAL_WRITE',
 };
 
 const DEFAULT_MODE: MigrationMode = 'ASYNC_ONLY';

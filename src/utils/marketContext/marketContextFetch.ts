@@ -21,6 +21,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../services/storage';
 import { logger } from '../logger';
 import {
   MarketContext, VIXData, BreadthData, FIIDIIData, PCRData, SectorData,
@@ -47,7 +48,7 @@ const CACHE_KEY = (src: string) => `marketCtx_v1_${src}`;
 
 async function readCtxCache<T>(src: string): Promise<{ data: T; fetchedAt: number } | null> {
   try {
-    const raw = await AsyncStorage.getItem(CACHE_KEY(src));
+    const raw = await KVStore.get(CACHE_KEY(src));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.data && parsed?.fetchedAt ? parsed : null;
@@ -56,7 +57,7 @@ async function readCtxCache<T>(src: string): Promise<{ data: T; fetchedAt: numbe
 
 async function writeCtxCache<T>(src: string, data: T): Promise<void> {
   try {
-    await AsyncStorage.setItem(CACHE_KEY(src), JSON.stringify({ data, fetchedAt: Date.now() }));
+    await KVStore.set(CACHE_KEY(src), JSON.stringify({ data, fetchedAt: Date.now() }));
   } catch {}
 }
 

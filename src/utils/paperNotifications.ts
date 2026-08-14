@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import * as Notifications from 'expo-notifications';
 import { PaperPosition } from './paperPortfolio';
 import { PaperTradeRecord } from './paperTradeJournal';
@@ -15,9 +16,9 @@ async function shouldSend(key: string): Promise<boolean> {
   if (inFlightKeys.has(key)) return false;
   inFlightKeys.add(key);
   try {
-    const raw = await AsyncStorage.getItem('notifDedup_' + key);
+    const raw = await KVStore.get('notifDedup_' + key);
     if (raw && Date.now() - parseInt(raw, 10) < DEDUP_WINDOW_MS) return false;
-    await AsyncStorage.setItem('notifDedup_' + key, String(Date.now()));
+    await KVStore.set('notifDedup_' + key, String(Date.now()));
     return true;
   } catch { return true; }
   finally { inFlightKeys.delete(key); }

@@ -25,6 +25,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../services/storage';
 import { logger } from '../logger';
 import {
   PatternOutcome, PatternFamilyStats, MIN_OUTCOME_SAMPLE,
@@ -35,7 +36,7 @@ const STORE_KEY = 'patternOutcomes_v1';
 // ── Internal: load the full store (Record<patternId, PatternOutcome>) ─────────
 async function loadStore(): Promise<Record<string, PatternOutcome>> {
   try {
-    const raw = await AsyncStorage.getItem(STORE_KEY);
+    const raw = await KVStore.get(STORE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch (e: any) {
     logger.error('patternOutcomeStore', `Failed to load: ${e.message}`);
@@ -45,7 +46,7 @@ async function loadStore(): Promise<Record<string, PatternOutcome>> {
 
 async function saveStore(store: Record<string, PatternOutcome>): Promise<void> {
   try {
-    await AsyncStorage.setItem(STORE_KEY, JSON.stringify(store));
+    await KVStore.set(STORE_KEY, JSON.stringify(store));
   } catch (e: any) {
     logger.error('patternOutcomeStore', `Failed to save: ${e.message}`);
   }
@@ -238,6 +239,6 @@ function computePnLPctLocal(
 
 // ── Clear all outcome data (use with caution) ─────────────────────────────────
 export async function clearAllOutcomes(): Promise<void> {
-  await AsyncStorage.removeItem(STORE_KEY);
+  await KVStore.remove(STORE_KEY);
   logger.warn('patternOutcomeStore', 'All pattern outcomes cleared.');
 }

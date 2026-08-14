@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 
 // ── Metric labels ─────────────────────────────────────────────────────────────
 // These are the exact categories the architect specified.
@@ -143,7 +144,7 @@ export async function getAllMetricStats(): Promise<MetricStats[]> {
 
 export async function clearMetrics(label?: MetricLabel): Promise<void> {
   if (label) {
-    await AsyncStorage.removeItem(KEY_PREFIX + label);
+    await KVStore.remove(KEY_PREFIX + label);
   } else {
     const keys = await AsyncStorage.getAllKeys();
     const metricKeys = keys.filter(k => k.startsWith(KEY_PREFIX));
@@ -155,7 +156,7 @@ export async function clearMetrics(label?: MetricLabel): Promise<void> {
 
 async function loadSamples(label: MetricLabel): Promise<MetricSample[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY_PREFIX + label);
+    const raw = await KVStore.get(KEY_PREFIX + label);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
@@ -165,6 +166,6 @@ async function appendSample(label: MetricLabel, sample: MetricSample): Promise<v
     const samples = await loadSamples(label);
     samples.push(sample);
     if (samples.length > MAX_SAMPLES) samples.splice(0, samples.length - MAX_SAMPLES);
-    await AsyncStorage.setItem(KEY_PREFIX + label, JSON.stringify(samples));
+    await KVStore.set(KEY_PREFIX + label, JSON.stringify(samples));
   } catch { /* non-fatal */ }
 }

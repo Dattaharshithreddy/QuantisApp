@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // DRIFT DETECTOR  (v6.1.0)
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../services/storage';
 // Lightweight statistical structural break detection — O(1) per observation.
 //
 // Two independent monitors:
@@ -134,7 +135,7 @@ export async function loadDriftState(
   symbol: string, timeframe: string,
 ): Promise<DriftDetectorState> {
   try {
-    const raw = await AsyncStorage.getItem(DRIFT_KEY(symbol, timeframe));
+    const raw = await KVStore.get(DRIFT_KEY(symbol, timeframe));
     return raw ? JSON.parse(raw) : emptyDriftState();
   } catch { return emptyDriftState(); }
 }
@@ -143,10 +144,10 @@ export async function saveDriftState(
   symbol: string, timeframe: string, state: DriftDetectorState,
 ): Promise<void> {
   try {
-    await AsyncStorage.setItem(DRIFT_KEY(symbol, timeframe), JSON.stringify(state));
+    await KVStore.set(DRIFT_KEY(symbol, timeframe), JSON.stringify(state));
   } catch { /* non-critical — drift resets on next load, acceptable */ }
 }
 
 export async function clearDriftState(symbol: string, timeframe: string): Promise<void> {
-  try { await AsyncStorage.removeItem(DRIFT_KEY(symbol, timeframe)); } catch {}
+  try { await KVStore.remove(DRIFT_KEY(symbol, timeframe)); } catch {}
 }

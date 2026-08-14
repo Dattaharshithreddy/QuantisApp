@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { logger } from './logger';
 
 // Named watchlists for the SCANNER specifically — deliberately NOT a
@@ -17,7 +18,7 @@ const DEFAULT_NAME = 'All Tracked Assets'; // the implicit watchlist = everythin
 
 export async function getNamedWatchlists(): Promise<NamedWatchlist[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (e: any) {
     logger.error('multiWatchlist', `Failed to load: ${e.message}`);
@@ -29,25 +30,25 @@ export async function saveNamedWatchlist(list: NamedWatchlist): Promise<NamedWat
   const lists = await getNamedWatchlists();
   const idx = lists.findIndex(l => l.name === list.name);
   if (idx >= 0) lists[idx] = list; else lists.push(list);
-  await AsyncStorage.setItem(KEY, JSON.stringify(lists));
+  await KVStore.set(KEY, JSON.stringify(lists));
   return lists;
 }
 
 export async function deleteNamedWatchlist(name: string): Promise<NamedWatchlist[]> {
   const lists = (await getNamedWatchlists()).filter(l => l.name !== name);
-  await AsyncStorage.setItem(KEY, JSON.stringify(lists));
+  await KVStore.set(KEY, JSON.stringify(lists));
   const active = await getActiveWatchlistName();
   if (active === name) await setActiveWatchlistName(DEFAULT_NAME);
   return lists;
 }
 
 export async function getActiveWatchlistName(): Promise<string> {
-  const raw = await AsyncStorage.getItem(ACTIVE_KEY);
+  const raw = await KVStore.get(ACTIVE_KEY);
   return raw || DEFAULT_NAME;
 }
 
 export async function setActiveWatchlistName(name: string): Promise<void> {
-  await AsyncStorage.setItem(ACTIVE_KEY, name);
+  await KVStore.set(ACTIVE_KEY, name);
 }
 
 export { DEFAULT_NAME as DEFAULT_WATCHLIST_NAME };

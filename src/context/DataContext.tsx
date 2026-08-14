@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { getSecureCredential, setSecureCredential, deleteSecureCredential } from '../utils/secureCredentials';
 import { ASSETS, Asset, LogicalAsset } from '../api/assets';
 import { openBinanceStream, fetchBinanceDepth, fetchBnSpotSnapshot } from '../api/binance';
@@ -230,7 +231,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Phase 1: load cached prices from last session on mount (~50ms)
   useEffect(() => {
-    AsyncStorage.getItem(PRICE_CACHE_KEY).then(raw => {
+    KVStore.get(PRICE_CACHE_KEY).then(raw => {
       if (!raw) return;
       try {
         const cached: Record<string, PriceInfo> = JSON.parse(raw);
@@ -263,7 +264,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (info.status === 'live' && info.price > 0) toSave[sym] = info;
       });
       if (Object.keys(toSave).length > 0) {
-        AsyncStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(toSave)).catch(() => {});
+        KVStore.set(PRICE_CACHE_KEY, JSON.stringify(toSave)).catch(() => {});
       }
     }, 10_000); // write at most once every 10 seconds
   }, []);

@@ -31,6 +31,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { aoGetPositions } from '../api/angelOneTrading';
 import { bnGetBalances }  from '../api/binanceTrading';
 import { getLiveTradingCredential } from './secureCredentials';
@@ -67,7 +68,7 @@ const RECON_INTERVAL_MS = 15_000;
 
 export async function getReconciliationLog(): Promise<ReconciliationResult[]> {
   try {
-    const raw = await AsyncStorage.getItem(LOG_KEY);
+    const raw = await KVStore.get(LOG_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
@@ -77,7 +78,7 @@ async function appendReconLog(result: ReconciliationResult): Promise<void> {
     const log = await getReconciliationLog();
     log.unshift(result);
     if (log.length > LOG_MAX) log.splice(LOG_MAX);
-    await AsyncStorage.setItem(LOG_KEY, JSON.stringify(log));
+    await KVStore.set(LOG_KEY, JSON.stringify(log));
   } catch (e: any) {
     logger.error('reconciliation', `Failed to append log: ${e.message}`);
   }

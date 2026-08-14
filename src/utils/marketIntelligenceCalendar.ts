@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import * as Notifications from 'expo-notifications';
 
 // ── Re-export legacy types so existing CalendarScreen.tsx is unaffected ────────
@@ -1012,13 +1013,13 @@ export async function saveCachedEvents(events: MarketEvent[]): Promise<void> {
     const payload = {
       timestamp: Date.now(),
       events: events.map(e => ({ ...e, date: e.date.toISOString() }))};
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    await KVStore.set(CACHE_KEY, JSON.stringify(payload));
   } catch (_) { /* Graceful degradation — cache failure is non-fatal */ }
 }
 
 export async function loadCachedEvents(): Promise<MarketEvent[] | null> {
   try {
-    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    const raw = await KVStore.get(CACHE_KEY);
     if (!raw) return null;
     const payload = JSON.parse(raw);
     if (Date.now() - payload.timestamp > CACHE_TTL_MS) return null;
@@ -1034,13 +1035,13 @@ const REMINDER_STORE_KEY = 'eventReminders_v2';
 
 async function loadReminderIds(): Promise<Record<string, string[]>> {
   try {
-    const raw = await AsyncStorage.getItem(REMINDER_STORE_KEY);
+    const raw = await KVStore.get(REMINDER_STORE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch { return {}; }
 }
 
 async function saveReminderIds(data: Record<string, string[]>): Promise<void> {
-  try { await AsyncStorage.setItem(REMINDER_STORE_KEY, JSON.stringify(data)); } catch { /* graceful */ }
+  try { await KVStore.set(REMINDER_STORE_KEY, JSON.stringify(data)); } catch { /* graceful */ }
 }
 
 export async function scheduleEventReminder(

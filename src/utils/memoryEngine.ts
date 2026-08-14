@@ -342,7 +342,7 @@ export function buildEpisodeStore(input: EpisodeBuildInput): EpisodeStore {
 
 export async function saveEpisodeStore(store: EpisodeStore): Promise<void> {
   try {
-    await AsyncStorage.setItem(
+    await KVStore.set(
       EPISODE_STORE_KEY(store.symbol, store.timeframe),
       JSON.stringify(store),
     );
@@ -358,7 +358,7 @@ export async function loadEpisodeStore(
   featureCount:       number,
 ): Promise<EpisodeStore | null> {
   try {
-    const raw = await AsyncStorage.getItem(EPISODE_STORE_KEY(symbol, timeframe));
+    const raw = await KVStore.get(EPISODE_STORE_KEY(symbol, timeframe));
     if (!raw) return null;
     const store: EpisodeStore = JSON.parse(raw);
 

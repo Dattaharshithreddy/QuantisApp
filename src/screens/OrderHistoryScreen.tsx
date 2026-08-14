@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { useTheme } from '../context/ThemeContext';
 import { SPACING } from '../theme/colors';
 
@@ -27,17 +28,17 @@ const MAX = 500;
 
 export async function appendOrderRecord(record: OrderRecord): Promise<void> {
   try {
-    const raw  = await AsyncStorage.getItem(KEY);
+    const raw  = await KVStore.get(KEY);
     const list: OrderRecord[] = raw ? JSON.parse(raw) : [];
     list.unshift(record);
     if (list.length > MAX) list.splice(MAX);
-    await AsyncStorage.setItem(KEY, JSON.stringify(list));
+    await KVStore.set(KEY, JSON.stringify(list));
   } catch { /* non-fatal */ }
 }
 
 export async function getOrderHistory(): Promise<OrderRecord[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }

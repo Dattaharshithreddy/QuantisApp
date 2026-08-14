@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { useTheme } from '../context/ThemeContext';
 import { Card, SectionLabel } from '../components/Common';
 import { SPACING, RADIUS } from '../theme/colors';
@@ -39,13 +40,13 @@ const DEFAULTS: LiveTradeSettings = {
 
 export async function getLiveTradeSettings(): Promise<LiveTradeSettings> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
   } catch { return { ...DEFAULTS }; }
 }
 
 export async function saveLiveTradeSettings(s: LiveTradeSettings): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(s));
+  await KVStore.set(KEY, JSON.stringify(s));
 }
 
 function SettingRow({ label, sub, children, T }: any) {

@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import * as SecureStore from 'expo-secure-store';
 import { BUILD_VERSION } from '../buildInfo';
 import { logger } from './logger';
@@ -57,7 +58,7 @@ async function checkCredentialsNotInAsyncStorage(): Promise<AuditFinding> {
   const leaked: string[] = [];
   for (const key of CREDENTIAL_KEYS) {
     try {
-      const val = await AsyncStorage.getItem(key);
+      const val = await KVStore.get(key);
       if (val && val.length > 5) leaked.push(key);
     } catch { /* ignore read errors */ }
   }
@@ -182,7 +183,7 @@ export async function runSecurityAudit(): Promise<SecurityAuditResult> {
     allPassed,
     findings};
 
-  await AsyncStorage.setItem(AUDIT_KEY, JSON.stringify(result)).catch(() => {});
+  await KVStore.set(AUDIT_KEY, JSON.stringify(result)).catch(() => {});
 
   const failures = findings.filter(f => !f.passed);
   if (failures.length > 0) {
@@ -198,7 +199,7 @@ export async function runSecurityAudit(): Promise<SecurityAuditResult> {
 
 export async function getLastAuditResult(): Promise<SecurityAuditResult | null> {
   try {
-    const raw = await AsyncStorage.getItem(AUDIT_KEY);
+    const raw = await KVStore.get(AUDIT_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }

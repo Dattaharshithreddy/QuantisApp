@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../services/storage';
 import type { StrategyId } from './strategyTypes';
 
 const KEY = 'activeStrategyId';
@@ -30,7 +31,7 @@ function isValidStrategyId(value: unknown): value is StrategyId {
  */
 export async function getActiveStrategyId(): Promise<StrategyId | null> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return isValidStrategyId(parsed) ? parsed : null;
@@ -47,9 +48,9 @@ export async function getActiveStrategyId(): Promise<StrategyId | null> {
 export async function setActiveStrategyId(id: StrategyId | null): Promise<void> {
   try {
     if (id === null) {
-      await AsyncStorage.removeItem(KEY);
+      await KVStore.remove(KEY);
     } else {
-      await AsyncStorage.setItem(KEY, JSON.stringify(id));
+      await KVStore.set(KEY, JSON.stringify(id));
     }
   } catch {
     // Storage failures are non-fatal — the app continues with the in-memory default

@@ -24,6 +24,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { logger } from './logger';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ const MAX_LOG = 1000;
 
 export async function getOrderLog(): Promise<LiveOrderRecord[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (e: any) {
     logger.error('orderLifecycle', `Failed to read order log: ${e.message}`);
@@ -126,7 +127,7 @@ export async function appendOrder(record: LiveOrderRecord): Promise<void> {
     const log = await getOrderLog();
     log.unshift(record);
     if (log.length > MAX_LOG) log.splice(MAX_LOG);
-    await AsyncStorage.setItem(KEY, JSON.stringify(log));
+    await KVStore.set(KEY, JSON.stringify(log));
   } catch (e: any) {
     logger.error('orderLifecycle', `Failed to append order: ${e.message}`);
   }
@@ -158,7 +159,7 @@ export async function updateOrderState(
       state:     to,
       updatedAt: Date.now(),
       history:   [...order.history, transition]};
-    await AsyncStorage.setItem(KEY, JSON.stringify(log));
+    await KVStore.set(KEY, JSON.stringify(log));
     logger.info('orderLifecycle', `${localId} ${order.state} → ${to}${reason ? ` (${reason})` : ''}`);
     return log[idx];
   } catch (e: any) {

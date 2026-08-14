@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../services/storage';
 import {
   FuturesUnderlying, FuturesContract, ContractMonth,
   LOT_SIZES, MARGIN_PCT,
@@ -100,7 +101,7 @@ type CachedTokens = { fetchedAt: number; tokens: Record<string, string> };
 
 async function getCachedTokens(): Promise<CachedTokens | null> {
   try {
-    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    const raw = await KVStore.get(CACHE_KEY);
     if (!raw) return null;
     const cached: CachedTokens = JSON.parse(raw);
     if (isCacheStale(cached.fetchedAt)) return null;
@@ -110,7 +111,7 @@ async function getCachedTokens(): Promise<CachedTokens | null> {
 
 async function saveCachedTokens(tokens: Record<string, string>): Promise<void> {
   try {
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), tokens }));
+    await KVStore.set(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), tokens }));
   } catch {}
 }
 
@@ -361,5 +362,5 @@ export async function getActiveContract(
 }
 
 export async function clearContractCache(): Promise<void> {
-  await AsyncStorage.removeItem(CACHE_KEY).catch(() => {});
+  await KVStore.remove(CACHE_KEY).catch(() => {});
 }

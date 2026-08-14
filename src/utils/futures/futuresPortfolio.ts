@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../services/storage';
 import { logger } from '../logger';
 import {
   FuturesPosition, MtmSettlement,
@@ -46,7 +47,7 @@ const DEFAULT_STATE: FuturesPortfolioState = {
 
 export async function getFuturesPortfolio(): Promise<FuturesPortfolioState> {
   try {
-    const raw = await AsyncStorage.getItem(PORTFOLIO_KEY);
+    const raw = await KVStore.get(PORTFOLIO_KEY);
     return raw ? { ...DEFAULT_STATE, ...JSON.parse(raw) } : { ...DEFAULT_STATE };
   } catch (e: any) {
     logger.error('futuresPortfolio', `Read failed: ${e.message}`);
@@ -56,22 +57,22 @@ export async function getFuturesPortfolio(): Promise<FuturesPortfolioState> {
 
 export async function saveFuturesPortfolio(state: FuturesPortfolioState): Promise<void> {
   try {
-    await AsyncStorage.setItem(PORTFOLIO_KEY, JSON.stringify(state));
+    await KVStore.set(PORTFOLIO_KEY, JSON.stringify(state));
   } catch (e: any) {
     logger.error('futuresPortfolio', `Save failed: ${e.message}`);
   }
 }
 
 export async function resetFuturesPortfolio(): Promise<void> {
-  await AsyncStorage.removeItem(PORTFOLIO_KEY).catch(() => {});
-  await AsyncStorage.removeItem(MTM_LOG_KEY).catch(() => {});
+  await KVStore.remove(PORTFOLIO_KEY).catch(() => {});
+  await KVStore.remove(MTM_LOG_KEY).catch(() => {});
 }
 
 // ── MTM log ───────────────────────────────────────────────────────────────────
 
 export async function getMtmLog(): Promise<MtmSettlement[]> {
   try {
-    const raw = await AsyncStorage.getItem(MTM_LOG_KEY);
+    const raw = await KVStore.get(MTM_LOG_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
@@ -80,7 +81,7 @@ async function appendMtmEntry(entry: MtmSettlement): Promise<void> {
   const log = await getMtmLog();
   log.unshift(entry);
   if (log.length > 500) log.splice(500);
-  await AsyncStorage.setItem(MTM_LOG_KEY, JSON.stringify(log)).catch(() => {});
+  await KVStore.set(MTM_LOG_KEY, JSON.stringify(log)).catch(() => {});
 }
 
 // ── Open position ─────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../../services/storage';
 import { Alert } from 'react-native';
 import { getLiveTradeSettings, LiveTradeSettings } from '../../LiveTradeSettingsScreen';
 import { getLiveTradingCredential } from '../../../utils/secureCredentials';
@@ -85,7 +86,7 @@ export function useLiveTrading(
       return;
     }
 
-    AsyncStorage.getItem(modeKey(src))
+    KVStore.get(modeKey(src))
       .then(v => setTradingModeState(v === 'LIVE' ? 'LIVE' : 'PAPER'))
       .catch(() => setTradingModeState('PAPER'));
   }, [asset?.src]);  // re-runs on every source change (AO → Binance, etc.)
@@ -113,7 +114,7 @@ export function useLiveTrading(
     }
 
     setTradingModeState(mode);
-    AsyncStorage.setItem(modeKey(src), mode).catch(() => {});
+    KVStore.set(modeKey(src), mode).catch(() => {});
   }, [asset?.src]);
 
   // ── Validation before any live trade ──────────────────────────────────────

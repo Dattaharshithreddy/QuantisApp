@@ -9,6 +9,7 @@
 // symbol+timeframe. Queries are O(versions) — always small (<100).
 // ─────────────────────────────────────────────────────────────────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../services/storage';
 import { ARCHITECTURE_VERSION } from '../modelConstants';
 
 // ── Registry record — one per accepted training run ──────────────────────────
@@ -35,7 +36,7 @@ const MAX_REGISTRY_ENTRIES = 50;  // prevent unbounded growth
 // ── Read ──────────────────────────────────────────────────────────────────────
 export async function listModels(symbol: string, timeframe: string): Promise<ModelRegistryEntry[]> {
   try {
-    const raw = await AsyncStorage.getItem(REGISTRY_KEY(symbol, timeframe));
+    const raw = await KVStore.get(REGISTRY_KEY(symbol, timeframe));
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
@@ -55,7 +56,7 @@ export async function registerModel(
     const all = await listModels(symbol, timeframe);
     all.push(entry);
     const trimmed = all.slice(-MAX_REGISTRY_ENTRIES);
-    await AsyncStorage.setItem(REGISTRY_KEY(symbol, timeframe), JSON.stringify(trimmed));
+    await KVStore.set(REGISTRY_KEY(symbol, timeframe), JSON.stringify(trimmed));
   } catch (e: any) {
     console.warn('[ModelRegistry] Failed to write:', e.message);
   }
@@ -82,8 +83,8 @@ export async function rollbackModel(
     const prevKey = `mlModel_prev_${previous.symbol}_${previous.timeframe}_h${h}`;
     const liveKey = `mlModel_${previous.symbol}_${previous.timeframe}_h${h}`;
     try {
-      const raw = await AsyncStorage.getItem(prevKey);
-      if (raw) await AsyncStorage.setItem(liveKey, raw);
+      const raw = await KVStore.get(prevKey);
+      if (raw) await KVStore.set(liveKey, raw);
     } catch { /* best-effort per horizon */ }
   }
 

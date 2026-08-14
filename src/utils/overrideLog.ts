@@ -5,6 +5,7 @@
 // Never overwrites history. Each entry is appended to the existing array.
 // ─────────────────────────────────────────────────────────────────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 
 const KEY = 'quantis_override_log';
 
@@ -24,10 +25,10 @@ export type OverrideLogEntry = {
 /** Appends one entry to the override log. Never clears existing entries. */
 export async function appendOverrideLog(entry: OverrideLogEntry): Promise<void> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     const existing: OverrideLogEntry[] = raw ? JSON.parse(raw) : [];
     existing.push(entry);
-    await AsyncStorage.setItem(KEY, JSON.stringify(existing));
+    await KVStore.set(KEY, JSON.stringify(existing));
   } catch {
     // Non-fatal — override proceeds regardless of log failure
   }
@@ -36,7 +37,7 @@ export async function appendOverrideLog(entry: OverrideLogEntry): Promise<void> 
 /** Reads override log. Returns empty array on any read/parse failure. */
 export async function readOverrideLog(): Promise<OverrideLogEntry[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import * as Notifications from 'expo-notifications';
 
 export type PriceAlert = {
@@ -25,7 +26,7 @@ export async function requestNotifPermission() {
 }
 
 export async function getAlerts(): Promise<PriceAlert[]> {
-  const raw = await AsyncStorage.getItem(KEY);
+  const raw = await KVStore.get(KEY);
   try { return raw ? JSON.parse(raw) : []; } catch (e: any) { console.warn('[alerts] corrupt storage:', e?.message); return []; }
 }
 
@@ -33,14 +34,14 @@ export async function addAlert(a: Omit<PriceAlert, 'id' | 'triggered' | 'created
   const alerts = await getAlerts();
   const newAlert: PriceAlert = { ...a, id: Date.now().toString(), triggered: false, createdAt: Date.now() };
   const updated = [newAlert, ...alerts];
-  await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+  await KVStore.set(KEY, JSON.stringify(updated));
   return updated;
 }
 
 export async function deleteAlert(id: string): Promise<PriceAlert[]> {
   const alerts = await getAlerts();
   const updated = alerts.filter(a => a.id !== id);
-  await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+  await KVStore.set(KEY, JSON.stringify(updated));
   return updated;
 }
 
@@ -66,7 +67,7 @@ export async function checkAlerts(symbol: string, currentPrice: number) {
           trigger: null});
       }
     }
-    if (changed) await AsyncStorage.setItem(KEY, JSON.stringify(alerts));
+    if (changed) await KVStore.set(KEY, JSON.stringify(alerts));
     return alerts;
   } finally {
     checkAlertsInFlight.delete(symbol); // ALWAYS released, even on early return or exception

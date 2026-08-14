@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../../../services/storage';
 import { logger } from '../../logger';
 import {
   BnFuturesPosition, BnFuturesSymbol, BnFundingPayment,
@@ -47,7 +48,7 @@ const DEFAULT_STATE: BnFuturesPortfolioState = {
 
 export async function getBnFuturesPortfolio(): Promise<BnFuturesPortfolioState> {
   try {
-    const raw = await AsyncStorage.getItem(PORTFOLIO_KEY);
+    const raw = await KVStore.get(PORTFOLIO_KEY);
     return raw ? { ...DEFAULT_STATE, ...JSON.parse(raw) } : { ...DEFAULT_STATE };
   } catch (e: any) {
     logger.error('bnFuturesPortfolio', `Read failed: ${e.message}`);
@@ -57,7 +58,7 @@ export async function getBnFuturesPortfolio(): Promise<BnFuturesPortfolioState> 
 
 export async function saveBnFuturesPortfolio(state: BnFuturesPortfolioState): Promise<void> {
   try {
-    await AsyncStorage.setItem(PORTFOLIO_KEY, JSON.stringify(state));
+    await KVStore.set(PORTFOLIO_KEY, JSON.stringify(state));
   } catch (e: any) {
     logger.error('bnFuturesPortfolio', `Save failed: ${e.message}`);
   }
@@ -71,7 +72,7 @@ export async function resetBnFuturesPortfolio(): Promise<void> {
 
 export async function getFundingLog(): Promise<BnFundingPayment[]> {
   try {
-    const raw = await AsyncStorage.getItem(FUNDING_LOG_KEY);
+    const raw = await KVStore.get(FUNDING_LOG_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
@@ -80,7 +81,7 @@ async function appendFundingEntry(entry: BnFundingPayment): Promise<void> {
   const log = await getFundingLog();
   log.unshift(entry);
   if (log.length > 500) log.splice(500);
-  await AsyncStorage.setItem(FUNDING_LOG_KEY, JSON.stringify(log)).catch(() => {});
+  await KVStore.set(FUNDING_LOG_KEY, JSON.stringify(log)).catch(() => {});
 }
 
 // ── Open position ─────────────────────────────────────────────────────────────

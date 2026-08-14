@@ -15,6 +15,7 @@
 //   paperTradeJournal.ts — AI control, rich schema, PaperJournalScreen + validationEngine
 // ─────────────────────────────────────────────────────────────────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { calculatePnLWithMultiplier } from './pnlCalculator';
 
 export type Trade = {
@@ -35,7 +36,7 @@ export type Trade = {
 const KEY = 'tradeJournal';
 
 export async function getTrades(): Promise<Trade[]> {
-  const raw = await AsyncStorage.getItem(KEY);
+  const raw = await KVStore.get(KEY);
   try { return raw ? JSON.parse(raw) : []; } catch (e: any) { console.warn('[journal] corrupt storage:', e?.message); return []; }
 }
 
@@ -43,21 +44,21 @@ export async function addTrade(trade: Omit<Trade, 'id' | 'openedAt'>): Promise<T
   const trades = await getTrades();
   const newTrade: Trade = { ...trade, id: Date.now().toString(), openedAt: Date.now() };
   const updated = [newTrade, ...trades];
-  await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+  await KVStore.set(KEY, JSON.stringify(updated));
   return updated;
 }
 
 export async function closeTrade(id: string, exitPrice: number): Promise<Trade[]> {
   const trades = await getTrades();
   const updated = trades.map(t => (t.id === id ? { ...t, exit: exitPrice, closedAt: Date.now() } : t));
-  await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+  await KVStore.set(KEY, JSON.stringify(updated));
   return updated;
 }
 
 export async function deleteTrade(id: string): Promise<Trade[]> {
   const trades = await getTrades();
   const updated = trades.filter(t => t.id !== id);
-  await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+  await KVStore.set(KEY, JSON.stringify(updated));
   return updated;
 }
 

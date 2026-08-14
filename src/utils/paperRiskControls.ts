@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { getRiskSettings, getTodayPnL, isDailyLossLimitHit, RiskSettings } from './riskManager';
 import { PaperPortfolioState, PaperPosition } from './paperPortfolio';
 
@@ -19,11 +20,11 @@ const DEFAULTS: PaperRiskExtras = { maxOpenPositions: 5, maxExposurePerSymbolPct
 const KEY = 'paperRiskExtras';
 
 export async function getPaperRiskExtras(): Promise<PaperRiskExtras> {
-  const raw = await AsyncStorage.getItem(KEY);
+  const raw = await KVStore.get(KEY);
   try { return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS; } catch (e: any) { console.warn('[paperRiskControls] corrupt storage:', e?.message); return DEFAULTS; }
 }
 export async function savePaperRiskExtras(extras: PaperRiskExtras): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(extras));
+  await KVStore.set(KEY, JSON.stringify(extras));
 }
 
 export type RiskCheckResult = { allowed: boolean; reason?: string };

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { logger } from './logger';
 
 // Training Status redesign — the single source of truth for "what
@@ -50,11 +51,11 @@ const MAX_ENTRIES = 20;
 export async function recordTrainingStatus(info: TrainingStatusInfo): Promise<void> {
   try {
     const key = KEY(info.symbol, info.timeframe);
-    const raw = await AsyncStorage.getItem(key);
+    const raw = await KVStore.get(key);
     const existing: TrainingStatusInfo[] = raw ? JSON.parse(raw) : [];
     const updated = [info, ...existing].slice(0, MAX_ENTRIES);
-    await AsyncStorage.setItem(key, JSON.stringify(updated));
-    await AsyncStorage.setItem(LATEST_KEY(info.symbol, info.timeframe), JSON.stringify(info));
+    await KVStore.set(key, JSON.stringify(updated));
+    await KVStore.set(LATEST_KEY(info.symbol, info.timeframe), JSON.stringify(info));
   } catch (e: any) {
     logger.error('trainingHistory', `Failed to record status for ${info.symbol}/${info.timeframe}: ${e.message}`);
   }
@@ -62,7 +63,7 @@ export async function recordTrainingStatus(info: TrainingStatusInfo): Promise<vo
 
 export async function getTrainingHistory(symbol: string, timeframe: string): Promise<TrainingStatusInfo[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY(symbol, timeframe));
+    const raw = await KVStore.get(KEY(symbol, timeframe));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -71,7 +72,7 @@ export async function getTrainingHistory(symbol: string, timeframe: string): Pro
 
 export async function getLatestTrainingStatus(symbol: string, timeframe: string): Promise<TrainingStatusInfo | null> {
   try {
-    const raw = await AsyncStorage.getItem(LATEST_KEY(symbol, timeframe));
+    const raw = await KVStore.get(LATEST_KEY(symbol, timeframe));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;

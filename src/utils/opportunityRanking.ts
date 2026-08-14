@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { Asset } from '../api/assets';
 import { evaluateAllTimeframes, TimeframeSignal, ALL_TIMEFRAMES } from './multiTimeframeEvaluator';
 import { computeConsensus, ConsensusResult } from './consensusEngine';
@@ -49,7 +50,7 @@ export async function rankOpportunities(
   timeframes: string[] = ALL_TIMEFRAMES
 ): Promise<OpportunitySignal[]> {
   let previousRaw: string | null = null;
-  try { previousRaw = await AsyncStorage.getItem(PREVIOUS_RANKING_KEY); }
+  try { previousRaw = await KVStore.get(PREVIOUS_RANKING_KEY); }
   catch (e: any) { logger.warn('opportunityRanking', `storage read failed: ${e?.message}`); }
   let previous: Record<string, { compositeScore: number; direction: string }> = {};
   try { previous = previousRaw ? JSON.parse(previousRaw) : {}; }
@@ -98,7 +99,7 @@ export async function rankOpportunities(
   // this, those two fields would have nothing real to compare against.
   const toPersist: Record<string, { compositeScore: number; direction: string }> = {};
   results.forEach(r => { toPersist[r.symbol] = { compositeScore: r.compositeScore, direction: r.consensus.overallDirection }; });
-  await AsyncStorage.setItem(PREVIOUS_RANKING_KEY, JSON.stringify(toPersist));
+  await KVStore.set(PREVIOUS_RANKING_KEY, JSON.stringify(toPersist));
 
   return results.sort((a, b) => b.compositeScore - a.compositeScore);
 }

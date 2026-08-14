@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { Asset } from './assets';
 import { fetchAOScripMaster, ScripEntry } from './angelOne';
 
@@ -38,7 +39,7 @@ const SCRIP_CACHE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 
 async function getScripMaster(): Promise<ScripEntry[]> {
   try {
-    const cached = await AsyncStorage.getItem(SCRIP_CACHE_KEY);
+    const cached = await KVStore.get(SCRIP_CACHE_KEY);
     if (cached) {
       const { data, fetchedAt } = JSON.parse(cached);
       if (Date.now() - fetchedAt < SCRIP_CACHE_MS) return data;
@@ -46,7 +47,7 @@ async function getScripMaster(): Promise<ScripEntry[]> {
   } catch (_) {}
   const fresh = await fetchAOScripMaster();
   try {
-    await AsyncStorage.setItem(SCRIP_CACHE_KEY, JSON.stringify({ data: fresh, fetchedAt: Date.now() }));
+    await KVStore.set(SCRIP_CACHE_KEY, JSON.stringify({ data: fresh, fetchedAt: Date.now() }));
   } catch (_) {} // if storage is full, just don't cache — search still works this session
   return fresh;
 }

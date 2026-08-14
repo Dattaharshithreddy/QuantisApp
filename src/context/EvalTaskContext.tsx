@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import * as Notifications from 'expo-notifications';
 import { evaluateProductionModel, ProductionEvalResult } from '../utils/productionEvaluation';
 import { clearPrecomputeCache } from '../utils/mlSignal';
@@ -162,7 +163,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
   const MAX_COMPLETED_TASKS = 10;
 
   useEffect(() => {
-    AsyncStorage.getItem(RUNNING_TASK_IDS_KEY).then(raw => {
+    KVStore.get(RUNNING_TASK_IDS_KEY).then(raw => {
       if (!raw) return;
       let staleIds: string[];
       try { staleIds = JSON.parse(raw); } catch { return; }
@@ -182,7 +183,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
       });
       setTasks(prev => ({ ...tombstones, ...prev })); // stale tasks behind any already-loaded state
       // Clear the stale list — they've been acknowledged
-      AsyncStorage.removeItem(RUNNING_TASK_IDS_KEY).catch(() => {});
+      KVStore.remove(RUNNING_TASK_IDS_KEY).catch(() => {});
     }).catch(() => {});
   }, []);
 
@@ -190,7 +191,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
   // across process kills. Called when a task starts and when it finishes.
   const persistRunningIds = useCallback((currentTasks: Record<string, AppTask>) => {
     const ids = Object.values(currentTasks).filter(t => t.status === 'running').map(t => t.id);
-    AsyncStorage.setItem(RUNNING_TASK_IDS_KEY, JSON.stringify(ids)).catch(() => {});
+    KVStore.set(RUNNING_TASK_IDS_KEY, JSON.stringify(ids)).catch(() => {});
   }, []);
 
   // Directly removes one task ID from the AsyncStorage running-IDs list.
@@ -199,10 +200,10 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
   // React state (which may not have committed at finally-block execution time).
   const removeRunningId = useCallback(async (id: string) => {
     try {
-      const raw = await AsyncStorage.getItem(RUNNING_TASK_IDS_KEY);
+      const raw = await KVStore.get(RUNNING_TASK_IDS_KEY);
       const ids: string[] = raw ? JSON.parse(raw) : [];
       const next = ids.filter(x => x !== id);
-      await AsyncStorage.setItem(RUNNING_TASK_IDS_KEY, JSON.stringify(next));
+      await KVStore.set(RUNNING_TASK_IDS_KEY, JSON.stringify(next));
     } catch { /* best-effort — stale-task recovery on next launch will handle residue */ }
   }, []);
 

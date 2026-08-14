@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { Asset } from '../api/assets';
 import { Candle } from '../utils/indicators';
 import { fetchBnKlines } from '../api/binance';
@@ -64,33 +65,33 @@ const LOCK_KEY = 'scannerLock';
 const DEFAULT_STATS: ScannerStats = { symbolsScanned: 0, cacheHits: 0, cacheMisses: 0, failedRequests: 0, lastError: null, avgScanDurationMs: 0, totalScanDurationMs: 0, scanCyclesRun: 0 };
 
 export async function getScannerConfig(): Promise<ScannerConfig> {
-  const raw = await AsyncStorage.getItem(CONFIG_KEY);
+  const raw = await KVStore.get(CONFIG_KEY);
   try { return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG; } catch (e: any) { logger.warn("watchlistScanner", "Corrupt scanner config in AsyncStorage — using defaults. " + (e?.message ?? "")); return DEFAULT_CONFIG; }
 }
 export async function saveScannerConfig(config: ScannerConfig): Promise<void> {
-  await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  await KVStore.set(CONFIG_KEY, JSON.stringify(config));
 }
 
 export async function getScannerStatus(): Promise<ScannerStatus> {
-  const raw = await AsyncStorage.getItem(STATUS_KEY);
+  const raw = await KVStore.get(STATUS_KEY);
   if (!raw) return { lastScanTime: null, nextScanTime: null, currentlyScanning: [], lastResults: {}, stats: DEFAULT_STATS };
   let parsed; try { parsed = JSON.parse(raw); } catch (e: any) { logger.warn("watchlistScanner", "Corrupt scanner status in AsyncStorage — using defaults. " + (e?.message ?? "")); return { lastScanTime: null, nextScanTime: null, currentlyScanning: [], lastResults: {}, stats: DEFAULT_STATS }; }
   return parsed ?? { lastScanTime: null, nextScanTime: null, currentlyScanning: [], lastResults: {}, stats: DEFAULT_STATS };
 }
 async function saveScannerStatus(status: ScannerStatus): Promise<void> {
-  await AsyncStorage.setItem(STATUS_KEY, JSON.stringify(status));
+  await KVStore.set(STATUS_KEY, JSON.stringify(status));
 }
 
 // Prevents duplicate/overlapping scans, with a staleness timeout in case a
 // previous cycle crashed mid-scan and never released the lock.
 async function acquireScanLock(): Promise<boolean> {
-  const raw = await AsyncStorage.getItem(LOCK_KEY);
+  const raw = await KVStore.get(LOCK_KEY);
   if (raw && Date.now() - parseInt(raw, 10) < 3 * 60 * 1000) return false;
-  await AsyncStorage.setItem(LOCK_KEY, String(Date.now()));
+  await KVStore.set(LOCK_KEY, String(Date.now()));
   return true;
 }
 async function releaseScanLock(): Promise<void> {
-  await AsyncStorage.removeItem(LOCK_KEY);
+  await KVStore.remove(LOCK_KEY);
 }
 
 // Exported so Phase 1's multi-timeframe evaluator can reuse this exact
@@ -274,7 +275,7 @@ export async function maybeSendDailySummary(): Promise<void> {
   dailySummaryInFlight = true;
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const lastSent = await AsyncStorage.getItem('lastDailySummaryDate');
+    const lastSent = await KVStore.get('lastDailySummaryDate');
     if (lastSent === today) return;
 
     const trades = await getPaperTrades();
@@ -283,7 +284,7 @@ export async function maybeSendDailySummary(): Promise<void> {
 
     const netPnl = todaysTrades.reduce((s, t) => s + t.pnl, 0);
     await notifyDailySummary(todaysTrades.length, netPnl);
-    await AsyncStorage.setItem('lastDailySummaryDate', today);
+    await KVStore.set('lastDailySummaryDate', today);
   } finally {
     dailySummaryInFlight = false; // ALWAYS cleared, even on early return or exception
   }

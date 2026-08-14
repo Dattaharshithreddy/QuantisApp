@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { useData } from './DataContext';
 import { runScanCycle, getScannerStatus, getScannerConfig, maybeSendDailySummary, ScannerStatus, ScannerConfig } from '../utils/watchlistScanner';
 import { getNamedWatchlists, getActiveWatchlistName, resolveWatchlistAssets } from '../utils/multiWatchlist';
@@ -83,7 +84,7 @@ export function ScannerServiceProvider({ children }: { children: React.ReactNode
   const toggleEnabled = useCallback(async () => {
     const next = !enabled;
     setEnabled(next);
-    await AsyncStorage.setItem(ENABLED_KEY, next ? 'true' : 'false');
+    await KVStore.set(ENABLED_KEY, next ? 'true' : 'false');
     if (next) {
       const config = await getScannerConfig();
       await startPolling(config);
@@ -104,7 +105,7 @@ export function ScannerServiceProvider({ children }: { children: React.ReactNode
     if (restoredRef.current) return;
     restoredRef.current = true;
     (async () => {
-      const wasEnabled = (await AsyncStorage.getItem(ENABLED_KEY)) === 'true';
+      const wasEnabled = (await KVStore.get(ENABLED_KEY)) === 'true';
       const savedStatus = await getScannerStatus();
       setStatus(savedStatus);
       setEnabled(wasEnabled);

@@ -8,6 +8,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import { useTheme } from '../context/ThemeContext';
 import {
   getFuturesPortfolio, resetFuturesPortfolio, saveFuturesPortfolio,
