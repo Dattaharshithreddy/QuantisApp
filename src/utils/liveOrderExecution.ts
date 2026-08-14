@@ -148,6 +148,10 @@ export async function placeLiveOrder(
                         fill.broker === 'ANGEL_ONE_FUTURES' ? 'Angel One NFO' :
                         fill.broker === 'BINANCE_FUTURES' ? 'Binance Perps' :
                         fill.broker === 'COINDCX' ? (req.assetSrc === 'coindcx_futures' ? 'CoinDCX Futures' : 'CoinDCX') : 'Binance';
+    // Push notification for live fill
+    import('../services/notifications').then(({ notifyLiveFill }) => {
+      notifyLiveFill(fill.symbol, fill.direction, fill.filledQty, fill.filledPrice, fill.orderId).catch(() => {});
+    }).catch(() => {});
     notifyLiveOrderFilled(
       fill.symbol, fill.direction, fill.filledQty, fill.filledPrice,
       currency, brokerLabel, fill.lots, fill.lotSize,

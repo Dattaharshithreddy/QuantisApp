@@ -6,6 +6,7 @@ import * as ExpoSplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/context/AuthContext';
+import { setupNotificationTapHandler, requestPermission } from './src/services/notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { DataProvider } from './src/context/DataContext';
@@ -91,6 +92,14 @@ function AppShell() {
 }
 
 export default function App() {
+  React.useEffect(() => {
+    // Request notification permission on first launch
+    requestPermission().catch(() => {});
+    // Setup tap handler for deep navigation
+    const unsub = setupNotificationTapHandler();
+    return unsub;
+  }, []);
+
   return (
     <AuthProvider>
     <GestureHandlerRootView style={{ flex: 1 }}>

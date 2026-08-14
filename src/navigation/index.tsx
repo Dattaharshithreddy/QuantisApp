@@ -36,6 +36,7 @@ import AIChatScreen from '../screens/AIChatScreen';
 import BrokerConnectionScreen from '../screens/BrokerConnectionScreen';
 import OrderConfirmationScreen from '../screens/OrderConfirmationScreen';
 import AccountScreen from '../screens/AccountScreen';
+import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import LivePositionsScreen from '../screens/LivePositionsScreen';
 import KillSwitchScreen from '../screens/KillSwitchScreen';
 import LiveTradeSettingsScreen from '../screens/LiveTradeSettingsScreen';
@@ -163,6 +164,7 @@ function MoreStackNavigator() {
       <MoreStack.Screen name="Calendar" component={WrappedCalendar} options={{ title: 'Economic Calendar' }} />
       <MoreStack.Screen name="MultiChart" component={WrappedMultiChart} options={{ title: 'Multi-Chart' }} />
       <MoreStack.Screen name="Account" component={AccountScreen} options={{ title: 'Account & Sync' }} />
+      <MoreStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ title: 'Notifications' }} />
       <MoreStack.Screen name="Screener" component={WrappedScreener} options={{ title: 'Strategy Screener' }} />
       <MoreStack.Screen name="Backtest" component={WrappedBacktest} options={{ title: 'Backtesting' }} />
       <MoreStack.Screen name="Verification" component={WrappedVerification} options={{ title: 'Verification & Stress Test' }} />

@@ -275,6 +275,10 @@ export async function evaluateProductionModel(
   logger.info('productionEval:perf',
     `[PERF] ${symbol}/${timeframe}  ${'TOTAL'.padEnd(35)}  ${_totalMs}ms = ${(_totalMs/60000).toFixed(1)}min`);
 
+  // Push notification — eval complete
+  import('../services/notifications').then(({ notifyEvalComplete }) => {
+    notifyEvalComplete(symbol, timeframe, primaryResult.metrics.totalReturnPct, bestHorizon?.horizon ?? 3).catch(() => {});
+  }).catch(() => {});
   logger.info('productionEval', `${symbol}/${timeframe} complete: ${primaryResult.trades.length} trades, ${primaryResult.metrics.totalReturnPct.toFixed(2)}% return, beats all baselines: ${beatsAllBaselines}`);
 
   return {
