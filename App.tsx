@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AuthProvider } from './src/context/AuthContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { DataProvider } from './src/context/DataContext';
@@ -91,6 +92,7 @@ function AppShell() {
 
 export default function App() {
   return (
+    <AuthProvider>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
@@ -108,5 +110,6 @@ export default function App() {
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </AuthProvider>
   );
 }

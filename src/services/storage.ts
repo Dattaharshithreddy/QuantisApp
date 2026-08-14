@@ -17,7 +17,7 @@
 //   await KVStore.remove('myKey')
 // ─────────────────────────────────────────────────────────────────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import {
   doc, getDoc, setDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
@@ -59,11 +59,18 @@ function modeFor(key: string): MigrationMode {
 }
 
 // ── Firestore helpers ─────────────────────────────────────────────────────────
-const COLLECTION = 'kvstore';
+// Firestore path: /users/{uid}/kvstore/{key}
+// Anonymous users get a stable UID automatically.
+// Data is scoped per-user — never shared across accounts.
+function getUserPath(key: string): string {
+  const uid = auth.currentUser?.uid ?? 'anonymous';
+  const encodedKey = encodeKey(key);
+  return `users/${uid}/kvstore/${encodedKey}`;
+}
 
 async function fsGet(key: string): Promise<string | null> {
   try {
-    const snap = await getDoc(doc(db, COLLECTION, encodeKey(key)));
+    const snap = await getDoc(doc(db, getUserPath(key)));
     if (!snap.exists()) return null;
     return snap.data()?.value ?? null;
   } catch {
@@ -73,7 +80,7 @@ async function fsGet(key: string): Promise<string | null> {
 
 async function fsSet(key: string, value: string): Promise<void> {
   try {
-    await setDoc(doc(db, COLLECTION, encodeKey(key)), {
+    await setDoc(doc(db, getUserPath(key)), {
       value,
       updatedAt: serverTimestamp(),
     });
@@ -82,11 +89,11 @@ async function fsSet(key: string, value: string): Promise<void> {
 
 async function fsDelete(key: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, COLLECTION, encodeKey(key)));
+    await deleteDoc(doc(db, getUserPath(key)));
   } catch {}
 }
 
-// Firestore doc IDs can't contain '/' — encode the key
+// Encode special chars for use in Firestore path segments
 function encodeKey(key: string): string {
   return key.replace(/\//g, '__SLASH__').replace(/\./g, '__DOT__');
 }

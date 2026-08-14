@@ -52,6 +52,7 @@ const SECTIONS: Section[] = [
       { route: 'HealthDashboard',     icon: '🩺', title: 'Health Dashboard',      desc: 'Broker status, WebSocket, reconciliation' },
       { route: 'PerformanceDashboard',icon: '⚡', title: 'System Performance',     desc: 'Prediction, order, and fill latency' },
       { route: 'OrderAudit',          icon: '🔍', title: 'Audit Trail',            desc: 'Full event timeline for every live order' },
+      { route: 'Account',              icon: '👤', title: 'Account & Sync',         desc: 'Sign in with Google to sync data' },
       { route: 'BrokerConnection',    icon: '🔌', title: 'Broker Connection',      desc: 'Connect Angel One & Binance' },
       { route: 'LiveTradeSettings',   icon: '⚙️', title: 'Live Trade Settings',    desc: 'MANUAL/AUTO mode, limits, notifications' },
       { route: 'FuturesSettings',     icon: '⚙️', title: 'Futures Settings',       desc: 'Paper capital, account reset for F&O + crypto' },
