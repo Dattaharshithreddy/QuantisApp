@@ -57,7 +57,7 @@ jobs:
         run: npm install
 
       - name: TypeScript type check
-        run: npx tsc --noEmit --skipLibCheck
+        run: npx tsc --noEmit --skipLibCheck --skipDefaultLibCheck
         # skipLibCheck avoids errors in third-party type definitions.
         # Our own code is fully checked.
 
