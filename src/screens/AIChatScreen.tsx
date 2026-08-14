@@ -17,7 +17,7 @@ import React, {
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   KeyboardAvoidingView, Platform, ActivityIndicator,
-  Animated, Easing, unstable_batchedUpdates,
+  Animated, Easing, unstable_batchedUpdates, AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -65,7 +65,8 @@ function InlineText({ text, baseStyle }: { text: string; baseStyle: any }) {
 }
 
 // ── Message content renderer — parses markdown blocks ────────────────────────
-const MessageContent = memo(({ text, isUser, T }: { text: string; isUser: boolean; T: any }) => {
+const MessageContent = memo(({ text, isUser }: { text: string; isUser: boolean }) => {
+  const { theme: T } = useTheme();
   const baseColor   = isUser ? '#fff' : T.text;
   const dimColor    = isUser ? 'rgba(255,255,255,0.75)' : T.textDim;
   const accentColor = isUser ? '#ffffffcc' : T.accent;
@@ -174,7 +175,8 @@ const MessageContent = memo(({ text, isUser, T }: { text: string; isUser: boolea
 });
 
 // ── Typing indicator — 3 bouncing dots ───────────────────────────────────────
-const TypingIndicator = memo(({ T }: { T: any }) => {
+const TypingIndicator = memo(() => {
+  const { theme: T } = useTheme();
   const dots = [useRef(new Animated.Value(0)).current,
                 useRef(new Animated.Value(0)).current,
                 useRef(new Animated.Value(0)).current];
@@ -204,7 +206,8 @@ const TypingIndicator = memo(({ T }: { T: any }) => {
 });
 
 // ── Single message bubble ─────────────────────────────────────────────────────
-const MessageBubble = memo(({ msg, T }: { msg: ChatMessage & { streaming?: boolean; stopped?: boolean }; T: any }) => {
+const MessageBubble = memo(({ msg }: { msg: ChatMessage & { streaming?: boolean; stopped?: boolean } }) => {
+  const { theme: T } = useTheme();
   const isUser = msg.role === 'user';
   const wasStopped = (msg as any).stopped === true;
   return (
@@ -243,9 +246,9 @@ const MessageBubble = memo(({ msg, T }: { msg: ChatMessage & { streaming?: boole
         elevation: 3,
       }}>
         {msg.streaming && !msg.content
-          ? <TypingIndicator T={T} />
+          ? <TypingIndicator />
           : msg.content
-            ? <MessageContent text={msg.content} isUser={isUser} T={T} />
+            ? <MessageContent text={msg.content} isUser={isUser} />
             : null
         }
         {msg.streaming && !!msg.content && (
@@ -431,6 +434,28 @@ export default function AIChatScreen({ route }: any) {
   const messagesRef     = useRef<(ChatMessage & { streaming?: boolean })[]>([]);
   const inputRef2       = useRef('');
   const throttleRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef      = useRef(true);
+  const appActiveRef    = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const _sub = AppState.addEventListener('change', s => { appActiveRef.current = s === 'active'; });
+    return () => { mountedRef.current = false; _sub.remove(); };
+  }, []);
+  const mountedRef      = useRef(true);
+  const appActiveRef    = useRef(true);
+
+  // Track mount/unmount to cancel pending updates
+  useEffect(() => {
+    mountedRef.current = true;
+    const sub = AppState.addEventListener('change', s => {
+      appActiveRef.current = s === 'active';
+    });
+    return () => {
+      mountedRef.current = false;
+      sub.remove();
+    };
+  }, []);
 
   // Keep refs in sync with state
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -471,13 +496,14 @@ export default function AIChatScreen({ route }: any) {
     // Prevents excessive re-renders competing with the JS thread
     function flushUpdate() {
       pendingUpdate = false;
+      if (!mountedRef.current) return; // don't update unmounted component
       setMessages(prev => {
         const next = [...prev];
         const last = next[next.length - 1];
         if (last?.streaming) next[next.length - 1] = { ...last, content: accumulated };
         return next;
       });
-      listRef.current?.scrollToEnd({ animated: false });
+      if (appActiveRef.current) listRef.current?.scrollToEnd({ animated: false });
     }
 
     try {
@@ -505,13 +531,13 @@ export default function AIChatScreen({ route }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       if (e?.name === 'AbortError') {
-        // Keep partial response clean — no ugly text appended
-        // The stopped badge is rendered by MessageBubble via the stopped flag
         const partial = [...withUser, {
           role: 'assistant' as const,
           content: accumulated || '',
           stopped: true,
         } as any];
+        // CRITICAL: update ref so next send() doesn't include stale streaming bubble
+        messagesRef.current = partial;
         setMessages(partial);
         persist(partial);
       } else {
@@ -572,11 +598,14 @@ export default function AIChatScreen({ route }: any) {
           ref={listRef}
           data={messages}
           keyExtractor={(_, i) => String(i)}
-          renderItem={({ item }) => <MessageBubble msg={item} T={T} />}
+          renderItem={({ item }) => <MessageBubble msg={item} />}
           contentContainerStyle={{ padding: 16, paddingBottom: 8, flexGrow: 1 }}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={10}
           ListHeaderComponent={showSuggestions ? null : undefined}
           ListEmptyComponent={
             contextReady ? (
