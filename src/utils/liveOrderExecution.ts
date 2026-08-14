@@ -153,6 +153,15 @@ export async function placeLiveOrder(
       currency, brokerLabel, fill.lots, fill.lotSize,
     ).catch(() => {});
 
+    // Save to order history for audit trail
+    import('@react-native-async-storage/async-storage').then(({ default: AS }) => {
+      AS.getItem('liveOrderHistory_v1').then(raw => {
+        const hist = JSON.parse(raw ?? '[]');
+        hist.unshift({ ...fill, assetSrc: req.assetSrc, time: Date.now() });
+        AS.setItem('liveOrderHistory_v1', JSON.stringify(hist.slice(0, 50)));
+      }).catch(() => {});
+    }).catch(() => {});
+
     return fill;
   } catch (e: any) {
     await updateOrderState(orderRecord.localId, 'FAILED', {}, e.message);

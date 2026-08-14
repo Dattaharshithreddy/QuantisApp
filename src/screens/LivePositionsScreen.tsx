@@ -3,6 +3,7 @@
 // Shows all open real positions with live P&L, modify SL/TP, and close button.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -96,10 +97,19 @@ export default function LivePositionsScreen({ navigation }: any) {
   const [loading, setLoading]     = useState(true);
   const [closing, setClosing]     = useState<string | null>(null);
 
+  const [orderHistory, setOrderHistory] = useState<any[]>([]);
+  const [tab, setTab] = useState<'positions' | 'history'>('positions');
+
   const load = useCallback(async () => {
     setLoading(true);
-    const p = await getLivePortfolio();
+    const [p, histRaw] = await Promise.all([
+      getLivePortfolio(),
+      AsyncStorage.getItem('liveOrderHistory_v1').catch(() => null),
+    ]);
     setPositions(p.openPositions);
+    if (histRaw) {
+      try { setOrderHistory(JSON.parse(histRaw)); } catch {}
+    }
     setLoading(false);
   }, []);
 
@@ -179,7 +189,35 @@ export default function LivePositionsScreen({ navigation }: any) {
 
         {loading && <ActivityIndicator color={T.accent} style={{ marginTop: 40 }} />}
 
-        {!loading && positions.length === 0 && (
+        {/* Tab switcher */}
+        <View style={{ flexDirection: 'row', marginBottom: 16, gap: 8 }}>
+          {(['positions', 'history'] as const).map(t => (
+            <TouchableOpacity key={t} onPress={() => setTab(t)}
+              style={{ flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center',
+                backgroundColor: tab === t ? T.accent : T.bg2 }}>
+              <Text style={{ color: tab === t ? '#fff' : T.textDim, fontSize: 12, fontWeight: '700' }}>
+                {t === 'positions' ? `Positions (${positions.length})` : `Order History (${orderHistory.length})`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {tab === 'history' && orderHistory.length === 0 && (
+          <Text style={{ color: T.textDim, textAlign: 'center', marginTop: 40 }}>No order history yet</Text>
+        )}
+        {tab === 'history' && orderHistory.map((o, i) => (
+          <View key={i} style={{ backgroundColor: T.bg2, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+            <Text style={{ color: T.text, fontWeight: '700' }}>{o.direction} {o.symbol} × {o.filledQty}</Text>
+            <Text style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>
+              Filled @ {o.filledPrice?.toFixed(4)} | Broker: {o.broker} | ID: {o.orderId}
+            </Text>
+            <Text style={{ color: T.textDim, fontSize: 10, marginTop: 2 }}>
+              {new Date(o.time || o.filledAt).toLocaleString()}
+            </Text>
+          </View>
+        ))}
+
+        {tab === 'positions' && !loading && positions.length === 0 && (
           <View style={{ alignItems: 'center', paddingTop: 60 }}>
             <Text style={{ color: T.textDim, fontSize: 14, marginBottom: 8 }}>No open live positions</Text>
             <Text style={{ color: T.textDim, fontSize: 11 }}>
@@ -188,7 +226,7 @@ export default function LivePositionsScreen({ navigation }: any) {
           </View>
         )}
 
-        {positions.map(pos => {
+        {tab === 'positions' && positions.map(pos => {
           const livePrice = prices[pos.symbol]?.price ?? pos.filledPrice;
           return (
             <View key={pos.id} style={{ opacity: closing === pos.id ? 0.5 : 1 }}>
