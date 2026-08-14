@@ -184,7 +184,7 @@ export async function fetchMaxHistoryForAsset(
 
   if ((asset.src === 'coindcx' || asset.src === 'coindcx_futures') && (asset as any).cdxSym) {
     // CoinDCX spot and futures use the same candles REST endpoint
-    const candles = await fetchCdxCandles((asset as any).cdxSym, tf, limit);
+    const candles = await fetchCdxCandles((asset as any).cdxSym, tf, Math.min(targetBars, 1000));
     return { candles, capability, note: null };
   }
   if (asset.src === 'av' && asset.avSym) {
