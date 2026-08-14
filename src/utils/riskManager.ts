@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 
 export type RiskSettings = {
   accountSize:              number;
@@ -17,11 +18,11 @@ const DEFAULT_SETTINGS: RiskSettings = {
 };
 
 export async function getRiskSettings(): Promise<RiskSettings> {
-  const raw = await AsyncStorage.getItem('riskSettings');
+  const raw = await KVStore.get('riskSettings');
   try { return raw ? JSON.parse(raw) : DEFAULT_SETTINGS; } catch (e: any) { console.warn("[riskManager] Corrupt risk settings in AsyncStorage — resetting to defaults.", e?.message); return DEFAULT_SETTINGS; }
 }
 export async function saveRiskSettings(s: RiskSettings) {
-  await AsyncStorage.setItem('riskSettings', JSON.stringify(s));
+  await KVStore.set('riskSettings', JSON.stringify(s));
 }
 
 // FIX (Paper Trading Audit — root cause of "first trade on a fresh
@@ -66,7 +67,7 @@ export type DailyPnL = { date: string; realizedPnL: number; tradesCount: number 
 
 export async function getTodayPnL(): Promise<DailyPnL> {
   const today = new Date().toISOString().slice(0, 10);
-  const raw = await AsyncStorage.getItem('dailyPnL_' + today);
+  const raw = await KVStore.get('dailyPnL_' + today);
   try { return raw ? JSON.parse(raw) : { date: today, realizedPnL: 0, tradesCount: 0 }; } catch (e: any) { console.warn("[riskManager] Corrupt daily P&L record in AsyncStorage — returning zero.", e?.message); return { date: today, realizedPnL: 0, tradesCount: 0 }; }
 }
 
@@ -74,7 +75,7 @@ export async function addToDailyPnL(amount: number) {
   const today = new Date().toISOString().slice(0, 10);
   const current = await getTodayPnL();
   const updated = { date: today, realizedPnL: current.realizedPnL + amount, tradesCount: current.tradesCount + 1 };
-  await AsyncStorage.setItem('dailyPnL_' + today, JSON.stringify(updated));
+  await KVStore.set('dailyPnL_' + today, JSON.stringify(updated));
   return updated;
 }
 
@@ -86,9 +87,9 @@ export function isDailyLossLimitHit(todayPnL: DailyPnL, settings: RiskSettings):
 // Paper trading mode — when on, the Journal and Risk Manager are clearly marked
 // as simulation-only so real and practice trades never get mixed up.
 export async function getPaperMode(): Promise<boolean> {
-  const v = await AsyncStorage.getItem('paperMode');
+  const v = await KVStore.get('paperMode');
   return v === 'true';
 }
 export async function setPaperMode(on: boolean) {
-  await AsyncStorage.setItem('paperMode', on ? 'true' : 'false');
+  await KVStore.set('paperMode', on ? 'true' : 'false');
 }

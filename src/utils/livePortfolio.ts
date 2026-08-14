@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { logger } from './logger';
 import type { PaperPosition } from './paperPortfolio';
 
@@ -52,7 +53,7 @@ const DEFAULT_STATE: LivePortfolioState = {
 
 export async function getLivePortfolio(): Promise<LivePortfolioState> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     if (!raw) return { ...DEFAULT_STATE };
     return { ...DEFAULT_STATE, ...JSON.parse(raw) };
   } catch (e: any) {
@@ -63,7 +64,7 @@ export async function getLivePortfolio(): Promise<LivePortfolioState> {
 
 export async function saveLivePortfolio(state: LivePortfolioState): Promise<void> {
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(state));
+    await KVStore.set(KEY, JSON.stringify(state));
   } catch (e: any) {
     logger.error('livePortfolio', `Failed to save: ${e.message}`);
   }
@@ -94,5 +95,5 @@ export async function updateLivePosition(positionId: string, updates: Partial<Li
 }
 
 export async function resetLivePortfolio(): Promise<void> {
-  await AsyncStorage.removeItem(KEY);
+  await KVStore.remove(KEY);
 }

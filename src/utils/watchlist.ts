@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { Asset, ASSETS } from '../api/assets';
 
 const KEY = 'customWatchlist';
 
 export async function getCustomAssets(): Promise<Asset[]> {
-  const raw = await AsyncStorage.getItem(KEY);
+  const raw = await KVStore.get(KEY);
   try { return raw ? JSON.parse(raw) : []; } catch (e: any) { console.warn("[watchlist] Corrupt watchlist data in AsyncStorage — returning empty list.", e?.message); return []; }
 }
 
@@ -13,14 +14,14 @@ export async function addCustomAsset(asset: Asset): Promise<Asset[]> {
   if (list.some(a => a.symbol === asset.symbol && a.src === asset.src)) return list; // already added as a custom asset
   if (ASSETS.some(a => a.symbol === asset.symbol && a.src === asset.src)) return list; // already exists as a built-in - adding it again would create a duplicate row
   const updated = [...list, { ...asset, custom: true }];
-  await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+  await KVStore.set(KEY, JSON.stringify(updated));
   return updated;
 }
 
 export async function removeCustomAsset(symbol: string, src: string): Promise<Asset[]> {
   const list = await getCustomAssets();
   const updated = list.filter(a => !(a.symbol === symbol && a.src === src));
-  await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+  await KVStore.set(KEY, JSON.stringify(updated));
   return updated;
 }
 
@@ -34,7 +35,7 @@ export async function removeCustomAsset(symbol: string, src: string): Promise<As
 const HIDDEN_KEY = 'hiddenBuiltinAssets';
 
 export async function getHiddenBuiltins(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(HIDDEN_KEY);
+  const raw = await KVStore.get(HIDDEN_KEY);
   try { return raw ? JSON.parse(raw) : []; } catch (e: any) { console.warn("[watchlist] Corrupt watchlist data in AsyncStorage — returning empty list.", e?.message); return []; }
 }
 
@@ -43,11 +44,11 @@ export async function hideBuiltinAsset(symbol: string, src: string): Promise<str
   const key = symbol + '|' + src;
   if (list.includes(key)) return list;
   const updated = [...list, key];
-  await AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify(updated));
+  await KVStore.set(HIDDEN_KEY, JSON.stringify(updated));
   return updated;
 }
 
 export async function restoreAllBuiltins(): Promise<string[]> {
-  await AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify([]));
+  await KVStore.set(HIDDEN_KEY, JSON.stringify([]));
   return [];
 }

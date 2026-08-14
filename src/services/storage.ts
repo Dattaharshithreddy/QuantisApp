@@ -24,15 +24,28 @@ import {
 
 type MigrationMode = 'ASYNC_ONLY' | 'DUAL_WRITE' | 'FIRESTORE';
 
-// Phase 1: everything is ASYNC_ONLY — no behaviour change whatsoever.
-// Phase 2 will flip specific keys to DUAL_WRITE.
+// Phase 2: user data keys now dual-write (AsyncStorage + Firestore)
+// Each key is written locally first (instant), then synced to cloud fire-and-forget.
+// Reads always come from AsyncStorage (fast, offline-safe).
 const KEY_MODES: Record<string, MigrationMode> = {
-  // Will be flipped to DUAL_WRITE in Phase 2:
-  // 'riskSettings':        'DUAL_WRITE',
-  // 'themeName':           'DUAL_WRITE',
-  // 'paperPortfolio_v1':   'DUAL_WRITE',
-  // 'livePortfolio_v1':    'DUAL_WRITE',
-  // 'liveOrderHistory_v1': 'DUAL_WRITE',
+  // ── User preferences ─────────────────────────────────────────────────────
+  'riskSettings':            'DUAL_WRITE',
+  'paperMode':               'DUAL_WRITE',
+  'themeName':               'DUAL_WRITE',
+  'exchangePreferences_v1':  'DUAL_WRITE',
+  // ── Trading data ─────────────────────────────────────────────────────────
+  'paperPortfolio':          'DUAL_WRITE',
+  'livePortfolio_v1':        'DUAL_WRITE',
+  'liveOrderHistory_v1':     'DUAL_WRITE',
+  'paperTradeJournal':       'DUAL_WRITE',
+  'shadowTrades_v1':         'DUAL_WRITE',
+  // ── Watchlist ─────────────────────────────────────────────────────────────
+  'hiddenBuiltinAssets':     'DUAL_WRITE',
+  'customWatchlist':         'DUAL_WRITE',
+  // ── Dynamic key prefixes ──────────────────────────────────────────────────
+  'aichat_v1_':              'DUAL_WRITE',  // aichat_v1_BTCUSD etc
+  'predictionHistory_':      'DUAL_WRITE',  // predictionHistory_BTCUSD_15m etc
+  'dailyPnL_':               'DUAL_WRITE',  // dailyPnL_2026-08-14 etc
 };
 
 const DEFAULT_MODE: MigrationMode = 'ASYNC_ONLY';

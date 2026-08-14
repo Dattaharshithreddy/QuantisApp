@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { logger } from './logger';
 import { PaperPosition, getPortfolio } from './paperPortfolio';
 
@@ -40,7 +41,7 @@ const MAX_SHADOWS = 500;
 const MAX_TICKS = 1800; // ~30 candles × 60 ticks each
 
 export async function loadShadowTrades(): Promise<ShadowTrade[]> {
-  try { const r = await AsyncStorage.getItem(KEY); return r ? JSON.parse(r) : []; }
+  try { const r = await KVStore.get(KEY); return r ? JSON.parse(r) : []; }
   catch (e: any) { logger.warn('shadow', e?.message); return []; }
 }
 
@@ -49,7 +50,7 @@ export async function saveShadowTrades(trades: ShadowTrade[]): Promise<void> {
     const open = trades.filter(t => t.outcome === 'OPEN');
     const closed = trades.filter(t => t.outcome !== 'OPEN')
       .sort((a,b) => (b.closedAt??0)-(a.closedAt??0)).slice(0, MAX_SHADOWS);
-    await AsyncStorage.setItem(KEY, JSON.stringify([...open, ...closed]));
+    await KVStore.set(KEY, JSON.stringify([...open, ...closed]));
   } catch (e: any) { logger.warn('shadow', e?.message); }
 }
 

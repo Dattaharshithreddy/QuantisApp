@@ -19,6 +19,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { logger } from './logger';
 
 const STORAGE_KEY = 'exchangePreferences_v1';
@@ -38,7 +39,7 @@ let _cache: ExchangePrefs | null = null;
 async function load(): Promise<ExchangePrefs> {
   if (_cache !== null) return _cache;
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const raw = await KVStore.get(STORAGE_KEY);
     _cache = raw ? JSON.parse(raw) : {};
   } catch (e: any) {
     logger.warn('exchangePrefs', `Load error: ${e.message}`);
@@ -50,7 +51,7 @@ async function load(): Promise<ExchangePrefs> {
 async function save(prefs: ExchangePrefs): Promise<void> {
   _cache = prefs;
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    await KVStore.set(STORAGE_KEY, JSON.stringify(prefs));
   } catch (e: any) {
     logger.warn('exchangePrefs', `Save error: ${e.message}`);
   }

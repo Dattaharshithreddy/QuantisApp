@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { THEMES, Theme } from '../theme/colors';
 
 type ThemeCtx = { theme: Theme; themeName: 'dark' | 'light'; toggleTheme: () => void };
@@ -9,7 +10,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themeName, setThemeName] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
-    AsyncStorage.getItem('themeName').then(v => {
+    KVStore.get('themeName').then(v => {
       if (v === 'light' || v === 'dark') setThemeName(v);
     });
   }, []);
@@ -17,7 +18,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   function toggleTheme() {
     const next = themeName === 'dark' ? 'light' : 'dark';
     setThemeName(next);
-    AsyncStorage.setItem('themeName', next);
+    KVStore.set('themeName', next);
   }
 
   return (

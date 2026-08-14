@@ -22,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { fetchCdxCandles } from '../api/coindcx';
@@ -319,7 +320,7 @@ export default function AIChatScreen({ route }: any) {
   const persist = useCallback((msgs: ChatMessage[]) => {
     if (persistTimer.current) clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(() => {
-      AsyncStorage.setItem(HISTORY_KEY(symbol), JSON.stringify(msgs.slice(-MAX_STORED)));
+      KVStore.set(HISTORY_KEY(symbol), JSON.stringify(msgs.slice(-MAX_STORED)));
     }, 500);
   }, [symbol]);
 
@@ -372,7 +373,7 @@ export default function AIChatScreen({ route }: any) {
     try {
       // Load history AND candles in parallel
       const [historyRaw, candles] = await Promise.all([
-        AsyncStorage.getItem(HISTORY_KEY(symbol)).catch(() => null),
+        KVStore.get(HISTORY_KEY(symbol)).catch(() => null),
         (async () => {
           if (asset?.src === 'binance' && asset?.bnSym) {
             return fetchCandlesWithCache(symbol, tf,
@@ -608,7 +609,7 @@ export default function AIChatScreen({ route }: any) {
   }, [contextReady, anthropicKey, persist]);
 
   const clearHistory = useCallback(() => {
-    AsyncStorage.removeItem(HISTORY_KEY(symbol));
+    KVStore.remove(HISTORY_KEY(symbol));
     setMessages([]);
   }, [symbol]);
 

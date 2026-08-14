@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import type { StrategyId } from './strategy/strategyTypes';
 import { Candle } from './indicators';
 import { logger } from './logger';
@@ -166,7 +167,7 @@ const CURRENT_PORTFOLIO_VERSION = 2;
 
 export async function getPortfolio(): Promise<PaperPortfolioState> {
   try {
-    const raw = await AsyncStorage.getItem(PORTFOLIO_KEY);
+    const raw = await KVStore.get(PORTFOLIO_KEY);
     if (raw) {
       const state: PaperPortfolioState = JSON.parse(raw);
       return await migratePortfolioIfNeeded(state);
@@ -180,7 +181,7 @@ export async function getPortfolio(): Promise<PaperPortfolioState> {
 
 export async function savePortfolio(state: PaperPortfolioState): Promise<void> {
   try {
-    await AsyncStorage.setItem(PORTFOLIO_KEY, JSON.stringify(state));
+    await KVStore.set(PORTFOLIO_KEY, JSON.stringify(state));
   } catch (e: any) {
     logger.error('paperPortfolio', `Failed to save: ${e.message}`);
   }

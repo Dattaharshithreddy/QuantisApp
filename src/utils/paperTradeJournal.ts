@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { logger } from './logger';
 import { Candle } from './indicators';
 import { FillResult } from './executionEngine';
@@ -127,7 +128,7 @@ const KEY = 'paperTradeJournal';
 
 export async function getPaperTrades(): Promise<PaperTradeRecord[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await KVStore.get(KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (e: any) {
     logger.error('paperTradeJournal', `Failed to load: ${e.message}`);
@@ -139,7 +140,7 @@ export async function recordCompletedTrade(record: PaperTradeRecord): Promise<Pa
   const trades = await getPaperTrades();
   const updated = [record, ...trades];
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(updated));
+    await KVStore.set(KEY, JSON.stringify(updated));
     logger.info('paperTradeJournal', `Journal entry created: ${record.direction} ${record.symbol} closed via ${record.exitReason}, pnl=${record.pnl.toFixed(2)} (${record.pnlPct.toFixed(2)}%), held ${(record.holdingMs / 60000).toFixed(0)}min. ${updated.length} total trades in journal.`);
   } catch (e: any) {
     logger.error('paperTradeJournal', `Failed to persist: ${e.message}`);

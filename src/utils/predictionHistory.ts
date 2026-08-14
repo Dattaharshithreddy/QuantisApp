@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from 'services/storage';
 import { Candle } from './indicators';
 import { logger } from './logger';
 
@@ -27,13 +28,13 @@ const MAX_RECORDS = 200; // cap storage growth — keeps the most recent 200 pre
 
 export async function recordPrediction(symbol: string, timeframe: string, time: number, ensembleProbUp: number, horizon: number): Promise<void> {
   try {
-    const raw = await AsyncStorage.getItem(HISTORY_KEY(symbol, timeframe));
+    const raw = await KVStore.get(HISTORY_KEY(symbol, timeframe));
     const history: PredictionRecord[] = raw ? JSON.parse(raw) : [];
     // Avoid duplicate records for the same bar (e.g. re-pressing Train & Predict on the same live bar)
     if (history.some(r => r.time === time)) return;
     history.push({ time, ensembleProbUp, horizon, resolved: false });
     const trimmed = history.slice(-MAX_RECORDS);
-    await AsyncStorage.setItem(HISTORY_KEY(symbol, timeframe), JSON.stringify(trimmed));
+    await KVStore.set(HISTORY_KEY(symbol, timeframe), JSON.stringify(trimmed));
   } catch (e: any) {
     logger.warn('predictionHistory', `${symbol}: failed to record: ${e.message}`);
   }
@@ -44,7 +45,7 @@ export async function recordPrediction(symbol: string, timeframe: string, time: 
 // passed to check the actual outcome against real price data.
 export async function resolveOutcomes(symbol: string, timeframe: string, candles: Candle[]): Promise<void> {
   try {
-    const raw = await AsyncStorage.getItem(HISTORY_KEY(symbol, timeframe));
+    const raw = await KVStore.get(HISTORY_KEY(symbol, timeframe));
     if (!raw) return;
     const history: PredictionRecord[] = JSON.parse(raw);
     let changed = false;
@@ -60,7 +61,7 @@ export async function resolveOutcomes(symbol: string, timeframe: string, candles
       changed = true;
     });
 
-    if (changed) await AsyncStorage.setItem(HISTORY_KEY(symbol, timeframe), JSON.stringify(history));
+    if (changed) await KVStore.set(HISTORY_KEY(symbol, timeframe), JSON.stringify(history));
   } catch (e: any) {
     logger.warn('predictionHistory', `${symbol}: failed to resolve outcomes: ${e.message}`);
   }
@@ -75,7 +76,7 @@ export type CalibrationBucket = { range: string; nominalProb: number; actualHitR
 // shouldn't be taken at face value.
 export async function getCalibration(symbol: string, timeframe: string): Promise<{ buckets: CalibrationBucket[]; totalResolved: number; available: boolean }> {
   try {
-    const raw = await AsyncStorage.getItem(HISTORY_KEY(symbol, timeframe));
+    const raw = await KVStore.get(HISTORY_KEY(symbol, timeframe));
     const history: PredictionRecord[] = raw ? JSON.parse(raw) : [];
     const resolved = history.filter(r => r.resolved);
 
