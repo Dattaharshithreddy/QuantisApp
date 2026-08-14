@@ -641,7 +641,8 @@ export const PredictionCard = React.memo(function PredictionCard({
                 const enriched = { ...d, _liveOverallConfidence: conf.overall, _liveConfGrade: conf.grade } as any;
                 if (isLiveMode && onLiveTrade) {
                   setIsSubmitting(false);
-                  setCtaState({ type: 'position_opened', isLive: true });
+                  // Don't set position_opened yet — wait for order confirmation
+                  // ctaState stays in current state until order is confirmed
                   onLiveTrade({
                     prediction:     enriched,
                     bypassGates:    false,
@@ -732,7 +733,6 @@ export const PredictionCard = React.memo(function PredictionCard({
                         const enrichedOverride = { ...d, _liveOverallConfidence: conf.overall, _liveConfGrade: conf.grade } as any;
                         if (isLiveMode && onLiveTrade) {
                           setIsSubmitting(false);
-                          setCtaState({ type: 'position_opened', isLive: true });
                           onLiveTrade({
                             prediction:     enrichedOverride,
                             bypassGates:    true,

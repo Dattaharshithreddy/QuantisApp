@@ -200,11 +200,12 @@ export default function OrderConfirmationScreen({ route, navigation }: any) {
       };
 
       await addLivePosition(position);
-      navigation.replace('LivePositions');
       Alert.alert(
         '✅ Order Filled',
         `${isLong ? 'Bought' : 'Sold'} ${fill.filledQty}×${request.symbol}` +
         ` @ ${fill.filledPrice.toFixed(4)}\nOrder ID: ${fill.orderId}`,
+        [{ text: 'View Position', onPress: () => navigation.replace('LivePositions') },
+         { text: 'Back to Chart', onPress: () => navigation.goBack() }],
       );
     } catch (e: any) {
       Alert.alert('Order Failed', e.message);
