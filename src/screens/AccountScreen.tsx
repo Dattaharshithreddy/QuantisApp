@@ -106,6 +106,7 @@ export default function AccountScreen() {
             '🤖  AI Copilot chat history',
             '🎯  Prediction history per symbol',
             '🎨  Theme preference',
+            '🧠  ML model weights (Firebase Storage)',
           ].map(item => (
             <Text key={item} style={{ color: T.text, fontSize: 13, marginBottom: 6 }}>
               {item}

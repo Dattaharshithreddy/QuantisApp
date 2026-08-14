@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { saveModel, loadModel, deleteModel } from '../services/mlStorage';
 import { registerModel, buildRegistryEntry } from './modelHealth/modelRegistry';
 import { logger } from './logger';
 import { recordPrediction, getCalibration } from './predictionHistory';
@@ -1183,7 +1184,8 @@ const LR_KEY = (symbol: string, timeframe: string) => `lrModel_${symbol}_${timef
 
 async function loadSavedMLP(key: string, inputSize: number): Promise<MLPWeights | null> {
   try {
-    const raw = await AsyncStorage.getItem(key);
+    const { loadModel: _loadModel } = await import('../services/mlStorage');
+    const raw = await _loadModel(key);
     if (!raw) return null;
     const saved: MLPWeights = JSON.parse(raw);
     if (saved.W1?.length !== 8 || saved.W1?.[0]?.length !== inputSize) return null;
@@ -1192,7 +1194,8 @@ async function loadSavedMLP(key: string, inputSize: number): Promise<MLPWeights 
 }
 async function loadSavedLR(key: string, inputSize: number): Promise<LRWeights | null> {
   try {
-    const raw = await AsyncStorage.getItem(key);
+    const { loadModel: _loadModel2 } = await import('../services/mlStorage');
+    const raw = await _loadModel2(key);
     if (!raw) return null;
     const saved: LRWeights = JSON.parse(raw);
     if (saved.w?.length !== inputSize) return null;
@@ -2296,7 +2299,13 @@ async function trainAndPredictInner(
     const newPairs: [string, string][] = pendingWrites.map(w => [w.key, JSON.stringify(w.value)]);
     const metaPair: [string, string]  = [METADATA_KEY(symbol, timeframe), JSON.stringify(metadata)];
     try {
+      // Save to AsyncStorage first (instant local cache)
       await AsyncStorage.multiSet([...prevPairs, ...newPairs, metaPair]);
+      // Then upload model weights to Firebase Storage in background
+      const { saveModel: _saveModel } = await import('../services/mlStorage');
+      for (const [k, v] of newPairs) {
+        _saveModel(k, v).catch(() => {}); // fire-and-forget cloud backup
+      }
     } catch (e: any) {
       logger.error('mlSignal', `multiSet persistence failed: ${e.message}`);
     }
@@ -2502,6 +2511,11 @@ export async function clearSavedModel(symbol: string, timeframe: string) {
     ...HORIZONS.map(h => AsyncStorage.removeItem(MODEL_KEY(symbol, timeframe, h))),
     ...HORIZONS.map(h => AsyncStorage.removeItem(PREV_MODEL_KEY(symbol, timeframe, h))),
     AsyncStorage.removeItem(LR_KEY(symbol, timeframe)),
+    // Also delete from Firebase Storage
+    ...HORIZONS.map(async h => {
+      const { deleteModel: _del } = await import('../services/mlStorage');
+      return _del(MODEL_KEY(symbol, timeframe, h)).catch(() => {});
+    }),
     AsyncStorage.removeItem(METADATA_KEY(symbol, timeframe)),
   ]);
   logger.info('mlSignal', `${symbol}: cleared all saved model weights and metadata`);
