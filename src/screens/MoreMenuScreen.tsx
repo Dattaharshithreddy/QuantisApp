@@ -53,6 +53,7 @@ const SECTIONS: Section[] = [
       { route: 'PerformanceDashboard',icon: '⚡', title: 'System Performance',     desc: 'Prediction, order, and fill latency' },
       { route: 'OrderAudit',          icon: '🔍', title: 'Audit Trail',            desc: 'Full event timeline for every live order' },
       { route: 'Account',              icon: '👤', title: 'Account & Sync',         desc: 'Sign in with Google to sync data' },
+      { route: 'NotificationSettings', icon: '🔔', title: 'Notifications',             desc: 'Price alerts, trade events, scanner' },
       { route: 'NotificationSettings',  icon: '🔔', title: 'Notifications',            desc: 'Price alerts, trade signals & summaries' },
       { route: 'BrokerConnection',    icon: '🔌', title: 'Broker Connection',      desc: 'Connect Angel One & Binance' },
       { route: 'LiveTradeSettings',   icon: '⚙️', title: 'Live Trade Settings',    desc: 'MANUAL/AUTO mode, limits, notifications' },

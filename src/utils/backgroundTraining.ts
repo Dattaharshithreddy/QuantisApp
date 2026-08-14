@@ -99,7 +99,12 @@ async function _runBackgroundTrain(
       null,           // no order book snapshot in background
       null,           // no market context in background
     );
-    console.log(`[PERF TRAIN] Background train COMPLETE ${symbol}/${timeframe} t=+${Date.now()-_bgT0}ms`);
+    const elapsed = Date.now() - _bgT0;
+    console.log(`[PERF TRAIN] Background train COMPLETE ${symbol}/${timeframe} t=+${elapsed}ms`);
+    // Notify user that model was updated (only if enabled in settings)
+    import('../services/notifications').then(({ notifyTrainingComplete }) => {
+      notifyTrainingComplete(symbol, timeframe, 0).catch(() => {}); // accuracy filled by mlSignal
+    }).catch(() => {});
   } catch {
     // Background training failures are silent — user still gets JS inference on next tap
     console.log(`[PERF TRAIN] Background train FAILED ${symbol}/${timeframe} t=+${Date.now()-_bgT0}ms`);

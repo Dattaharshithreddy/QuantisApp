@@ -12,7 +12,7 @@ import { trainAndPredict, loadModelMetadata } from './mlSignal';
 import { getOptimalConfig } from './modelOptimization';
 import { attemptOpenPosition, checkAIExitSignal, monitorOpenPositions } from './paperTradingEngine';
 import { getPortfolio } from './paperPortfolio';
-import { notifyDailySummary, notifySignalReady } from './paperNotifications';
+import { notifyDailySummary as _notifyDailySummary, notifyScannerSignal } from '../services/notifications';
 import { monitorLivePositions } from './livePositionMonitor';
 import { getPaperTrades } from './paperTradeJournal';
 import { logger } from './logger';
@@ -247,7 +247,7 @@ export async function runScanCycle(
           if ((prediction.action === 'BUY' || prediction.action === 'SELL')
               && prediction.confidence >= 65) {
             const dir: 'LONG' | 'SHORT' = prediction.action === 'BUY' ? 'LONG' : 'SHORT';
-            notifySignalReady(asset.symbol, dir, prediction.confidence, tf).catch(() => {});
+            notifyScannerSignal(asset.symbol, dir, prediction.confidence).catch(() => {});
           }
           await attemptOpenPosition(asset.symbol, tf, prediction, currentPrice, candles, asset.type);
         }
@@ -283,7 +283,9 @@ export async function maybeSendDailySummary(): Promise<void> {
     if (todaysTrades.length === 0) return;
 
     const netPnl = todaysTrades.reduce((s, t) => s + t.pnl, 0);
-    await notifyDailySummary(todaysTrades.length, netPnl);
+    import('../services/notifications').then(({ notifyDailySummary }) => {
+      notifyDailySummary(netPnl, winRate, todaysTrades.length).catch(() => {});
+    }).catch(() => {});
     await KVStore.set('lastDailySummaryDate', today);
   } finally {
     dailySummaryInFlight = false; // ALWAYS cleared, even on early return or exception

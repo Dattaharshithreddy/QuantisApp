@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KVStore } from '../services/storage';
-import * as Notifications from 'expo-notifications';
 
 export type PriceAlert = {
   id: string;
@@ -59,12 +58,10 @@ export async function checkAlerts(symbol: string, currentPrice: number) {
       if (hit) {
         a.triggered = true;
         changed = true;
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `🔔 ${symbol} Alert Triggered`,
-            body: `${symbol} is now ${a.condition === 'ABOVE' ? 'above' : 'below'} ${a.targetPrice} — current: ${currentPrice.toFixed(2)}`,
-            sound: true},
-          trigger: null});
+        // Use central notification service (handles dedup + settings)
+        import('../services/notifications').then(({ notifyPriceAlert }) => {
+          notifyPriceAlert(symbol, a.condition, a.targetPrice).catch(() => {});
+        }).catch(() => {});
       }
     }
     if (changed) await KVStore.set(KEY, JSON.stringify(alerts));
