@@ -35,20 +35,13 @@ export async function signInAnon(): Promise<User | null> {
   }
 }
 
-// ── Google Sign-In via expo-auth-session ──────────────────────────────────────
+// ── Google Sign-In via expo-web-browser (no native deps needed) ───────────────
 export async function signInWithGoogle(): Promise<User | null> {
   try {
-    const AuthSession = await import('expo-auth-session');
-    const { makeRedirectUri, startAsync } = AuthSession;
+    const { openAuthSessionAsync } = await import('expo-web-browser');
+    const { Linking } = await import('react-native');
 
-    const redirectUri = makeRedirectUri({
-      scheme:   'quantis',
-      path:     'auth',
-      useProxy: false,
-    });
-
-    logger.info('auth', `Google Sign-In redirect URI: ${redirectUri}`);
-
+    const redirectUri = 'quantis://auth';
     const authUrl =
       `https://accounts.google.com/o/oauth2/v2/auth` +
       `?client_id=${WEB_CLIENT_ID}` +
@@ -56,14 +49,22 @@ export async function signInWithGoogle(): Promise<User | null> {
       `&response_type=token` +
       `&scope=${encodeURIComponent('profile email')}`;
 
-    const result = await startAsync({ authUrl });
+    const result = await openAuthSessionAsync(authUrl, redirectUri);
 
-    if (result.type !== 'success') {
+    if (result.type !== 'success' || !result.url) {
       logger.info('auth', `Google sign-in result: ${result.type}`);
       return null;
     }
 
-    const { access_token } = result.params as { access_token: string };
+    // Extract access_token from redirect URL
+    const url = result.url;
+    const match = url.match(/access_token=([^&]+)/);
+    if (!match) {
+      logger.warn('auth', 'No access_token in redirect URL');
+      return null;
+    }
+
+    const access_token = decodeURIComponent(match[1]);
     const credential = GoogleAuthProvider.credential(null, access_token);
 
     let user: User;
