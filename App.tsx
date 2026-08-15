@@ -7,7 +7,6 @@ import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/context/AuthContext';
 import { requestPermission, setupNotificationTapHandler } from './src/services/notifications';
-import { setupNotificationTapHandler, requestPermission } from './src/services/notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { DataProvider } from './src/context/DataContext';
@@ -97,14 +96,6 @@ export default function App() {
     // Request notification permission on first launch
     requestPermission().catch(() => {});
     // Handle notification taps → navigate to correct screen
-    const unsub = setupNotificationTapHandler();
-    return unsub;
-  }, []);
-
-  React.useEffect(() => {
-    // Request notification permission on first launch
-    requestPermission().catch(() => {});
-    // Setup tap handler for deep navigation
     const unsub = setupNotificationTapHandler();
     return unsub;
   }, []);
