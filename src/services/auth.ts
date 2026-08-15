@@ -35,10 +35,11 @@ export async function signInAnon(): Promise<User | null> {
   }
 }
 
-// ── Google Sign-In via expo-web-browser (no native deps needed) ───────────────
+// ── Google Sign-In via React Native Linking (zero native deps) ───────────────
+// Opens system browser → user signs in → browser redirects to app URL
+// App reads the token from the URL via Linking event listener
 export async function signInWithGoogle(): Promise<User | null> {
   try {
-    const { openAuthSessionAsync } = await import('expo-web-browser');
     const { Linking } = await import('react-native');
 
     const redirectUri = 'quantis://auth';
@@ -49,16 +50,28 @@ export async function signInWithGoogle(): Promise<User | null> {
       `&response_type=token` +
       `&scope=${encodeURIComponent('profile email')}`;
 
-    const result = await openAuthSessionAsync(authUrl, redirectUri);
+    // Open browser for OAuth
+    await Linking.openURL(authUrl);
 
-    if (result.type !== 'success' || !result.url) {
-      logger.info('auth', `Google sign-in result: ${result.type}`);
+    // Listen for the redirect back to the app
+    const url = await new Promise<string | null>((resolve) => {
+      const timeout = setTimeout(() => { sub.remove(); resolve(null); }, 120_000); // 2 min timeout
+      const sub = Linking.addEventListener('url', ({ url: u }) => {
+        if (u.startsWith('quantis://auth')) {
+          clearTimeout(timeout);
+          sub.remove();
+          resolve(u);
+        }
+      });
+    });
+
+    if (!url) {
+      logger.info('auth', 'Google sign-in timed out or cancelled');
       return null;
     }
 
-    // Extract access_token from redirect URL
-    const url = result.url;
-    const match = url.match(/access_token=([^&]+)/);
+    // Extract access_token from redirect URL fragment
+    const match = url.match(/[#&]access_token=([^&]+)/);
     if (!match) {
       logger.warn('auth', 'No access_token in redirect URL');
       return null;

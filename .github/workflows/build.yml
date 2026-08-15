@@ -35,6 +35,23 @@ jobs:
         env:
           EXPO_NO_TYPESCRIPT_SETUP: 1
 
+      - name: Patch expo-modules-core for AGP 8 compatibility
+        run: |
+          # Fix: ExpoModulesCorePlugin.gradle uses components.release which
+          # doesn't exist in AGP 8.x — patch it to use components.getByName('release')
+          PLUGIN_FILE="node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle"
+          if [ -f "$PLUGIN_FILE" ]; then
+            sed -i 's/components\.release/components.getByName("release")/g' "$PLUGIN_FILE"
+            echo "Patched ExpoModulesCorePlugin.gradle for AGP 8"
+          fi
+          # Fix expo-web-browser and other expo packages that reference expo-module-gradle-plugin
+          # by ensuring the plugin classpath is available
+          find node_modules -name "build.gradle" -path "*/expo-*/android/*" | while read f; do
+            if grep -q "expo-module-gradle-plugin" "$f" 2>/dev/null; then
+              echo "Found expo-module-gradle-plugin reference in: $f"
+            fi
+          done
+
       - name: Build Release APK
         run: |
           cd android
