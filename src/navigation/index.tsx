@@ -37,7 +37,6 @@ import BrokerConnectionScreen from '../screens/BrokerConnectionScreen';
 import OrderConfirmationScreen from '../screens/OrderConfirmationScreen';
 import AccountScreen from '../screens/AccountScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
-import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import LivePositionsScreen from '../screens/LivePositionsScreen';
 import KillSwitchScreen from '../screens/KillSwitchScreen';
 import LiveTradeSettingsScreen from '../screens/LiveTradeSettingsScreen';
@@ -158,14 +157,12 @@ function MoreStackNavigator() {
       <MoreStack.Screen name="PortfolioRisk"       component={PortfolioRiskScreen}       options={{ title: 'Portfolio Risk',             headerShown: true }} />
       <MoreStack.Screen name="FAQ"                  component={FAQScreen}                  options={{ title: 'Help & FAQ',                 headerShown: true }} />
       <MoreStack.Screen name="DeveloperSupport"    component={DeveloperSupportScreen}    options={{ title: 'Support & Diagnostics',       headerShown: true }} />
-      <MoreStack.Screen name="OrderConfirmation"   component={OrderConfirmationScreen}   options={{ title: 'Confirm Order', headerShown: true, presentation: 'modal' }} />
       <MoreStack.Screen name="OptionsStrategy" component={WrappedOptionsStrategy} options={{ title: 'Options Strategy' }} />
       <MoreStack.Screen name="Portfolio" component={WrappedPortfolio} options={{ title: 'Portfolio' }} />
       <MoreStack.Screen name="Correlation" component={WrappedCorrelation} options={{ title: 'Correlation Matrix' }} />
       <MoreStack.Screen name="Calendar" component={WrappedCalendar} options={{ title: 'Economic Calendar' }} />
       <MoreStack.Screen name="MultiChart" component={WrappedMultiChart} options={{ title: 'Multi-Chart' }} />
       <MoreStack.Screen name="Account" component={AccountScreen} options={{ title: 'Account & Sync' }} />
-      <MoreStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ title: 'Notifications' }} />
       <MoreStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ title: 'Notifications' }} />
       <MoreStack.Screen name="Screener" component={WrappedScreener} options={{ title: 'Strategy Screener' }} />
       <MoreStack.Screen name="Backtest" component={WrappedBacktest} options={{ title: 'Backtesting' }} />
