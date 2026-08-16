@@ -54,14 +54,16 @@ const SETTINGS_KEY = 'notificationSettings_v1';
 const DEDUP_MS     = 2 * 60 * 1000; // 2 min cooldown per key
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
-// Set handler ONCE at module level (idempotent)
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert:  true,
-    shouldPlaySound:  true,
-    shouldSetBadge:   false,
-  }),
-});
+// Set handler ONCE at module level — wrapped in try/catch for Hermes safety
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert:  true,
+      shouldPlaySound:  true,
+      shouldSetBadge:   false,
+    }),
+  });
+} catch (e) { /* non-fatal — permission will handle this */ }
 
 // ── Permission ────────────────────────────────────────────────────────────────
 export async function requestPermission(): Promise<boolean> {

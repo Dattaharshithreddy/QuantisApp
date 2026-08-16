@@ -12,17 +12,8 @@ export type PriceAlert = {
 
 const KEY = 'priceAlerts';
 
-console.log('[QUANTIS_DIAG] M-alerts-A: alerts.ts top-level starting');
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false}),
-});
-console.log('[QUANTIS_DIAG] M-alerts-B: setNotificationHandler completed');
-
-export async function requestNotifPermission() {
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status === 'granted';
-}
+// Notification handler is set in notifications.ts via requestPermission()
+// Removed from here to prevent top-level crash on Hermes
 
 export async function getAlerts(): Promise<PriceAlert[]> {
   const raw = await KVStore.get(KEY);
@@ -84,7 +75,8 @@ export async function notifyPatternConfirmed(
 ): Promise<void> {
   try {
     const icon = direction === 'bullish' ? '🟢' : direction === 'bearish' ? '🔴' : '🟡';
-    await Notifications.scheduleNotificationAsync({
+    const Notifs = await import('expo-notifications');
+    await Notifs.scheduleNotificationAsync({
       content: {
         title: `${icon} Pattern Confirmed: ${symbol}`,
         body:  `${patternName} confirmed — ${direction.toUpperCase()} · Confidence ${confidence}/100`,
