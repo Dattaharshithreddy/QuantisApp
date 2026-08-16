@@ -8,6 +8,8 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+console.log('[QUANTIS_DIAG] firebase: module loaded');
+
 
 const firebaseConfig = {
   apiKey:            'AIzaSyDWbdiTn83IHPBaqwc5iAKm6Y71JnGYqWs',

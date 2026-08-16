@@ -19,6 +19,8 @@ import {
 } from 'firebase/auth';
 import { auth } from './firebase';
 import { logger } from '../utils/logger';
+console.log('[QUANTIS_DIAG] auth: module loaded');
+
 
 const WEB_CLIENT_ID = '758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.googleusercontent.com';
 

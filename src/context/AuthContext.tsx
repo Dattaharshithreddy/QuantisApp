@@ -7,6 +7,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { signInAnon, signInWithGoogle as _signInWithGoogle, signOut as _signOut,
+console.log('[QUANTIS_DIAG] AuthContext: module loaded');
+
          subscribeToAuthState, User } from '../services/auth';
 
 type AuthContextValue = {

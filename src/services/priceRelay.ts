@@ -15,6 +15,8 @@
 import { db, auth } from './firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { logger } from '../utils/logger';
+console.log('[QUANTIS_DIAG] priceRelay: module loaded');
+
 
 const PRICE_CHANGE_THRESHOLD = 0.0005; // 0.05% change triggers write
 const MAX_WRITE_INTERVAL_MS  = 60_000; // write at least every 60s (keepalive)
