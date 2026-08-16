@@ -19,10 +19,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db, auth } from './firebase';
 import {
-console.log('[QUANTIS_DIAG] storage: module loaded');
 
   doc, getDoc, setDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
+console.log('[QUANTIS_DIAG] storage: module loaded');
 
 type MigrationMode = 'ASYNC_ONLY' | 'DUAL_WRITE' | 'FIRESTORE';
 
