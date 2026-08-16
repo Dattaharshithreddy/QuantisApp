@@ -41,6 +41,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage             from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
 import type { Candle }          from './indicators';
 import type { EpisodicContext } from './contextFeatures';
 import { logger }               from './logger';

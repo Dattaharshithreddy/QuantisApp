@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { KVStore } from 'services/storage';
+import { KVStore } from '../services/storage';
 import { logger } from './logger';
 import type { PaperPosition } from './paperPortfolio';
 

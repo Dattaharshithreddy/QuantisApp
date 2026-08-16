@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { KVStore } from 'services/storage';
+import { KVStore } from '../services/storage';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';

@@ -22,7 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { KVStore } from 'services/storage';
+import { KVStore } from '../services/storage';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { fetchCdxCandles } from '../api/coindcx';

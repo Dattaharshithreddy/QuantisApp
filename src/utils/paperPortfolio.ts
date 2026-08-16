@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { KVStore } from 'services/storage';
+import { KVStore } from '../services/storage';
 import type { StrategyId } from './strategy/strategyTypes';
 import { Candle } from './indicators';
 import { logger } from './logger';

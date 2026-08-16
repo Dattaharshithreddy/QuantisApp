@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { KVStore } from 'services/storage';
+import { KVStore } from '../services/storage';
 import { THEMES, Theme } from '../theme/colors';
 
 type ThemeCtx = { theme: Theme; themeName: 'dark' | 'light'; toggleTheme: () => void };

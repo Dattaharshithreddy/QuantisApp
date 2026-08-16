@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { KVStore } from 'services/storage';
+import { KVStore } from '../services/storage';
 import { Asset, ASSETS } from '../api/assets';
 
 const KEY = 'customWatchlist';
