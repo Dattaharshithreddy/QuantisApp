@@ -1,11 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each user can only read/write their own data
-    match /users/{userId}/kvstore/{key} {
+    // User's private data — only accessible by the user themselves
+    match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    // Public read-only (for future shared signals/leaderboard)
+    // Public read-only (future: shared signals, leaderboard)
     match /public/{document=**} {
       allow read: if true;
       allow write: if false;

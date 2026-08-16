@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KVStore } from '../services/storage';
+import { relayPrice } from '../services/priceRelay';
 import { getSecureCredential, setSecureCredential, deleteSecureCredential } from '../utils/secureCredentials';
 import { ASSETS, Asset, LogicalAsset } from '../api/assets';
 import { openBinanceStream, fetchBinanceDepth, fetchBnSpotSnapshot } from '../api/binance';
@@ -453,6 +454,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           return n;
         });
         checkAlerts(sym, price);
+        relayPrice(sym, price, chg); // relay to Firestore for background notifications
       },
       setWsStatus
     );

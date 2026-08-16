@@ -178,3 +178,125 @@ export const onUserCreate = functions.auth.onUserCreated(async (user) => {
   });
   functions.logger.info(`New user initialised: ${user.uid}`);
 });
+
+// ── 6. PRICE MONITOR — triggers when device relays a price update ─────────────
+// Checks all user price alerts and open positions for SL/TP hits
+export const priceMonitor = functions.firestore.onDocumentUpdated(
+  {
+    document: 'users/{uid}/prices/{symbol}',
+    region:   'asia-south1',
+  },
+  async (event) => {
+    const uid    = event.params.uid;
+    const symbol = event.params.symbol;
+    const data   = event.data?.after.data();
+    if (!data) return;
+
+    const price = data.price as number;
+    if (!price || price <= 0) return;
+
+    const token = await getFCMToken(uid);
+    if (!token) return;
+
+    // ── Check price alerts ───────────────────────────────────────────────────
+    const alertsSnap = await db.doc(`users/${uid}/kvstore/priceAlerts`).get();
+    if (alertsSnap.exists) {
+      try {
+        const alerts: any[] = JSON.parse(alertsSnap.data()?.value ?? '[]');
+        const toTrigger = alerts.filter(a =>
+          !a.triggered &&
+          a.symbol === symbol &&
+          (a.condition === 'ABOVE' ? price >= a.targetPrice : price <= a.targetPrice)
+        );
+
+        if (toTrigger.length > 0) {
+          // Mark triggered in Firestore
+          const updated = alerts.map(a =>
+            toTrigger.find(t => t.id === a.id) ? { ...a, triggered: true } : a
+          );
+          await db.doc(`users/${uid}/kvstore/priceAlerts`).set(
+            { value: JSON.stringify(updated) }, { merge: true }
+          );
+
+          // Send FCM for each triggered alert
+          for (const alert of toTrigger) {
+            const dir = alert.condition === 'ABOVE' ? 'above' : 'below';
+            await sendPush(
+              token,
+              `🎯 Price Alert: ${symbol}`,
+              `${symbol} hit ${alert.targetPrice} (now ${price.toFixed(2)})`,
+              { screen: 'Alerts', type: 'PRICE_ALERT', symbol },
+            ).catch(() => {});
+          }
+          functions.logger.info(`priceMonitor: ${toTrigger.length} alert(s) triggered for ${symbol}`);
+        }
+      } catch (e) { functions.logger.warn('priceMonitor: alert parse error', e); }
+    }
+
+    // ── Check open positions for SL/TP ───────────────────────────────────────
+    const posSnap = await db.collection(`users/${uid}/positions`)
+      .where('symbol', '==', symbol)
+      .where('isOpen', '==', true)
+      .get();
+
+    for (const posDoc of posSnap.docs) {
+      const pos = posDoc.data();
+      const hitSL = pos.direction === 'LONG'
+        ? price <= pos.stopLoss
+        : price >= pos.stopLoss;
+      const hitTP = pos.direction === 'LONG'
+        ? price >= pos.takeProfit
+        : price <= pos.takeProfit;
+
+      if (hitSL || hitTP) {
+        const type   = hitSL ? 'SL_HIT' : 'TP_HIT';
+        const emoji  = hitSL ? '🛑' : '🎯';
+        const label  = hitSL ? 'Stop Loss Hit' : 'Take Profit Hit';
+        const pnlDir = (hitTP && pos.direction === 'LONG') || (hitSL && pos.direction === 'SHORT')
+          ? '+' : '-';
+
+        await sendPush(
+          token,
+          `${emoji} ${label}: ${symbol}`,
+          `${pos.direction} position hit ${hitSL ? 'SL' : 'TP'} at ${price.toFixed(2)}`,
+          { screen: 'Journal', type, symbol },
+        ).catch(() => {});
+
+        functions.logger.info(`priceMonitor: ${type} for ${posDoc.id} at ${price}`);
+      }
+    }
+  },
+);
+
+// ── 7. SIGNAL MONITOR — triggers when ML signal changes ──────────────────────
+// Sends scanner notification when a high-confidence signal appears
+export const signalMonitor = functions.firestore.onDocumentUpdated(
+  {
+    document: 'users/{uid}/signals/{signalKey}',
+    region:   'asia-south1',
+  },
+  async (event) => {
+    const uid  = event.params.uid;
+    const data = event.data?.after.data();
+    if (!data) return;
+
+    const { symbol, timeframe, action, confidence, direction } = data;
+    const prevAction = event.data?.before.data()?.action;
+
+    // Only notify on BUY/SELL signals with confidence > 65%
+    if (action === 'HOLD' || confidence < 65) return;
+    if (action === prevAction) return; // no change
+
+    const token = await getFCMToken(uid);
+    if (!token) return;
+
+    const emoji = action === 'BUY' ? '🟢' : '🔴';
+    await sendPush(
+      token,
+      `${emoji} Scanner Signal: ${symbol}`,
+      `${action} ${direction} on ${timeframe} — ${confidence.toFixed(0)}% confidence`,
+      { screen: 'Chart', type: 'SCANNER_SIGNAL', symbol, timeframe },
+    );
+    functions.logger.info(`signalMonitor: ${action} signal for ${symbol}/${timeframe}`);
+  },
+);

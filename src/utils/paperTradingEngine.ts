@@ -1,4 +1,5 @@
 import { Candle } from './indicators';
+import { relayPosition } from '../services/priceRelay';
 import { MLPrediction } from './mlSignal';
 import { calculatePnL, calculatePnLPct, directionMultiplier } from './pnlCalculator';
 import { computeTradeEconomics } from './tradeEconomics';
@@ -496,6 +497,9 @@ export async function attemptOpenPosition(
   }
 
   portfolio.openPositions.push(position);
+  // Relay position to Firestore for server-side SL/TP monitoring
+  relayPosition(position.id, position.symbol, position.direction as 'LONG'|'SHORT',
+    position.entryPrice, position.stopLoss ?? 0, position.takeProfit ?? 0, true).catch(() => {});
   // CASH ACCOUNTING FIX: previously SHORT open ADDED positionValue to cash
   // (modeling real short-selling margin mechanics where you receive sale proceeds).
   // This caused cash to increase above starting capital when opening a SHORT,
@@ -544,6 +548,8 @@ export type CloseReason =
 const closingPositionIds = new Set<string>();
 
 export async function closePosition(positionId: string, exitPrice: number, exitReason: CloseReason, fill?: FillResult): Promise<void> {
+  // Mark position closed in Firestore (stops server monitoring)
+  relayPosition(positionId, '', 'LONG', 0, 0, 0, false).catch(() => {});
   if (closingPositionIds.has(positionId)) {
     logger.info('paperTradingEngine', `closePosition skipped for ${positionId} - already being closed by another caller`);
     return;

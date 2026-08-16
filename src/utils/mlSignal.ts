@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveModel, loadModel, deleteModel } from '../services/mlStorage';
+import { relaySignal } from '../services/priceRelay';
 import { registerModel, buildRegistryEntry } from './modelHealth/modelRegistry';
 import { logger } from './logger';
 import { recordPrediction, getCalibration } from './predictionHistory';
@@ -1540,6 +1541,9 @@ async function runInferenceOnly(
     `  action=${action}  direction=${direction}  confidence=${confidence.toFixed(1)}%`,
     `  precomputeSeries: ${nativeOutput ? 'CACHED' : 'computed'}  forwardPass: ${nativeOutput && !primaryModel ? 'NATIVE(<5ms)' : 'JS(~50ms)'}`,
   ].join('\n'));
+
+  // Relay signal to Firestore for background scanner notifications
+  relaySignal(symbol, timeframe, action, confidence, direction ?? 'LONG').catch(() => {});
 
   return inferenceResult;
 }
