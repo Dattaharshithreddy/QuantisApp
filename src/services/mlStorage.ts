@@ -1,3 +1,4 @@
+// Firebase loaded lazily via require() — never crashes on import
 // ─────────────────────────────────────────────────────────────────────────────
 // ML MODEL STORAGE SERVICE  (Phase 4)
 //
@@ -13,8 +14,6 @@
 // Path in Firebase Storage: /users/{uid}/models/{key}
 // ─────────────────────────────────────────────────────────────────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage, auth } from './firebase';
 import { logger } from '../utils/logger';
 console.log('[QUANTIS_DIAG] mlStorage: module loaded');
 

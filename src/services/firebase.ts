@@ -1,15 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// FIREBASE SINGLETON  (Phase 1)
-//
-// Single initialisation point for the entire app.
-// Import { db, auth, storage } from here — never call initializeApp() elsewhere.
+// FIREBASE SINGLETON — safe wrapper, never crashes app on load
 // ─────────────────────────────────────────────────────────────────────────────
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
 console.log('[QUANTIS_DIAG] firebase: module loaded');
 
+let _app: any = null;
+let _db:  any = null;
+let _auth: any = null;
+let _storage: any = null;
 
 const firebaseConfig = {
   apiKey:            'AIzaSyDWbdiTn83IHPBaqwc5iAKm6Y71JnGYqWs',
@@ -18,40 +15,55 @@ const firebaseConfig = {
   storageBucket:     'quantis-trading.firebasestorage.app',
   messagingSenderId: '758343320732',
   appId:             '1:758343320732:web:b451e5ec9f5f792ba1d959',
-  measurementId:     'G-W46TZ5FKVH',
 };
 
-// Lazy initialization — only runs when first accessed
-// This prevents Hermes/Metro from crashing on module load
-let _app:     FirebaseApp     | null = null;
-let _db:      Firestore       | null = null;
-let _auth:    Auth            | null = null;
-let _storage: FirebaseStorage | null = null;
-
-function getFirebaseApp(): FirebaseApp {
-  if (!_app) {
+function initFirebase() {
+  if (_app) return _app;
+  try {
+    const { initializeApp, getApps, getApp } = require('firebase/app');
     _app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    console.log('[QUANTIS_DIAG] firebase: initialized OK');
+  } catch (e: any) {
+    console.warn('[QUANTIS_DIAG] firebase: init failed:', e?.message);
+    _app = null;
   }
   return _app;
 }
 
-export function getDb(): Firestore {
-  if (!_db) _db = getFirestore(getFirebaseApp());
+export function getDb() {
+  if (!_db) {
+    try {
+      const { getFirestore } = require('firebase/firestore');
+      _db = getFirestore(initFirebase());
+    } catch (e) { _db = null; }
+  }
   return _db;
 }
 
-export function getFirebaseAuth(): Auth {
-  if (!_auth) _auth = getAuth(getFirebaseApp());
+export function getFirebaseAuth() {
+  if (!_auth) {
+    try {
+      const { getAuth } = require('firebase/auth');
+      _auth = getAuth(initFirebase());
+    } catch (e) { _auth = null; }
+  }
   return _auth;
 }
 
-export function getFirebaseStorage(): FirebaseStorage {
-  if (!_storage) _storage = getStorage(getFirebaseApp());
+export function getFirebaseStorage() {
+  if (!_storage) {
+    try {
+      const { getStorage } = require('firebase/storage');
+      _storage = getStorage(initFirebase());
+    } catch (e) { _storage = null; }
+  }
   return _storage;
 }
 
-// Convenience accessors (lazy — safe to import at module level)
-export const db      = new Proxy({} as Firestore,       { get: (_, p) => (getDb()      as any)[p] });
-export const auth    = new Proxy({} as Auth,            { get: (_, p) => (getFirebaseAuth() as any)[p] });
-export const storage = new Proxy({} as FirebaseStorage, { get: (_, p) => (getFirebaseStorage() as any)[p] });
-export default getFirebaseApp;
+// Proxy objects — safe to use even if Firebase fails
+// All operations are no-ops if Firebase is unavailable
+export const db      = new Proxy({} as any, { get: (_, p) => { const d = getDb();      return d ? d[p as string] : () => Promise.resolve(); } });
+export const auth    = new Proxy({} as any, { get: (_, p) => { const a = getFirebaseAuth(); return a ? a[p as string] : () => Promise.resolve(); } });
+export const storage = new Proxy({} as any, { get: (_, p) => { const s = getFirebaseStorage(); return s ? s[p as string] : () => Promise.resolve(); } });
+
+export default initFirebase;

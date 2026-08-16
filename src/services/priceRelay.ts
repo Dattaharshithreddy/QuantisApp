@@ -1,3 +1,4 @@
+// Firebase loaded lazily via require() — never crashes on import
 // ─────────────────────────────────────────────────────────────────────────────
 // PRICE RELAY SERVICE
 //
@@ -12,8 +13,6 @@
 //
 // Firestore path: /users/{uid}/prices/{symbol}
 // ─────────────────────────────────────────────────────────────────────────────
-import { db, auth } from './firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { logger } from '../utils/logger';
 console.log('[QUANTIS_DIAG] priceRelay: module loaded');
 

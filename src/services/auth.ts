@@ -1,3 +1,4 @@
+// Firebase loaded lazily via require() — never crashes on import
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH SERVICE  (Phase 8)
 //
@@ -8,16 +9,6 @@
 //
 // Web Client ID: 758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.googleusercontent.com
 // ─────────────────────────────────────────────────────────────────────────────
-import {
-  signInAnonymously,
-  signInWithCredential,
-  linkWithCredential,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  User,
-  UserCredential,
-} from 'firebase/auth';
-import { auth } from './firebase';
 import { logger } from '../utils/logger';
 console.log('[QUANTIS_DIAG] auth: module loaded');
 

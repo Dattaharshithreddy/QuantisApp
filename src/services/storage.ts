@@ -17,11 +17,7 @@
 //   await KVStore.remove('myKey')
 // ─────────────────────────────────────────────────────────────────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db, auth } from './firebase';
-import {
-
-  doc, getDoc, setDoc, deleteDoc, serverTimestamp,
-} from 'firebase/firestore';
+// Firebase loaded lazily via require() inside functions
 console.log('[QUANTIS_DIAG] storage: module loaded');
 
 type MigrationMode = 'ASYNC_ONLY' | 'DUAL_WRITE' | 'FIRESTORE';
@@ -94,32 +90,39 @@ function modeFor(key: string): MigrationMode {
 // Anonymous users get a stable UID automatically.
 // Data is scoped per-user — never shared across accounts.
 function getUserPath(key: string): string {
-  const uid = auth.currentUser?.uid ?? 'anonymous';
-  const encodedKey = encodeKey(key);
-  return `users/${uid}/kvstore/${encodedKey}`;
+  try {
+    const { getFirebaseAuth } = require('./firebase');
+    const a = getFirebaseAuth();
+    const uid = a?.currentUser?.uid ?? 'anonymous';
+    return `users/${uid}/kvstore/${encodeKey(key)}`;
+  } catch { return `users/anonymous/kvstore/${encodeKey(key)}`; }
 }
 
 async function fsGet(key: string): Promise<string | null> {
   try {
+    const { getDb } = require('./firebase');
+    const { doc, getDoc } = require('firebase/firestore');
+    const db = getDb(); if (!db) return null;
     const snap = await getDoc(doc(db, getUserPath(key)));
     if (!snap.exists()) return null;
     return snap.data()?.value ?? null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 async function fsSet(key: string, value: string): Promise<void> {
   try {
-    await setDoc(doc(db, getUserPath(key)), {
-      value,
-      updatedAt: serverTimestamp(),
-    });
-  } catch { /* fire-and-forget — never throw */ }
+    const { getDb } = require('./firebase');
+    const { doc, setDoc, serverTimestamp } = require('firebase/firestore');
+    const db = getDb(); if (!db) return;
+    await setDoc(doc(db, getUserPath(key)), { value, updatedAt: serverTimestamp() });
+  } catch { /* fire-and-forget */ }
 }
 
 async function fsDelete(key: string): Promise<void> {
   try {
+    const { getDb } = require('./firebase');
+    const { doc, deleteDoc } = require('firebase/firestore');
+    const db = getDb(); if (!db) return;
     await deleteDoc(doc(db, getUserPath(key)));
   } catch {}
 }
