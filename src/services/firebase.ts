@@ -19,10 +19,37 @@ const firebaseConfig = {
   measurementId:     'G-W46TZ5FKVH',
 };
 
-// Guard against double-init in development hot reloads
-const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+// Lazy initialization — only runs when first accessed
+// This prevents Hermes/Metro from crashing on module load
+let _app:     FirebaseApp     | null = null;
+let _db:      Firestore       | null = null;
+let _auth:    Auth            | null = null;
+let _storage: FirebaseStorage | null = null;
 
-export const db:      Firestore       = getFirestore(app);
-export const auth:    Auth            = getAuth(app);
-export const storage: FirebaseStorage = getStorage(app);
-export default app;
+function getFirebaseApp(): FirebaseApp {
+  if (!_app) {
+    _app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  }
+  return _app;
+}
+
+export function getDb(): Firestore {
+  if (!_db) _db = getFirestore(getFirebaseApp());
+  return _db;
+}
+
+export function getFirebaseAuth(): Auth {
+  if (!_auth) _auth = getAuth(getFirebaseApp());
+  return _auth;
+}
+
+export function getFirebaseStorage(): FirebaseStorage {
+  if (!_storage) _storage = getStorage(getFirebaseApp());
+  return _storage;
+}
+
+// Convenience accessors (lazy — safe to import at module level)
+export const db      = new Proxy({} as Firestore,       { get: (_, p) => (getDb()      as any)[p] });
+export const auth    = new Proxy({} as Auth,            { get: (_, p) => (getFirebaseAuth() as any)[p] });
+export const storage = new Proxy({} as FirebaseStorage, { get: (_, p) => (getFirebaseStorage() as any)[p] });
+export default getFirebaseApp;
