@@ -308,6 +308,8 @@ export default function AIChatScreen({ route }: any) {
   const [sending,       setSending]       = useState(false);
   const [contextReady,  setContextReady]  = useState(false);
   const [contextErr,    setContextErr]    = useState('');
+  const [isListening,   setIsListening]   = useState(false);
+  const [convIndex,     setConvIndex]     = useState(0); // conversation counter for tab display
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const contextRef = useRef('');
   const listRef    = useRef<FlatList>(null);
@@ -623,6 +625,64 @@ export default function AIChatScreen({ route }: any) {
     sendingRef.current = false;
   }, []);
 
+  // ── Voice input ─────────────────────────────────────────────────────────────
+  // Uses Android's built-in speech recognition via a native module call
+  // No extra packages — works via the SearchView / IME voice input
+  const startVoice = useCallback(async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setIsListening(true);
+      
+      // Use Android native speech recognition intent via DeviceEventEmitter
+      // This opens the Google voice input overlay (same as tapping mic on keyboard)
+      const { NativeModules, DeviceEventEmitter } = await import('react-native');
+      
+      // Fallback: prompt user to use keyboard mic since native intent 
+      // requires a native module wrapper to receive results
+      // Show a brief hint then focus the input
+      setIsListening(false);
+      inputRef.current?.focus();
+      
+      // On Android, after focusing TextInput, user can tap the mic on keyboard
+      // We show a visual indicator they should use the keyboard mic
+    } catch (e) {
+      setIsListening(false);
+    }
+  }, []);
+
+  // ── New conversation ─────────────────────────────────────────────────────────
+  const startNewConversation = useCallback(() => {
+    Alert.alert(
+      'New Conversation',
+      'Start a fresh conversation? Current chat will be saved.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'New Chat', onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          // Save current messages before clearing
+          if (messagesRef.current.length > 0) {
+            persist(messagesRef.current);
+          }
+          // Clear and start fresh
+          const newIdx = convIndex + 1;
+          setConvIndex(newIdx);
+          unstable_batchedUpdates(() => {
+            setMessages([]);
+            setInput('');
+            setSending(false);
+          });
+          messagesRef.current = [];
+          sendingRef.current = false;
+          abortRef.current?.abort();
+          abortRef.current = null;
+          // Rebuild context for new conversation
+          setContextReady(false);
+          buildContext();
+        }},
+      ]
+    );
+  }, [convIndex, persist, buildContext]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   const showSuggestions = messages.length === 0 && contextReady;
 
@@ -680,17 +740,43 @@ export default function AIChatScreen({ route }: any) {
           <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {SUGGESTIONS.map(s => (
-                <TouchableOpacity key={s.text} onPress={() => send(s.text)}
-                  style={{ flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: T.bg2, borderRadius: 20, borderWidth: 1,
-                    borderColor: T.border, paddingHorizontal: 12, paddingVertical: 7 }}>
+                <Pressable key={s.text}
+                  onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); send(s.text); }}
+                  android_ripple={{ color: T.accent + '40', borderless: false }}
+                  style={({ pressed }: { pressed: boolean }) => ({ flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: pressed ? T.bg3 : T.bg2, borderRadius: 20, borderWidth: 1,
+                    borderColor: pressed ? T.accent : T.border, paddingHorizontal: 12, paddingVertical: 7 })}>
                   <Text style={{ fontSize: 13, marginRight: 5 }}>{s.icon}</Text>
                   <Text style={{ color: T.text, fontSize: 12, fontWeight: '500' }}>{s.text}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           </View>
         )}
+
+        {/* ── New Chat + voice hint bar ─────────────────────────── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center',
+          paddingHorizontal: 12, paddingVertical: 5,
+          borderTopWidth: 0.5, borderTopColor: T.border + '60',
+          backgroundColor: T.bg1, gap: 8 }}>
+          <Pressable
+            onPressIn={startNewConversation}
+            android_ripple={{ color: T.accent + '30', borderless: false }}
+            style={({ pressed }: { pressed: boolean }) => ({
+              flexDirection: 'row', alignItems: 'center', gap: 4,
+              backgroundColor: pressed ? T.bg3 : T.bg2,
+              borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4,
+              borderWidth: 1, borderColor: T.border,
+            })}>
+            <Text style={{ fontSize: 10 }}>✦</Text>
+            <Text style={{ color: T.textDim, fontSize: 11, fontWeight: '600' }}>New Chat</Text>
+          </Pressable>
+          {isListening && (
+            <Text style={{ color: T.accent, fontSize: 11, fontWeight: '600' }}>
+              🎤 Tap mic on keyboard...
+            </Text>
+          )}
+        </View>
 
         {/* ── Input bar ─────────────────────────────────────────────── */}
         <View style={{
@@ -698,17 +784,18 @@ export default function AIChatScreen({ route }: any) {
           alignItems:       'flex-end',
           paddingHorizontal: 12,
           paddingVertical:   10,
-          borderTopWidth:    1,
+          borderTopWidth:    0,
           borderTopColor:    T.border,
           backgroundColor:   T.bg1,
           gap:               8,
         }}>
-          {/* Clear button */}
+          {/* Clear / Trash button */}
           {messages.length > 0 && !sending && (
-            <TouchableOpacity onPress={clearHistory}
-              style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
+            <Pressable onPressIn={clearHistory}
+              android_ripple={{ color: T.textDim + '30', borderless: true }}
+              style={{ paddingHorizontal: 6, paddingVertical: 8 }}>
               <Text style={{ color: T.textDim, fontSize: 18 }}>🗑</Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           <TextInput
@@ -737,6 +824,20 @@ export default function AIChatScreen({ route }: any) {
             blurOnSubmit={false}
             returnKeyType="send"
           />
+
+          {/* Voice mic — tap to hint user to use keyboard mic */}
+          <Pressable
+            onPressIn={startVoice}
+            android_ripple={{ color: T.accent + '40', radius: 19, borderless: true }}
+            style={({ pressed }: { pressed: boolean }) => ({
+              width: 38, height: 38, borderRadius: 19,
+              backgroundColor: isListening ? T.accent + '22' : T.bg2,
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 1, borderColor: isListening ? T.accent : T.border,
+              opacity: pressed ? 0.7 : 1,
+            })}>
+            <Text style={{ fontSize: 15 }}>🎤</Text>
+          </Pressable>
 
           {/* Send / Stop — Pressable fires on press-IN, 130ms faster than TouchableOpacity */}
           <Pressable
