@@ -12,6 +12,15 @@
 import { logger } from '../utils/logger';
 console.log('[QUANTIS_DIAG] auth: module loaded');
 
+// Type-only definition (firebase/auth loaded lazily via require)
+export type User = {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  isAnonymous: boolean;
+  providerData: any[];
+};
+
 
 const WEB_CLIENT_ID = '758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.googleusercontent.com';
 
@@ -109,4 +118,4 @@ export function subscribeToAuthState(callback: (user: User | null) => void): () 
   return onAuthStateChanged(auth, callback);
 }
 
-export type { User };
+// User type exported above
