@@ -27,8 +27,11 @@ const WEB_CLIENT_ID = '758343320732-vlcqo5qov5qukd3je8gm0jgsj7r6kp5a.apps.google
 // ── Anonymous sign-in ─────────────────────────────────────────────────────────
 export async function signInAnon(): Promise<User | null> {
   try {
-    if (auth.currentUser) return auth.currentUser;
-    const cred: UserCredential = await signInAnonymously(auth);
+    const { getFirebaseAuth } = require('./firebase');
+    const _auth = getFirebaseAuth();
+    if (_auth?.currentUser) return _auth.currentUser as User;
+    const { signInAnonymously } = require('firebase/auth');
+    const cred = await signInAnonymously(_auth);
     logger.info('auth', `Signed in anonymously: ${cred.user.uid}`);
     return cred.user;
   } catch (e: any) {
@@ -43,6 +46,9 @@ export async function signInAnon(): Promise<User | null> {
 export async function signInWithGoogle(): Promise<User | null> {
   try {
     const { Linking } = await import('react-native');
+    const { GoogleAuthProvider, linkWithCredential, signInWithCredential } = require('firebase/auth');
+    const { getFirebaseAuth } = require('./firebase');
+    const _auth = getFirebaseAuth();
 
     const redirectUri = 'quantis://auth';
     const authUrl =
@@ -83,13 +89,13 @@ export async function signInWithGoogle(): Promise<User | null> {
     const credential = GoogleAuthProvider.credential(null, access_token);
 
     let user: User;
-    if (auth.currentUser?.isAnonymous) {
-      const linked = await linkWithCredential(auth.currentUser, credential);
-      user = linked.user;
+    if (_auth?.currentUser?.isAnonymous) {
+      const linked = await linkWithCredential(_auth.currentUser, credential);
+      user = linked.user as User;
       logger.info('auth', `Anonymous → Google linked: ${user.email}`);
     } else {
-      const signed = await signInWithCredential(auth, credential);
-      user = signed.user;
+      const signed = await signInWithCredential(_auth, credential);
+      user = signed.user as User;
       logger.info('auth', `Signed in with Google: ${user.email}`);
     }
     return user;
@@ -102,7 +108,8 @@ export async function signInWithGoogle(): Promise<User | null> {
 // ── Sign out ──────────────────────────────────────────────────────────────────
 export async function signOut(): Promise<void> {
   try {
-    await auth.signOut();
+    const { getFirebaseAuth } = require('./firebase');
+    await getFirebaseAuth()?.signOut();
     await signInAnon(); // re-sign anonymously so app keeps working
   } catch (e: any) {
     logger.error('auth', `Sign out failed: ${e.message}`);
@@ -111,11 +118,22 @@ export async function signOut(): Promise<void> {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export function getCurrentUid(): string | null {
-  return auth.currentUser?.uid ?? null;
+  const { getFirebaseAuth } = require('./firebase');
+  return getFirebaseAuth()?.currentUser?.uid ?? null;
 }
 
 export function subscribeToAuthState(callback: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, callback);
+  try {
+    const { onAuthStateChanged } = require('firebase/auth');
+    const { getFirebaseAuth } = require('./firebase');
+    const _auth = getFirebaseAuth();
+    if (!_auth) { callback(null); return () => {}; }
+    return onAuthStateChanged(_auth, (u: any) => callback(u as User | null));
+  } catch (e: any) {
+    logger.warn('auth', `subscribeToAuthState failed: ${e.message}`);
+    callback(null);
+    return () => {};
+  }
 }
 
 // User type exported above
