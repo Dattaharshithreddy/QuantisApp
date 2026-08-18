@@ -6,6 +6,8 @@ import * as ExpoSplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/context/AuthContext';
+import LockScreen from './src/screens/LockScreen';
+import { getLockSettings } from './src/services/appLock';
 import { requestPermission, setupNotificationTapHandler } from './src/services/notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -58,6 +60,22 @@ function AppShell() {
     return () => sub.remove();
   }, []);
 
+  // Re-lock after 30s in background
+  const bgTimer = React.useRef<any>(null);
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'background') {
+        bgTimer.current = setTimeout(async () => {
+          const { enabled } = await getLockSettings();
+          if (enabled) setLocked(true);
+        }, 30000);
+      } else if (state === 'active') {
+        if (bgTimer.current) clearTimeout(bgTimer.current);
+      }
+    });
+    return () => { sub.remove(); if (bgTimer.current) clearTimeout(bgTimer.current); };
+  }, []);
+
   return (
     <ToastProvider>
       <StatusBar style={themeName === 'dark' ? 'light' : 'dark'} />
@@ -77,6 +95,21 @@ function AppShell() {
 }
 
 export default function App() {
+  const [locked, setLocked] = React.useState<boolean | null>(null); // null = checking
+
+  React.useEffect(() => {
+    // Check if app lock is enabled
+    getLockSettings().then(({ enabled }) => {
+      setLocked(enabled ? true : false);
+    }).catch(() => setLocked(false));
+  }, []);
+
+  // Show lock screen while checking or if locked
+  if (locked === null) return null; // splash handles this
+  if (locked) return (
+    <LockScreen onUnlock={() => setLocked(false)} />
+  );
+
   React.useEffect(() => {
     // Request notification permission on first launch
     requestPermission().catch(() => {});
