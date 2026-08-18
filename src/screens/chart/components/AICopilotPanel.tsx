@@ -35,10 +35,10 @@ export const AICopilotPanel = React.memo(function AICopilotPanel({ ai, assetName
           <Text style={{ color: T.textDim, fontSize: 9, marginTop: 2 }}>Claude Sonnet · Institutional Grade</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable onPress={() => onNavigateChat(symbol)} hitSlop={6} android_ripple={{color:'rgba(255,255,255,0.2)'}} style={{ backgroundColor: T.purple, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.sm }}>
+          <Pressable onPressIn={() => onNavigateChat(symbol)} hitSlop={6} android_ripple={{color:'rgba(255,255,255,0.2)'}} style={{ backgroundColor: T.purple, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.sm }}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>💬 Chat</Text>
           </Pressable>
-          <Pressable onPress={onAnalyze} disabled={ai.status === 'loading' || loading} hitSlop={6} android_ripple={{color:'rgba(255,255,255,0.2)'}} style={{ backgroundColor: T.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.sm, opacity: ai.status === 'loading' ? 0.6 : 1 }}>
+          <Pressable onPressIn={onAnalyze} disabled={ai.status === 'loading' || loading} hitSlop={6} android_ripple={{color:'rgba(255,255,255,0.2)'}} style={{ backgroundColor: T.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.sm, opacity: ai.status === 'loading' ? 0.6 : 1 }}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>{ai.status === 'loading' ? 'ANALYZING…' : 'ANALYZE'}</Text>
           </Pressable>
         </View>
