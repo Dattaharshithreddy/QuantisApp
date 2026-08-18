@@ -159,16 +159,7 @@ jobs:
 
       - name: Install Expo CLI + EAS CLI
         run: |
-          npm install -g @expo/cli
-          npm install -g eas-cli
-
-      - name: Authenticate with Expo
-        run: npx eas-cli whoami
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Build preview APK
-        run: npx eas-cli build --platform android --profile preview --non-interactive
+# EAS build removed - using Gradle in build.yml instead
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
