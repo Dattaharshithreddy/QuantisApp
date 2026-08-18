@@ -510,8 +510,8 @@ export default function AIChatScreen({ route }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     sendingRef.current = true;
 
-    // Refresh context with latest price + cached candles (instant, no network)
-    await refreshContextFromCache();
+    // Refresh context in background — don't block the send
+    refreshContextFromCache().catch(() => {});
 
     const userMsg: ChatMessage = { role: 'user', content };
     const withUser = [...messagesRef.current, userMsg];
