@@ -37,42 +37,32 @@ jobs:
 
       - name: Patch AGP 8 compatibility
         run: |
-          echo "=== Patching components.release → components.getByName('release') ==="
+          echo "=== Patching AGP 8 gradle issues ==="
 
-          # 1. expo-modules-core (known issue)
-          FILE="node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle"
-          if [ -f "$FILE" ]; then
-            sed -i 's/components\.release/components.getByName("release")/g' "$FILE"
-            echo "Patched: $FILE"
-          fi
-
-          # 2. Patch ALL gradle files under node_modules that reference components.release
+          # Fix: replace `from components.release` with null-safe version in ALL gradle files.
+          # In AGP 8, components.release throws "SoftwareComponent not found" during
+          # configuration phase. findByName("release") is safe and returns null if not ready.
           find node_modules -name "*.gradle" | while read f; do
-            if grep -q "components\.release" "$f" 2>/dev/null; then
-              sed -i 's/components\.release/components.getByName("release")/g' "$f"
-              echo "Patched: $f"
+            if grep -q "from components\.release" "$f" 2>/dev/null; then
+              python3 -c "
+import sys
+with open('$f', 'r') as file:
+    content = file.read()
+old = '          from components.release'
+new = '          def rc = components.findByName(\"release\"); if (rc != null) { from rc }'
+result = content.replace(old, new)
+# also handle 2-space indent variant
+old2 = '    from components.release'
+new2 = '    def rc = components.findByName(\"release\"); if (rc != null) { from rc }'
+result = result.replace(old2, new2)
+with open('$f', 'w') as file:
+    file.write(result)
+print('Patched: $f')
+"
             fi
           done
 
-          # 3. Patch expo-local-authentication build.gradle — add compileSdkVersion if missing
-          LOCAL_AUTH="node_modules/expo-local-authentication/android/build.gradle"
-          if [ -f "$LOCAL_AUTH" ]; then
-            # If compileSdkVersion is missing, inject it inside android { } block
-            if ! grep -q "compileSdkVersion" "$LOCAL_AUTH"; then
-              sed -i '/^android {/a\    compileSdkVersion 34' "$LOCAL_AUTH"
-              echo "Added compileSdkVersion 34 to: $LOCAL_AUTH"
-            fi
-          fi
-
-          # 4. Also patch any other expo packages missing compileSdkVersion
-          find node_modules/expo-*/android -name "build.gradle" 2>/dev/null | while read f; do
-            if grep -q "^android {" "$f" && ! grep -q "compileSdkVersion\|compileSdk" "$f"; then
-              sed -i '/^android {/a\    compileSdkVersion 34' "$f"
-              echo "Added compileSdkVersion to: $f"
-            fi
-          done
-
-          echo "=== All patches applied ==="
+          echo "=== Patches complete ==="
 
       - name: Build Release APK
         run: |
