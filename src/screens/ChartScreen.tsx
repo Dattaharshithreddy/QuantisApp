@@ -112,10 +112,13 @@ export default function ChartScreen({ route, navigation }: any) {
   // Stable callbacks for ChartHeader — inline arrows would break React.memo
   // on ChartHeader since a new function reference is created on every render
   // (every ~1s price tick), defeating the memo entirely.
-  const onSymbolChange = useCallback((sym: string) => {
-    setSymbol(sym);
+  const onSymbolChange = useCallback((assetId: string, exchange: string) => {
+    // Use the direct assetId+exchange path — avoids the legacy-symbol shim
+    // and correctly resolves built-in assets like 'BTC' → Binance variant
+    setAssetId(assetId);
+    setExchange(exchange);
     setReviewTrade(null);
-  }, [setSymbol]);
+  }, [setAssetId, setExchange]);
   const onSearch = useCallback(() =>
     navigation.navigate('SymbolSearch', { returnTo: 'Chart' }), [navigation]);
   const initialSymbol = route?.params?.symbol || 'NIFTY50';

@@ -9,6 +9,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { signInAnon, signInWithGoogle as _signInWithGoogle, signOut as _signOut,
 
          subscribeToAuthState, User } from '../services/auth';
+import { useModelRepair } from '../hooks/useModelRepair';
 console.log('[QUANTIS_DIAG] AuthContext: module loaded');
 
 type AuthContextValue = {
@@ -31,6 +32,9 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]         = useState<User | null>(null);
   const [isLoading, setLoading] = useState(true);
+
+  // Champion integrity check — runs once after auth is available, in background
+  useModelRepair(user?.uid ?? null);
 
   useEffect(() => {
     // Subscribe to auth state changes

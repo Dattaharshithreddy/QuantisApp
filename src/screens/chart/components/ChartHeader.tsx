@@ -15,7 +15,7 @@ type Props = {
   priceColor:string;
   isPos:     boolean;
   livePrice?: number;  // last candle close from aggTrade — in sync with chart
-  onSymbol:  (s: string) => void;
+  onSymbol:  (assetId: string, exchange: string) => void;
   onSearch:  () => void;
   T: any;
 };
@@ -33,9 +33,22 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
             <Text style={{ fontSize: 11 }}>🔍</Text>
             <Text style={{ color: T.purple, fontSize: 11, fontWeight: '700' }}>Search symbol</Text>
           </Pressable>
-          {allAssets.slice(0, 12).map(a => (
-            <Pill key={a.symbol + a.src} label={a.symbol} color={T.blue} active={a.symbol === symbol} onPress={() => onSymbol(a.symbol)} />
-          ))}
+          {allAssets.slice(0, 12).map(a => {
+            // Use assetId as the label (e.g. 'BTC', 'BANKNIFTY') — cleaner than internal symbol
+            // Fall back to symbol for custom assets that have no assetId
+            const label   = (a as any).assetId ?? a.symbol;
+            const assetId = (a as any).assetId ?? a.symbol;
+            const exch    = a.src ?? '';
+            // Active when the current assetId matches OR the variant.symbol matches
+            const isActive = (a as any).assetId
+              ? (a as any).assetId === ((asset as any).assetId ?? symbol)
+              : a.symbol === symbol;
+            return (
+              <Pill key={a.symbol + a.src} label={label} color={T.blue}
+                    active={isActive}
+                    onPress={() => onSymbol(assetId, exch)} />
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -47,17 +60,16 @@ export const ChartHeader = React.memo(function ChartHeader({ symbol, asset, allA
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 }}>
             <Text style={{ color: T.text, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 }}>
-              {/* Show clean display name for internal symbols like ETH-PERP-CDX */}
+              {/* Show clean display name: assetId for built-ins, cleaned name for futures */}
               {(asset as any)?.src === 'coindcx_futures'
                 ? (() => {
                     const s = (asset as any)?.cdxSym ?? symbol;
-                    // B-ETH_USDT → ETH/USDT Perp, ETHUSDT → ETH/USDT Perp
                     const base = s.startsWith('B-')
                       ? s.slice(2).replace('_USDT','').replace('_','')
                       : s.replace('USDT','');
                     return base + '/USDT Perp';
                   })()
-                : symbol}
+                : (asset as any)?.assetId ?? symbol}
             </Text>
             {(() => {
               // LIVE = websocket source OR snapshot with real price data

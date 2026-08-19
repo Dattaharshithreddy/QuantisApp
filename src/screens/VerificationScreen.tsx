@@ -69,7 +69,7 @@ export default function VerificationScreen() {
     try {
       for (const { asset, tf } of combos) {
         batchProgress.setCurrent(`${asset.symbol} / ${tf}`);
-        const { candles, note } = await fetchMaxHistoryForAsset(asset, tf, 5000, aoSession, avKey);
+        const { candles, note } = await fetchMaxHistoryForAsset(asset, tf, 50000, aoSession, avKey);
         if (note) setBatchSkipped(prev => [...new Set([...prev, note])]);
         if (candles.length >= 120) {
           candlesByCombo.set(`${asset.symbol}|${tf}`, candles);

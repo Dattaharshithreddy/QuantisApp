@@ -11,8 +11,14 @@ export async function getCustomAssets(): Promise<Asset[]> {
 
 export async function addCustomAsset(asset: Asset): Promise<Asset[]> {
   const list = await getCustomAssets();
-  if (list.some(a => a.symbol === asset.symbol && a.src === asset.src)) return list; // already added as a custom asset
-  if (ASSETS.some(a => a.symbol === asset.symbol && a.src === asset.src)) return list; // already exists as a built-in - adding it again would create a duplicate row
+  // Already in custom list — no-op
+  if (list.some(a => a.symbol === asset.symbol && a.src === asset.src)) return list;
+  // Already a built-in — ASSETS is LogicalAsset[], so check via exchanges map, not top-level .symbol/.src
+  // (The old check used a.symbol which is undefined on LogicalAsset and always returned false)
+  const isBuiltIn = ASSETS.some(la =>
+    Object.values(la.exchanges).some(v => v.symbol === asset.symbol && v.src === asset.src)
+  );
+  if (isBuiltIn) return list;
   const updated = [...list, { ...asset, custom: true }];
   await KVStore.set(KEY, JSON.stringify(updated));
   return updated;

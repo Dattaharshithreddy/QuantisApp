@@ -255,7 +255,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
 
         let candles: any[] = [];
         try {
-          const bars = ['1m','3m','5m','15m'].includes(tf) ? 10000 : 5000;
+          const bars = ['1m','3m','5m','15m'].includes(tf) ? 50000 : 50000;
           const { candles: c, note } = await fetchMaxHistoryForAsset(asset, tf, bars, session.aoSession, session.avKey);
           candles = c;
           if (note) setTasks(prev => {
@@ -372,7 +372,7 @@ export function EvalTaskProvider({ children }: { children: React.ReactNode }) {
 
         let candles: any[] = [];
         try {
-          const bars = ['1m','3m','5m','15m'].includes(tf) ? 10000 : 5000;
+          const bars = ['1m','3m','5m','15m'].includes(tf) ? 50000 : 50000;
           const { candles: c, note } = await fetchMaxHistoryForAsset(asset, tf, bars, session.aoSession, session.avKey);
           candles = c;
           if (note) setTasks(prev => {

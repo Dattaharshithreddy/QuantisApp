@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveModel, loadModel, deleteModel } from '../services/mlStorage';
 import { relaySignal } from '../services/priceRelay';
 import { registerModel, buildRegistryEntry } from './modelHealth/modelRegistry';
+import { saveVersionedModel, bootstrapLegacyModel } from './modelVersioning';
+import { findAssetByLegacySymbol } from './assetResolver';
 import { logger } from './logger';
 import { recordPrediction, getCalibration } from './predictionHistory';
 import { recordTrainingStatus, TrainingStatusInfo } from './trainingHistory';
@@ -2390,6 +2392,47 @@ async function trainAndPredictInner(
         holdoutF1: holdoutResult?.f1 ?? null,
         featureCount: FEATURE_NAMES.length, driftScore: driftScore,
         previousVersion: previousMetadata?.modelVersion ?? null})).catch(() => {});
+
+      // Champion/Challenger versioning — fire-and-forget, never blocks prediction
+      // Builds the mlpWeightsByHorizon map from pendingWrites for each horizon
+      (() => {
+        try {
+          const mlpByHorizon: Record<number, string> = {};
+          for (const w of pendingWrites) {
+            const m = w.key.match(/_h(\d+)$/);
+            if (m) mlpByHorizon[parseInt(m[1], 10)] = JSON.stringify(w.value);
+          }
+          const lrW = pendingWrites.find(w => w.key === LR_KEY(symbol, timeframe));
+          if (Object.keys(mlpByHorizon).length > 0 && lrW) {
+            const candleStart = candles.length > 0 ? candles[0].time : 0;
+            const candleEnd   = candles.length > 0 ? candles[candles.length - 1].time : 0;
+            // Resolve real exchange src from variant.symbol for accurate metadata
+            const _resolvedExchange = findAssetByLegacySymbol(symbol)?.exchange ?? assetClass;
+            saveVersionedModel({
+              symbol, exchange: _resolvedExchange, timeframe,
+              primaryHorizon: effectiveHorizon,
+              modelVersion:   finalModelVersion,
+              mlpWeightsByHorizon: mlpByHorizon,
+              lrWeights:      JSON.stringify(lrW.value),
+              trainingCandleCount: candles.length,
+              trainingSampleCount: X.length,
+              trainingDurationMs:  Date.now() - startTime,
+              oldestCandleTime:    candleStart,
+              newestCandleTime:    candleEnd,
+              validationAccuracy:  walkForwardAccuracy,
+              holdoutAccuracy:     holdoutResult?.ensembleAccuracy ?? null,
+              holdoutF1:           holdoutResult?.f1 ?? null,
+              backtestReturn:      null,
+              maxDrawdown:         null,
+              winRate:             null,
+              profitFactor:        null,
+              isAccepted:          true,
+            }).catch(e => logger.warn('mlSignal', `Versioning save failed (non-fatal): ${e?.message ?? e}`));
+          }
+        } catch (e: any) {
+          logger.warn('mlSignal', `Versioning call setup failed (non-fatal): ${e?.message ?? e}`);
+        }
+      })();
     } catch (e: any) {
       logger.error('mlSignal', `${symbol}: failed to persist metadata: ${e.message}`);
     }
@@ -2428,6 +2471,44 @@ async function trainAndPredictInner(
         acceptRejectReason,
       };
       await AsyncStorage.setItem(METADATA_KEY(symbol, timeframe), JSON.stringify(rejectedMeta));
+
+      // Store rejected model as a non-champion challenger — weights retained for history/rollback
+      // Fire-and-forget: never blocks or modifies the active MODEL_KEY
+      (() => {
+        try {
+          const mlpByHorizon: Record<number, string> = {};
+          for (const w of pendingWrites) {
+            const m = w.key.match(/_h(\d+)$/);
+            if (m) mlpByHorizon[parseInt(m[1], 10)] = JSON.stringify(w.value);
+          }
+          const lrW = pendingWrites.find(w => w.key === LR_KEY(symbol, timeframe));
+          if (Object.keys(mlpByHorizon).length > 0 && lrW) {
+            const candleStart = candles.length > 0 ? candles[0].time : 0;
+            const candleEnd   = candles.length > 0 ? candles[candles.length - 1].time : 0;
+            const _resolvedExchangeRej = findAssetByLegacySymbol(symbol)?.exchange ?? assetClass;
+            saveVersionedModel({
+              symbol, exchange: _resolvedExchangeRej, timeframe,
+              primaryHorizon: effectiveHorizon,
+              modelVersion:   finalTrainingRunNumber, // use run number to keep unique
+              mlpWeightsByHorizon: mlpByHorizon,
+              lrWeights:      JSON.stringify(lrW.value),
+              trainingCandleCount: candles.length,
+              trainingSampleCount: X.length,
+              trainingDurationMs:  Date.now() - startTime,
+              oldestCandleTime:    candleStart,
+              newestCandleTime:    candleEnd,
+              validationAccuracy:  walkForwardAccuracy,
+              holdoutAccuracy:     holdoutResult?.ensembleAccuracy ?? null,
+              holdoutF1:           holdoutResult?.f1 ?? null,
+              backtestReturn:      null,
+              maxDrawdown:         null,
+              winRate:             null,
+              profitFactor:        null,
+              isAccepted:          false,  // rejected — champion pointer NOT updated
+            }).catch(() => {});
+          }
+        } catch { /* versioning is non-critical */ }
+      })();
     } catch (e: any) {
       logger.error('mlSignal', `${symbol}: failed to persist rejection metadata: ${e.message}`);
     }

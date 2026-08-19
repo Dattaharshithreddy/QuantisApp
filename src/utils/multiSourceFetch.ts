@@ -7,28 +7,9 @@ import { fetchCandlesWithCache, isHistoryExhausted, markHistoryExhausted } from 
 import { fetchAVKlines } from '../api/alphaVantage';
 import { logger } from './logger';
 import { fetchCdxCandles } from '../api/coindcx';
+import { mergeIntoArchive, loadFromArchive, archiveKey } from './historicalArchive';
 
-// TASK 7/8 (Verification & Production Evaluation, asset-class support) —
-// before extending the symbol selector to all asset classes, this had to
-// be checked first: does this app actually have a way to fetch enough
-// HISTORY to evaluate each asset class, or would expanding the selector
-// just let people select symbols that silently fail?
-//
-// Checked directly against the real API files:
-//   - binance (crypto): fetchMaxHistory already paginates properly.
-//   - ao (NSE stocks/indices): aoCandlesBefore exists — real pagination
-//     is possible, just not previously assembled into a "fetch maximum
-//     history" loop the way Binance's already was. Built below.
-//   - av (US stocks): fetchAVKlines is a SINGLE call with no "before X"
-//     pagination function anywhere in this codebase — genuinely capped
-//     at whatever one call returns. Not a bug to fix; a real platform
-//     limit, reported honestly rather than silently retried forever.
-//   - forex: there is NO historical candle endpoint anywhere in this
-//     app — api/forex.ts only has fetchForexRates(), which returns live
-//     spot rates, not OHLC history. Forex assets genuinely cannot be
-//     backtested/evaluated here. Surfaced explicitly below, not
-//     fabricated by treating a live rate as a fake candle.
-
+// ── Capability classification ─────────────────────────────────────────────────
 export type FetchCapability = 'full_pagination' | 'single_call_capped' | 'unsupported';
 
 export function getFetchCapability(asset: Asset): FetchCapability {
@@ -36,12 +17,14 @@ export function getFetchCapability(asset: Asset): FetchCapability {
   if (asset.src === 'ao' || asset.src === 'ao_futures') return 'full_pagination';
   if (asset.src === 'coindcx' || asset.src === 'coindcx_futures') return 'single_call_capped';
   if (asset.src === 'av') return 'single_call_capped';
-  return 'unsupported'; // forex, and anything else with no historical source
+  return 'unsupported';
 }
 
-// Paginate backward through AngelOne history using aoCandlesBefore.
-// Exported so callers can use it as a fetcher lambda inside fetchCandlesWithCache.
-async function fetchMaxHistoryAO(token: string, exchange: string, tf: string, session: AOSession, targetBars: number): Promise<Candle[]> {
+// ── Angel One paginated history ───────────────────────────────────────────────
+async function fetchMaxHistoryAO(
+  token: string, exchange: string, tf: string,
+  session: AOSession, targetBars: number,
+): Promise<Candle[]> {
   const chunks: Candle[][] = [];
   let totalFetched = 0;
   let first = await aoCandles(token, exchange, tf, session);
@@ -49,7 +32,7 @@ async function fetchMaxHistoryAO(token: string, exchange: string, tf: string, se
   chunks.push(first);
   totalFetched += first.length;
 
-  const maxChunks = Math.ceil(targetBars / Math.max(1, first.length)) + 1;
+  const maxChunks = Math.ceil(targetBars / Math.max(1, first.length)) + 2;
   for (let i = 0; i < maxChunks && totalFetched < targetBars; i++) {
     const oldestSoFar = chunks[0][0].time;
     let older: Candle[];
@@ -70,127 +53,178 @@ async function fetchMaxHistoryAO(token: string, exchange: string, tf: string, se
   return Array.from(byTime.values()).sort((a, b) => a.time - b.time).slice(-targetBars);
 }
 
+// ── Exchange name helper ──────────────────────────────────────────────────────
+function exchangeFor(asset: Asset): string {
+  if (asset.src === 'binance') return 'binance';
+  if (asset.src === 'ao' || asset.src === 'ao_futures') return 'angelone';
+  if (asset.src === 'coindcx' || asset.src === 'coindcx_futures') return 'coindcx';
+  if (asset.src === 'av') return 'av';
+  return 'unknown';
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+// Flow for full_pagination sources:
+//   1. Load Firebase archive (up to 50K candles, persisted across sessions)
+//   2. Determine newest archived timestamp
+//   3. Fetch ONLY candles newer than that from exchange API (incremental)
+//   4. Merge new + archived, persist updated archive to Firebase
+//   5. Return merged candles (capped at targetBars)
+//
+// For single_call_capped sources (CoinDCX, AV):
+//   Use fetchCandlesWithCache (AsyncStorage), unchanged behavior.
+//   Archive not used for these — single call returns a fixed window.
 export async function fetchMaxHistoryForAsset(
-  asset: Asset, tf: string, targetBars: number, aoSession: AOSession | null, avKey: string | null
+  asset: Asset,
+  tf: string,
+  targetBars: number,
+  aoSession: AOSession | null,
+  avKey: string | null,
 ): Promise<{ candles: Candle[]; capability: FetchCapability; note: string | null }> {
   const capability = getFetchCapability(asset);
+  const exchange   = exchangeFor(asset);
 
   if (capability === 'unsupported') {
-    return { candles: [], capability, note: `${asset.symbol}: no historical data source exists for forex in this app (only live spot rates) — cannot be evaluated.` };
+    return {
+      candles: [],
+      capability,
+      note: `${asset.symbol}: no historical data source exists for forex in this app (only live spot rates) — cannot be evaluated.`,
+    };
   }
 
+  // ── Binance ────────────────────────────────────────────────────────────────
   if (asset.src === 'binance' && asset.bnSym) {
-    // Binance: fetchCandlesWithCache with incremental fetcher.
-    // newestCachedTime is passed to fetchBnKlines endTime so we only
-    // fetch candles NEWER than what cache already has.
     const bnSym = asset.bnSym;
-    // CORRECTION_WINDOW: always re-fetch the last N candles to catch broker corrections.
-    // Some brokers revise OHLC/volume on the latest closed candle after market close.
-    // Re-fetching 10 bars of overlap ensures corrections are picked up on next sync.
     const CORRECTION_WINDOW = 10;
-    const candles = await fetchCandlesWithCache(
-      asset.symbol, tf,
-      async (newestCachedTime) => {
-        if (newestCachedTime) {
-          // True incremental fetch: request ONLY candles newer than cache.
-          // Subtract correction window so last 10 bars are always refreshed.
-          const tfMs: Record<string, number> = {
-            '1m':60000,'3m':180000,'5m':300000,'15m':900000,
-            '30m':1800000,'1h':3600000,'4h':14400000,'1D':86400000};
-          const barMs = tfMs[tf] ?? 900000;
-          const fromTime = newestCachedTime - (CORRECTION_WINDOW * barMs);
-          // Binance API: limit=1000 with startTime gives exactly what we need
-          return fetchBnKlines(bnSym, tf, 1000, undefined, fromTime);
-        }
-        // No cache — fetch full paginated history
-        const result = await fetchMaxHistory(bnSym, tf, targetBars);
-        // Persist historyExhausted flag now so next incremental fetch skips pagination.
-        if (result.historyExhausted) await markHistoryExhausted(asset.symbol, tf);
-        return result.candles;
-      },
-      { maxCandles: targetBars, forceRefresh: true },
-    );
 
-    // ── History completeness check (replaces 80% heuristic) ────────────────────
-    // Decision logic:
-    //   1. Cache already marked historyExhausted=true → Binance confirmed no older
-    //      data exists. Use cache as-is regardless of bar count. Log and return.
-    //   2. Cache has fewer bars than targetBars AND not exhausted → backfill via
-    //      fetchMaxHistory (paginated). Persist historyExhausted from the result
-    //      so the NEXT eval run skips pagination entirely.
-    //   3. Cache has >= targetBars → already sufficient. No backfill needed.
-    const alreadyExhausted = await isHistoryExhausted(asset.symbol, tf);
-    if (alreadyExhausted) {
-      // Exchange history fully cached — no backfill needed ever again.
-      logger.info('multiSourceFetch',
-        `${asset.symbol}/${tf}: history exhausted flag set — using cached ${candles.length} bars (max available from Binance)`);
-    } else if (candles.length < targetBars) {
-      // We have less than requested AND Binance may have more. Paginate.
-      logger.info('multiSourceFetch',
-        `${asset.symbol}/${tf}: cached ${candles.length} < target ${targetBars} and history not exhausted — backfilling...`);
-      const result: MaxHistoryResult = await fetchMaxHistory(bnSym, tf, targetBars);
-      if (result.candles.length > candles.length) {
-        // Merge: backfill gives the historical base; cached candles may have
-        // more recent bars (from the incremental fetch above). Merge both.
-        const byTime = new Map<number, import('./indicators').Candle>();
-        [...result.candles, ...candles].forEach(c => byTime.set(c.time, c));
-        const merged = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
-        const final  = merged.slice(-targetBars);
-        // Persist the historyExhausted flag so future runs skip this pagination.
-        if (result.historyExhausted) {
-          await markHistoryExhausted(asset.symbol, tf);
-          logger.info('multiSourceFetch',
-            `${asset.symbol}/${tf}: backfill complete — ${final.length} bars. Binance history exhausted; marking cache.`);
-        } else {
-          logger.info('multiSourceFetch',
-            `${asset.symbol}/${tf}: backfill complete — ${final.length} bars (targetBars cap hit; more Binance history may exist).`);
+    // 1. Load archive (Firebase → AsyncStorage fallback)
+    const { candles: archived } = await loadFromArchive(asset.symbol, tf, exchange);
+    const newestArchivedTime = archived.length ? archived[archived.length - 1].time : null;
+
+    // 2. Incremental fetch from exchange
+    let freshCandles: Candle[] = [];
+    try {
+      if (newestArchivedTime) {
+        const tfMs: Record<string, number> = {
+          '1m':60000,'3m':180000,'5m':300000,'15m':900000,
+          '30m':1800000,'1h':3600000,'4h':14400000,'1D':86400000,
+        };
+        const barMs = tfMs[tf] ?? 900000;
+        const fromTime = newestArchivedTime - (CORRECTION_WINDOW * barMs);
+        freshCandles = await fetchBnKlines(bnSym, tf, 1000, undefined, fromTime);
+      } else {
+        // No archive yet — paginate full history
+        const alreadyExhausted = await isHistoryExhausted(asset.symbol, tf);
+        if (!alreadyExhausted) {
+          const result: MaxHistoryResult = await fetchMaxHistory(bnSym, tf, targetBars);
+          if (result.historyExhausted) await markHistoryExhausted(asset.symbol, tf);
+          freshCandles = result.candles;
         }
-        return { candles: final, capability, note: null };
       }
-      // Backfill returned same or fewer bars — cache was already up to date.
-      if (result.historyExhausted) await markHistoryExhausted(asset.symbol, tf);
-    } else {
-      logger.info('multiSourceFetch',
-        `${asset.symbol}/${tf}: cached ${candles.length} >= target ${targetBars} — no backfill needed`);
+    } catch (e: any) {
+      logger.warn('multiSourceFetch', `${asset.symbol}/${tf}: Binance fetch failed: ${e.message}`);
     }
-    return { candles, capability, note: null };
+
+    // 3. If we only got a small incremental update but archive is thin, backfill
+    if (archived.length < targetBars && freshCandles.length < targetBars) {
+      const alreadyExhausted = await isHistoryExhausted(asset.symbol, tf);
+      if (!alreadyExhausted) {
+        logger.info('multiSourceFetch',
+          `${asset.symbol}/${tf}: archive has ${archived.length} < ${targetBars}, backfilling...`);
+        try {
+          const result: MaxHistoryResult = await fetchMaxHistory(bnSym, tf, targetBars);
+          if (result.historyExhausted) await markHistoryExhausted(asset.symbol, tf);
+          // Merge backfill + any fresh candles we already got
+          const byTime = new Map<number, Candle>();
+          [...result.candles, ...freshCandles].forEach(c => byTime.set(c.time, c));
+          freshCandles = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+        } catch (e: any) {
+          logger.warn('multiSourceFetch', `${asset.symbol}/${tf}: backfill failed: ${e.message}`);
+        }
+      }
+    }
+
+    // 4. Merge into archive (Firebase persisted)
+    const merged = await mergeIntoArchive(asset.symbol, tf, exchange, freshCandles);
+
+    // 5. Also persist in AsyncStorage cache for chart/fast-path access
+    if (merged.length) {
+      const { fetchCandlesWithCache: _fcc } = require('./candleCache');
+      // Write fresh portion only to candleCache (chart uses this for TTL)
+      // Do not await — background write
+      const { writeCache } = require('./candleCache');
+      // Use setCachedCandles to update chart-side cache with latest window
+      const { setCachedCandles } = require('./candleCache');
+      const chartWindow = merged.slice(-Math.min(10_000, merged.length));
+      setCachedCandles(asset.symbol, tf, chartWindow).catch(() => {});
+    }
+
+    const result = merged.slice(-targetBars);
+    logger.info('multiSourceFetch',
+      `${asset.symbol}/${tf}: returning ${result.length} bars (archive=${merged.length})`);
+    return { candles: result, capability, note: null };
   }
 
+  // ── Angel One ─────────────────────────────────────────────────────────────
   if ((asset.src === 'ao' || asset.src === 'ao_futures') && asset.aoToken && asset.aoEx) {
-    if (!aoSession?.jwtToken) return { candles: [], capability, note: `${asset.symbol}: Angel One not connected — connect it in Settings to evaluate this symbol.` };
+    if (!aoSession?.jwtToken) {
+      return {
+        candles: [],
+        capability,
+        note: `${asset.symbol}: Angel One not connected — connect it in Settings to evaluate this symbol.`,
+      };
+    }
     const { aoToken, aoEx } = asset;
     const session = aoSession;
     const CORRECTION_WINDOW = 10;
-    const candles = await fetchCandlesWithCache(
-      asset.symbol, tf,
-      async (newestCachedTime) => {
-        if (newestCachedTime) {
-          // True incremental fetch: request only candles after newestCachedTime.
-          // Correction window: re-fetch last 10 bars so broker revisions are caught.
-          const tfMs: Record<string, number> = {
-            '1m':60000,'3m':180000,'5m':300000,'15m':900000,
-            '30m':1800000,'1h':3600000,'4h':14400000,'1D':86400000};
-          const barMs = tfMs[tf] ?? 900000;
-          const fromTime = newestCachedTime - (CORRECTION_WINDOW * barMs);
-          return aoCandlesFrom(aoToken, aoEx, tf, fromTime, session);
-        }
-        // No cache — fetch full paginated history to seed cache
-        return fetchMaxHistoryAO(aoToken, aoEx, tf, session, targetBars);
-      },
-      { maxCandles: targetBars, forceRefresh: true },
-    );
-    return { candles, capability, note: null };
+
+    // 1. Load archive
+    const { candles: archived } = await loadFromArchive(asset.symbol, tf, exchange);
+    const newestArchivedTime = archived.length ? archived[archived.length - 1].time : null;
+
+    // 2. Incremental fetch
+    let freshCandles: Candle[] = [];
+    try {
+      if (newestArchivedTime) {
+        const tfMs: Record<string, number> = {
+          '1m':60000,'3m':180000,'5m':300000,'15m':900000,
+          '30m':1800000,'1h':3600000,'4h':14400000,'1D':86400000,
+        };
+        const barMs = tfMs[tf] ?? 900000;
+        const fromTime = newestArchivedTime - (CORRECTION_WINDOW * barMs);
+        freshCandles = await aoCandlesFrom(aoToken, aoEx, tf, fromTime, session);
+      } else {
+        freshCandles = await fetchMaxHistoryAO(aoToken, aoEx, tf, session, targetBars);
+      }
+    } catch (e: any) {
+      logger.warn('multiSourceFetch', `${asset.symbol}/${tf}: AO fetch failed: ${e.message}`);
+    }
+
+    // 3. Merge into archive
+    const merged = await mergeIntoArchive(asset.symbol, tf, exchange, freshCandles);
+    const { setCachedCandles } = require('./candleCache');
+    const chartWindow = merged.slice(-Math.min(10_000, merged.length));
+    setCachedCandles(asset.symbol, tf, chartWindow).catch(() => {});
+
+    return { candles: merged.slice(-targetBars), capability, note: null };
   }
 
+  // ── CoinDCX (single_call_capped — no archive) ─────────────────────────────
   if ((asset.src === 'coindcx' || asset.src === 'coindcx_futures') && (asset as any).cdxSym) {
-    // CoinDCX spot and futures use the same candles REST endpoint
     const candles = await fetchCdxCandles((asset as any).cdxSym, tf, Math.min(targetBars, 1000));
     return { candles, capability, note: null };
   }
+
+  // ── Alpha Vantage (single_call_capped) ────────────────────────────────────
   if (asset.src === 'av' && asset.avSym) {
-    if (!avKey) return { candles: [], capability, note: `${asset.symbol}: Alpha Vantage key not set — add one in Settings to evaluate this symbol.` };
+    if (!avKey) {
+      return {
+        candles: [],
+        capability,
+        note: `${asset.symbol}: Alpha Vantage key not set — add one in Settings to evaluate this symbol.`,
+      };
+    }
     const avSym = asset.avSym;
-    const key = avKey;
+    const key   = avKey;
     const candles = await fetchCandlesWithCache(
       asset.symbol, tf,
       async () => fetchAVKlines(avSym, tf, key),

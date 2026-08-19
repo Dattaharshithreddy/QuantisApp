@@ -3,28 +3,30 @@ import { fetchBnKlines } from '../api/binance';
 import { detectGaps } from './gapDetection';
 import { logger } from './logger';
 
-// Binance's klines endpoint caps each call at 1000 candles. To get genuinely
-// "maximum available history" rather than just one capped call, this
-// paginates backward using the endTime parameter — fetching consecutive
-// 1000-bar chunks moving further into the past until either no more data
-// is returned (we've hit the start of the symbol's history) or the
-// requested cap is reached.
+// Binance klines endpoint: 1000 candles max per call.
+// To reach 50,000 candles: 50 chunks × 1000 bars.
+// maxChunks is derived from targetBars with +2 safety margin to handle
+// partial last chunk (Binance returns < 1000 when hitting exchange history start).
 //
-// historyExhausted = true when Binance returned < 1000 bars on the last chunk,
+// historyExhausted = true when Binance returns < 1000 bars on the last chunk,
 // meaning we genuinely hit the beginning of available exchange data.
-// The caller stores this flag in the candle cache so future eval runs can
-// skip re-pagination when they already have everything Binance has.
+
 export type MaxHistoryResult = {
   candles:          Candle[];
-  historyExhausted: boolean; // true = Binance has no older data; false = cap hit first
+  historyExhausted: boolean;
 };
 
-export async function fetchMaxHistory(bnSym: string, tf: string, targetBars = 5000): Promise<MaxHistoryResult> {
+export async function fetchMaxHistory(
+  bnSym: string,
+  tf: string,
+  targetBars = 50_000,   // raised from 5000 → 50000
+): Promise<MaxHistoryResult> {
   const chunks: Candle[][] = [];
   let endTime: number | undefined = undefined;
   let totalFetched = 0;
   let hitExchangeStart = false;
-  const maxChunks = Math.ceil(targetBars / 1000) + 1;
+  // +2 to handle the partial chunk at the oldest end of Binance history
+  const maxChunks = Math.ceil(targetBars / 1000) + 2;
 
   for (let i = 0; i < maxChunks && totalFetched < targetBars; i++) {
     let chunk: Candle[];
@@ -38,8 +40,6 @@ export async function fetchMaxHistory(bnSym: string, tf: string, targetBars = 50
     chunks.unshift(chunk);
     totalFetched += chunk.length;
     endTime = chunk[0].time - 1;
-    // Binance returns < 1000 bars only when it has reached the earliest available
-    // data for this symbol. This is the definitive "history exhausted" signal.
     if (chunk.length < 1000) { hitExchangeStart = true; break; }
   }
 
@@ -48,13 +48,11 @@ export async function fetchMaxHistory(bnSym: string, tf: string, targetBars = 50
   const result = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
   const trimmed = result.slice(-targetBars);
 
-  // If we hit the cap (maxChunks) without exhausting exchange history,
-  // historyExhausted stays false — more data exists but we stopped at targetBars.
   const historyExhausted = hitExchangeStart;
 
   const gaps = detectGaps(trimmed, tf);
   if (gaps.length) {
-    logger.warn('maxHistoryFetch', `${bnSym}/${tf}: ${gaps.length} gap(s) detected across ${chunks.length} chunks`);
+    logger.warn('maxHistoryFetch', `${bnSym}/${tf}: ${gaps.length} gap(s) across ${chunks.length} chunks`);
   }
   logger.info('maxHistoryFetch',
     `${bnSym}/${tf}: ${trimmed.length} bars across ${chunks.length} chunk(s) | historyExhausted=${historyExhausted}`);

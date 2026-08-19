@@ -49,18 +49,18 @@ export default function BacktestScreen() {
       if (asset.src === 'binance' && asset.bnSym) {
         const bnSym = asset.bnSym;
         candles = await fetchCandlesWithCache(asset.symbol, tf,
-          async () => fetchMaxHistory(bnSym, tf, 5000),
-          { maxCandles: 5000, forceRefresh: true });
+          async () => fetchMaxHistory(bnSym, tf, 50000),
+          { maxCandles: 50000, forceRefresh: true });
       } else if ((asset.src === 'ao' || asset.src === 'ao_futures') && aoSession?.jwtToken && asset.aoToken && asset.aoEx) {
         const { aoToken, aoEx } = asset; const sess = aoSession;
         candles = await fetchCandlesWithCache(asset.symbol, tf,
           async () => aoCandles(aoToken, aoEx, tf, sess),
-          { maxCandles: 5000, forceRefresh: true });
+          { maxCandles: 50000, forceRefresh: true });
       } else if (asset.src === 'av' && asset.avSym && avKey) {
         const avSym = asset.avSym; const key = avKey;
         candles = await fetchCandlesWithCache(asset.symbol, tf,
           async () => fetchAVKlines(avSym, tf, key),
-          { maxCandles: 5000, forceRefresh: true });
+          { maxCandles: 50000, forceRefresh: true });
       }
       else { setErr('No live data source connected for this asset.'); setLoading(false); return; }
 
