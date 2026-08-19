@@ -37,10 +37,6 @@ jobs:
 
       - name: Patch AGP 8 compatibility
         run: |
-          # Fix: AGP 8 removed components.release magic property.
-          # Replace with findByName("release") which is null-safe.
-          # Covers expo-modules-core/ExpoModulesCorePlugin.gradle and
-          # expo-local-authentication/android/build.gradle
           find node_modules -name "*.gradle" -exec grep -l "from components\.release" {} \; | while read f; do
             sed -i 's/from components\.release/def __rc = components.findByName("release"); if (__rc != null) { from __rc }/g' "$f"
             echo "Patched: $f"
@@ -48,10 +44,23 @@ jobs:
           echo "AGP 8 patch complete"
 
       - name: Build Release APK
+        id: gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle_output.txt
+          exit ${PIPESTATUS[0]}
+        continue-on-error: true
+
+      - name: Show build errors
+        if: steps.gradle.outcome == 'failure'
+        run: |
+          echo "=== GRADLE ERRORS ==="
+          grep -A 10 "What went wrong\|FAILURE\|error:" /tmp/gradle_output.txt | head -80
+
+      - name: Fail build
+        if: steps.gradle.outcome == 'failure'
+        run: exit 1
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
