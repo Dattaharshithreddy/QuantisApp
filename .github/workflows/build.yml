@@ -35,32 +35,50 @@ jobs:
         env:
           EXPO_NO_TYPESCRIPT_SETUP: 1
 
-      - name: Patch expo-modules-core for AGP 8 compatibility
+      - name: Patch AGP 8 compatibility
         run: |
-          PLUGIN_FILE="node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle"
-          if [ -f "$PLUGIN_FILE" ]; then
-            sed -i 's/components\.release/components.getByName("release")/g' "$PLUGIN_FILE"
-            echo "Patched ExpoModulesCorePlugin.gradle for AGP 8"
+          echo "=== Patching components.release → components.getByName('release') ==="
+
+          # 1. expo-modules-core (known issue)
+          FILE="node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle"
+          if [ -f "$FILE" ]; then
+            sed -i 's/components\.release/components.getByName("release")/g' "$FILE"
+            echo "Patched: $FILE"
           fi
+
+          # 2. Patch ALL gradle files under node_modules that reference components.release
+          find node_modules -name "*.gradle" | while read f; do
+            if grep -q "components\.release" "$f" 2>/dev/null; then
+              sed -i 's/components\.release/components.getByName("release")/g' "$f"
+              echo "Patched: $f"
+            fi
+          done
+
+          # 3. Patch expo-local-authentication build.gradle — add compileSdkVersion if missing
+          LOCAL_AUTH="node_modules/expo-local-authentication/android/build.gradle"
+          if [ -f "$LOCAL_AUTH" ]; then
+            # If compileSdkVersion is missing, inject it inside android { } block
+            if ! grep -q "compileSdkVersion" "$LOCAL_AUTH"; then
+              sed -i '/^android {/a\    compileSdkVersion 34' "$LOCAL_AUTH"
+              echo "Added compileSdkVersion 34 to: $LOCAL_AUTH"
+            fi
+          fi
+
+          # 4. Also patch any other expo packages missing compileSdkVersion
+          find node_modules/expo-*/android -name "build.gradle" 2>/dev/null | while read f; do
+            if grep -q "^android {" "$f" && ! grep -q "compileSdkVersion\|compileSdk" "$f"; then
+              sed -i '/^android {/a\    compileSdkVersion 34' "$f"
+              echo "Added compileSdkVersion to: $f"
+            fi
+          done
+
+          echo "=== All patches applied ==="
 
       - name: Build Release APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tail -100
-        continue-on-error: true
-        id: gradle_build
-
-      - name: Show Gradle failure details
-        if: steps.gradle_build.outcome == 'failure'
-        run: |
-          echo "=== GRADLE BUILD FAILED ==="
-          cd android
-          ./gradlew assembleRelease --no-daemon --info 2>&1 | grep -E "ERROR|FAILURE|error:|Exception|Could not|Caused by" | tail -50
-
-      - name: Fail if build failed
-        if: steps.gradle_build.outcome == 'failure'
-        run: exit 1
+          ./gradlew assembleRelease --no-daemon
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
