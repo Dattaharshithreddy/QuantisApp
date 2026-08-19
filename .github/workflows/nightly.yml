@@ -1,0 +1,11 @@
+# DISABLED — replaced by build.yml (EAS build)
+# This file kept to avoid git conflicts but does nothing.
+name: nightly (disabled)
+on:
+  workflow_dispatch:
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Use EAS build via build.yml instead"
