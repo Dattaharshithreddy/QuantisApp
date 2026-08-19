@@ -41,26 +41,12 @@ jobs:
             sed -i 's/from components\.release/def __rc = components.findByName("release"); if (__rc != null) { from __rc }/g' "$f"
             echo "Patched: $f"
           done
-          echo "AGP 8 patch complete"
 
       - name: Build Release APK
-        id: gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle_output.txt
-          exit ${PIPESTATUS[0]}
-        continue-on-error: true
-
-      - name: Show build errors
-        if: steps.gradle.outcome == 'failure'
-        run: |
-          echo "=== GRADLE ERRORS ==="
-          grep -A 10 "What went wrong\|FAILURE\|error:" /tmp/gradle_output.txt | head -80
-
-      - name: Fail build
-        if: steps.gradle.outcome == 'failure'
-        run: exit 1
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tail -150
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
