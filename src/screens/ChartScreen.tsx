@@ -56,7 +56,6 @@ import { ExchangeSelector } from './chart/components/ExchangeSelector';
 import { buildChatContext } from '../api/claude';
 import { fetchBnKlines } from '../api/binance';
 import { getCachedCandles, fetchCandlesWithCache } from '../utils/candleCache';
-import { calcRSI, calcMA } from '../utils/indicators';
 import { fetchCryptoContextPartial } from '../utils/cryptoMarketContext/cryptoMarketContextFetch';
 // setExchangePreference moved to DataContext.updateExchangePreference
 
