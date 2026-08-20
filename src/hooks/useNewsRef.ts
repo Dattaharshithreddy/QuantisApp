@@ -1,15 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // useNewsRef — zero-render news subscription
-//
-// Same pattern as usePriceRef.
-// News updates every ~5 minutes — AIChatScreen must not re-render from it.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
 import { useData } from '../context/DataContext';
 
 function NewsRefUpdaterInner({ onNews }: { onNews: (news: any[]) => void }) {
   const { news } = useData();
-  onNews(news ?? []); // synchronous ref update, no setState
+
+  useLayoutEffect(() => {
+    onNews(news ?? []);
+  }, [news, onNews]);
+
   return null;
 }
 
