@@ -95,17 +95,20 @@ function AppShell() {
 }
 
 export default function App() {
-  const [locked, setLocked] = React.useState<boolean | null>(null); // null = checking
+  const [locked, setLocked] = React.useState(false); // start unlocked, check async
 
   React.useEffect(() => {
-    // Check if app lock is enabled
+    // Check lock settings with timeout — never block app startup
+    const timeout = setTimeout(() => setLocked(false), 2000); // 2s max wait
     getLockSettings().then(({ enabled }) => {
-      setLocked(enabled ? true : false);
-    }).catch(() => setLocked(false));
+      clearTimeout(timeout);
+      if (enabled) setLocked(true);
+    }).catch(() => {
+      clearTimeout(timeout);
+      setLocked(false);
+    });
   }, []);
 
-  // Show lock screen while checking or if locked
-  if (locked === null) return null; // splash handles this
   if (locked) return (
     <LockScreen onUnlock={() => setLocked(false)} />
   );
