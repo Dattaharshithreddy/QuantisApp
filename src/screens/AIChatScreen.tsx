@@ -450,27 +450,25 @@ export default function AIChatScreen({ route }: any) {
       return; // Done — no network calls needed
     }
 
-    // ── PHASE 1: INSTANT context from params (0ms, no network) ───────────────
-    // Build context immediately from data ChartScreen already computed.
-    // User can type RIGHT AWAY — no waiting for network.
+    // ── PHASE 1: INSTANT context (0ms) ──────────────────────────────────────
+    // Always fire setContextReady immediately — never block chat
     const liveCp0 = cpRef.current;
     const instantPrice = liveCp0?.price ?? (asset as any)?.base ?? 0;
-    if (instantPrice > 0) {
-      contextRef.current = buildChatContext({
-        assetName: asset?.name ?? symbol, symbol,
-        type: asset?.type ?? 'CRYPTO', tf, srcLabel,
-        price: instantPrice, chgPct: liveCp0?.chg ?? 0,
-        rsi: null, ma20: null, ma50: null,
-        ohlc: 'Loading latest candles...',
-        mlSignal: params?.mlSignal ?? null,
-        vpSnap: params?.vpSnap ?? null,
-        regimeSnap: params?.regimeSnap ?? null,
-        mtfSnap: params?.mtfSnap ?? null,
-        techSummary: params?.techSummary ?? null,
-        openPosition: params?.openPosition ?? null,
-      });
-      setContextReady(true); // ← INSTANT: chat usable immediately
-    }
+    const quickContext = buildChatContext({
+      assetName: asset?.name ?? symbol, symbol,
+      type: asset?.type ?? 'CRYPTO', tf, srcLabel,
+      price: instantPrice || 0, chgPct: liveCp0?.chg ?? 0,
+      rsi: null, ma20: null, ma50: null,
+      ohlc: instantPrice > 0 ? `Current price: ${instantPrice}` : 'Loading...',
+      mlSignal: params?.mlSignal ?? null,
+      vpSnap: params?.vpSnap ?? null,
+      regimeSnap: params?.regimeSnap ?? null,
+      mtfSnap: params?.mtfSnap ?? null,
+      techSummary: params?.techSummary ?? null,
+      openPosition: params?.openPosition ?? null,
+    });
+    contextRef.current = quickContext;
+    setContextReady(true); // ← ALWAYS fires immediately, no conditions
 
     try {
       const [historyRaw, candles] = await Promise.all([
@@ -530,13 +528,15 @@ export default function AIChatScreen({ route }: any) {
       const liveNews    = newsRef.current;
       const newsSummary = liveNews?.slice(0, 3).map((n: any) => n.headline).join(' | ') ?? '';
       let fearGreedSummary = '';
-      // Fetch Fear&Greed + fundamentals in background (doesn't block)
+      // Fetch Fear&Greed in true background — NEVER blocks contextReady
       let fundamentalsSummary = '';
       if (asset?.src === 'binance' || asset?.src === 'coindcx') {
-        try {
-          const ctx = await fetchCryptoContextPartial(symbol, ['FEAR_GREED', 'MARKET_CAP']);
-          if (ctx?.fearGreed?.value) fearGreedSummary = `Fear&Greed: ${ctx.fearGreed.value} (${ctx.fearGreed.classification})`;
-        } catch {}
+        // Fire-and-forget — updates context for NEXT message only
+        fetchCryptoContextPartial(symbol, ['FEAR_GREED']).then((ctx: any) => {
+          if (ctx?.fearGreed?.value && contextRef.current) {
+            fearGreedSummary = `Fear&Greed: ${ctx.fearGreed.value} (${ctx.fearGreed.classification})`;
+          }
+        }).catch(() => {});
         // Calculate support/resistance from candle history
         try {
           if (candles && candles.length >= 50) {

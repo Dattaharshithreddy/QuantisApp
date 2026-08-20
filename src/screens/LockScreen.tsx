@@ -19,9 +19,9 @@ export default function LockScreen({ onUnlock, appName = 'Quantis' }: Props) {
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    isBiometricAvailable().then(setBiometricOK);
-    // Auto-trigger biometric on open
-    setTimeout(tryBiometric, 300);
+    // Check biometric availability but don't auto-trigger
+    // KeyguardManager may not be available on all devices
+    isBiometricAvailable().then(setBiometricOK).catch(() => setBiometricOK(false));
   }, []);
 
   // Lockout timer countdown
@@ -42,8 +42,13 @@ export default function LockScreen({ onUnlock, appName = 'Quantis' }: Props) {
 
   const tryBiometric = useCallback(async () => {
     if (!biometricOK) return;
-    const ok = await authenticateWithBiometric();
-    if (ok) onUnlock();
+    try {
+      const ok = await authenticateWithBiometric();
+      if (ok) onUnlock();
+    } catch {
+      // Biometric not available on this device — use PIN
+      setBiometricOK(false);
+    }
   }, [biometricOK, onUnlock]);
 
   const shake = useCallback(() => {

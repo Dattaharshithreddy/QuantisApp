@@ -67,26 +67,12 @@ export async function setLockSettings(enabled: boolean, type: 'biometric' | 'mpi
 
 // ── Biometric — uses Android KeyguardManager (no extra native packages) ─────────
 export async function isBiometricAvailable(): Promise<boolean> {
-  try {
-    const { NativeModules, Platform } = require('react-native');
-    if (Platform.OS !== 'android') return false;
-    // Check if device has secure lock screen (pattern/PIN/fingerprint)
-    const km = NativeModules.KeyguardManager ?? NativeModules.RNKeyguard;
-    if (km?.isDeviceSecure) return await km.isDeviceSecure();
-    // Fallback: assume available if Android 6+
-    return Platform.Version >= 23;
-  } catch { return false; }
+  // KeyguardManager NativeModules not available in current build
+  // Fingerprint requires expo-local-authentication which breaks Gradle AGP 8
+  // Returns false — PIN is the primary lock method
+  return false;
 }
 
 export async function authenticateWithBiometric(): Promise<boolean> {
-  try {
-    const { NativeModules, Platform } = require('react-native');
-    if (Platform.OS !== 'android') return false;
-    // Use Android's built-in biometric prompt via KeyguardManager
-    const km = NativeModules.KeyguardManager ?? NativeModules.RNKeyguard;
-    if (km?.authenticate) {
-      return await km.authenticate('Verify your identity to open Quantis');
-    }
-    return false;
-  } catch { return false; }
+  return false;
 }
