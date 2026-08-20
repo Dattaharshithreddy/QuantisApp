@@ -171,7 +171,7 @@ export default function AppLockSettingsScreen() {
           {bioAvail ? (
             <View style={{ gap: 10 }}>
               <Text style={{ color: T.text, fontSize: 13 }}>
-                ✅ Fingerprint / Face ID available on this device
+                ✅ Device has secure lock screen (fingerprint/PIN/pattern)
               </Text>
               <TouchableOpacity onPress={testBiometric} style={{
                 backgroundColor: T.bg2, borderRadius: 8, padding: 12,
@@ -185,8 +185,8 @@ export default function AppLockSettingsScreen() {
             </View>
           ) : (
             <Text style={{ color: T.textDim, fontSize: 13 }}>
-              ❌ No fingerprint or face unlock enrolled on this device.
-              Go to phone Settings → Security → Fingerprint to set it up.
+              ❌ Device lock screen not configured.
+              Go to Settings → Security → Screen Lock to set up fingerprint.
             </Text>
           )}
         </View>
