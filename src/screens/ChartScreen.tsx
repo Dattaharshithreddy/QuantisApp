@@ -53,6 +53,11 @@ import { getActiveStrategyId } from '../utils/strategy/strategyStorage';
 import { getProfile } from '../utils/strategy/strategyProfiles';
 import { LiveCandleCountdown } from './chart/components/LiveCandleCountdown';
 import { ExchangeSelector } from './chart/components/ExchangeSelector';
+import { buildChatContext } from '../api/claude';
+import { fetchBnKlines } from '../api/binance';
+import { getCachedCandles, fetchCandlesWithCache } from '../utils/candleCache';
+import { calcRSI, calcMA } from '../utils/indicators';
+import { fetchCryptoContextPartial } from '../utils/cryptoMarketContext/cryptoMarketContextFetch';
 // setExchangePreference moved to DataContext.updateExchangePreference
 
 // FIX H-5: Module-level stable empty arrays/arrays so `?? []` in JSX never
@@ -144,8 +149,83 @@ export default function ChartScreen({ route, navigation }: any) {
   // Previously ChartScreen consumed `prices` directly from useData(), causing
   // a re-render on every aggTrade tick (50-200ms) — 5-20 renders/second.
   const { cp, cpRef } = usePriceSelector(symbol);
+  const preBuildRef = React.useRef<string>(''); // pre-built chat context
+  const preBuildingRef = React.useRef(false);
 
   const indicators = useChartIndicators(candles);
+
+  // Pre-build chat context in background whenever data changes
+  // So when user taps Chat, context is already 100% ready
+  React.useEffect(() => {
+    if (!candles?.length || !symbol || preBuildingRef.current) return;
+    preBuildingRef.current = true;
+    const buildInBackground = async () => {
+      try {
+        const liveCp  = cpRef.current;
+        const price   = liveCp?.price ?? (asset as any)?.base ?? 0;
+        if (!price) return;
+        const last    = candles[candles.length - 1];
+        const rsi     = calcRSI(candles, 14);
+        const ma20Arr = calcMA(candles, 20);
+        const ma50Arr = calcMA(candles, 50);
+        const ma20    = ma20Arr[ma20Arr.length - 1] ?? null;
+        const ma50    = ma50Arr[ma50Arr.length - 1] ?? null;
+        const recent  = candles.slice(-8);
+        const ohlc    = recent.map((c: any) =>
+          `${new Date(c.time).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})} O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+        ).join('\n');
+        // Calculate S/R levels
+        let fundamentalsSummary = '';
+        try {
+          const highs   = Math.max(...candles.map((c: any) => c.high));
+          const lows    = Math.min(...candles.map((c: any) => c.low));
+          const ph      = Math.max(...candles.slice(-20).map((c: any) => c.high));
+          const pl      = Math.min(...candles.slice(-20).map((c: any) => c.low));
+          const pivot   = ((ph + pl + last.close) / 3).toFixed(2);
+          const r1      = (2 * Number(pivot) - pl).toFixed(2);
+          const s1      = (2 * Number(pivot) - ph).toFixed(2);
+          fundamentalsSummary = `Range: ${lows.toFixed(2)}–${highs.toFixed(2)} | Pivot: ${pivot} | R1: ${r1} | S1: ${s1}`;
+        } catch {}
+        // Fetch Fear&Greed in background (non-blocking)
+        let fearGreed = '';
+        try {
+          if (asset?.src === 'binance' || asset?.src === 'coindcx') {
+            const ctx = await fetchCryptoContextPartial(symbol, ['FEAR_GREED']);
+            if (ctx?.fearGreed?.value) fearGreed = `Fear&Greed: ${ctx.fearGreed.value} (${ctx.fearGreed.classification})`;
+          }
+        } catch {}
+        const srcLabelMap: Record<string,string> = {
+          binance:'Binance',coindcx:'CoinDCX',coindcx_futures:'CDX Perps',
+          ao:'Angel One',ao_futures:'Angel One NFO',av:'Alpha Vantage',
+        };
+        preBuildRef.current = buildChatContext({
+          assetName: asset?.name ?? symbol, symbol,
+          type: asset?.type ?? 'CRYPTO', tf,
+          srcLabel: srcLabelMap[asset?.src ?? ''] ?? asset?.src ?? 'Unknown',
+          price: last.close, chgPct: liveCp?.chg ?? 0,
+          rsi, ma20, ma50, ohlc,
+          newsSummary: [fearGreed, fundamentalsSummary].filter(Boolean).join(' | ') || undefined,
+          mlSignal: ml.data ? {
+            action: ml.data.action, direction: ml.data.direction,
+            ensembleProbUp: ml.data.ensembleProbUp, confidence: ml.data.confidence,
+            walkForwardAccuracy: ml.data.walkForwardAccuracy,
+            topFeatures: ml.data.topFeatures?.slice(0,6) ?? [],
+            memoryResult: ml.data.memoryResult ?? null,
+            suggestedEntry: ml.data.suggestedEntry,
+            suggestedStopLoss: ml.data.suggestedStopLoss,
+            suggestedTakeProfit: ml.data.suggestedTakeProfit,
+          } : null,
+          vpSnap: vpSnap ? { poc: vpSnap.poc, vah: vpSnap.vah, val: vpSnap.val, sessionVwap: vwapSnap?.sessionVwap } : null,
+          regimeSnap: regimeSnap ? { label: regimeSnap.label, confidence: regimeSnap.confidence } : null,
+          mtfSnap: mtfSnap ? { trend: mtfSnap.trend, alignment: mtfSnap.alignment } : null,
+          techSummary: techSummary ? { atr: techSummary.atr, rsi: techSummary.rsi, bbPosition: techSummary.bbPosition, macdState: techSummary.macdState, trend: techSummary.trend } : null,
+          openPosition: overlays.openPosition ? { direction: overlays.openPosition.direction, entryPrice: overlays.openPosition.entryPrice, stopLoss: overlays.openPosition.stopLoss, takeProfit: overlays.openPosition.takeProfit, pnlPct: overlays.openPosition.pnlPct } : null,
+        });
+      } catch {}
+      preBuildingRef.current = false;
+    };
+    buildInBackground();
+  }, [candles, ml.data, symbol, tf]); // re-build when data changes
   const {
     geoPatterns, validatedPatterns, candlePatterns, msSnapshot, msStr, smcSnap, fvgSnap, fvgBull, fvgBear,
     vwapSnap, vpSnap, mtfSnap, mtfSignals, regimeSnap, techSummary} = indicators ?? {};
@@ -765,6 +845,7 @@ export default function ChartScreen({ route, navigation }: any) {
               symbol: sym,
               asset,
               tf,
+              preBuiltContext: preBuildRef.current || undefined,
               // Full ML signal + memory engine result
               mlSignal: ml.data ? {
                 action:              ml.data.action,

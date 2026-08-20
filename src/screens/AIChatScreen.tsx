@@ -432,6 +432,24 @@ export default function AIChatScreen({ route }: any) {
     const tf = (route?.params as any)?.tf || '15m';
     const params = route?.params as any;
 
+    // ── PHASE 0: Use pre-built context if ChartScreen already built it ────────
+    // This is the fastest path — context built while user was on chart
+    const preBuilt = params?.preBuiltContext;
+    if (preBuilt && typeof preBuilt === 'string' && preBuilt.length > 100) {
+      contextRef.current = preBuilt;
+      setContextReady(true);
+      // Still load history in background
+      KVStore.get(HISTORY_KEY(symbol)).then(raw => {
+        if (!raw) return;
+        try {
+          const msgs = JSON.parse(raw).slice(-MAX_STORED).map((m: any) => withId(m));
+          setCommitted(msgs);
+          committedRef.current = msgs;
+        } catch {}
+      }).catch(() => {});
+      return; // Done — no network calls needed
+    }
+
     // ── PHASE 1: INSTANT context from params (0ms, no network) ───────────────
     // Build context immediately from data ChartScreen already computed.
     // User can type RIGHT AWAY — no waiting for network.
