@@ -5,7 +5,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { Card, SectionLabel, PrimaryButton, Pill } from '../components/Common';
 import { BottomSheet } from '../components/BottomSheet';
-import { PriceAlert, getAlerts, addAlert, deleteAlert, requestNotifPermission } from '../utils/alerts';
+import { PriceAlert, getAlerts, addAlert, deleteAlert } from '../utils/alerts';
+import { requestPermission } from '../services/notifications';
 import { pFmt } from '../utils/indicators';
 
 export default function AlertsScreen({ route, navigation }: any) {
@@ -19,7 +20,7 @@ export default function AlertsScreen({ route, navigation }: any) {
 
   useEffect(() => {
     getAlerts().then(setAlerts);
-    requestNotifPermission();
+    requestPermission().catch(() => {});
   }, []);
 
   // FIXED: previously the symbol picker here was a fixed list of 12 hardcoded
