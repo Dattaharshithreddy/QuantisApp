@@ -46,7 +46,18 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tail -150
+          ./gradlew assembleRelease --no-daemon
+        # No pipe — Gradle exit code preserved, step fails if build fails
+
+      - name: Verify APK exists
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "APK not found at $APK"
+            find android/app/build -name "*.apk" 2>/dev/null || echo "No APK files found"
+            exit 1
+          fi
+          echo "APK found: $(du -sh $APK)"
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
