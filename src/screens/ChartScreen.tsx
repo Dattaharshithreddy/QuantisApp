@@ -56,7 +56,7 @@ import { ExchangeSelector } from './chart/components/ExchangeSelector';
 import { buildChatContext } from '../api/claude';
 import { fetchBnKlines } from '../api/binance';
 import { getCachedCandles, fetchCandlesWithCache } from '../utils/candleCache';
-import { fetchCryptoContextPartial } from '../utils/cryptoMarketContext/cryptoMarketContextFetch';
+// fetchCryptoContextPartial removed — was blocking JS thread
 // setExchangePreference moved to DataContext.updateExchangePreference
 
 // FIX H-5: Module-level stable empty arrays/arrays so `?? []` in JSX never
@@ -185,14 +185,10 @@ export default function ChartScreen({ route, navigation }: any) {
           const s1      = (2 * Number(pivot) - ph).toFixed(2);
           fundamentalsSummary = `Range: ${lows.toFixed(2)}–${highs.toFixed(2)} | Pivot: ${pivot} | R1: ${r1} | S1: ${s1}`;
         } catch {}
-        // Fetch Fear&Greed in background (non-blocking)
+        // Fear&Greed removed from pre-build — it's a 5-15s external API call
+        // that blocks the JS thread while user might be tapping Chat.
+        // Claude will request it via buildContext when actually needed.
         let fearGreed = '';
-        try {
-          if (asset?.src === 'binance' || asset?.src === 'coindcx') {
-            const ctx = await fetchCryptoContextPartial(symbol, ['FEAR_GREED']);
-            if (ctx?.fearGreed?.value) fearGreed = `Fear&Greed: ${ctx.fearGreed.value} (${ctx.fearGreed.classification})`;
-          }
-        } catch {}
         const srcLabelMap: Record<string,string> = {
           binance:'Binance',coindcx:'CoinDCX',coindcx_futures:'CDX Perps',
           ao:'Angel One',ao_futures:'Angel One NFO',av:'Alpha Vantage',

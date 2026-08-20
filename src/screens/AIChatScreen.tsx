@@ -294,25 +294,37 @@ const StreamingBubble = memo(({ textRef, forceUpdateRef, onScroll, appActiveRef 
 });
 
 // ── Suggestion chips ──────────────────────────────────────────────────────────
+// ── Asset-specific suggestions (shown for current symbol) ───────────────────
 const SUGGESTIONS = [
   { icon: '📊', text: 'What\'s the current trend?' },
   { icon: '🎯', text: 'Give me entry and target levels' },
   { icon: '⚠️', text: 'What are the key risks right now?' },
   { icon: '🔮', text: 'What does the ML model say?' },
-  { icon: '📰', text: 'How is news affecting price?' },
   { icon: '💡', text: 'Best trade setup right now?' },
+];
+
+// ── Daily news/events suggestions (always shown on new chat) ─────────────────
+// Tapping sends as a normal user message — Claude uses cached news from context
+const NEWS_SUGGESTIONS = [
+  { icon: '📰', text: 'What\'s today\'s crypto news?' },
+  { icon: '📈', text: 'What major market events are happening today?' },
+  { icon: '🌍', text: 'What important economic events should I watch?' },
+  { icon: '⚠️', text: 'What events could affect BTC and ETH today?' },
+  { icon: '📅', text: 'What\'s on today\'s market calendar?' },
 ];
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function AIChatScreen({ route }: any) {
   const { theme: T } = useTheme();
-  const { prices, aoSession, avKey, anthropicKey, allAssets, news } = useData();
+  // prices + news excluded: use ref-only children to prevent re-renders
+  const { aoSession, avKey, anthropicKey, allAssets } = useData();
 
-  const pricesRef = useRef(prices);
-  const newsRef   = useRef(news);
-  const cpRef     = useRef<any>(null);
-  useEffect(() => { pricesRef.current = prices; }, [prices]);
-  useEffect(() => { newsRef.current   = news;   }, [news]);
+  // Ref-only price/news access — see PriceRefUpdater/NewsRefUpdater in JSX
+  const { cpRef, pricesRef, updatePrice } = usePriceRef(symbol);
+  const { newsRef, updateNews } = useNewsRef();
+  // cpRef comes from usePriceRef above
+  // pricesRef synced by PriceRefUpdater child, not via effect
+  // newsRef synced by NewsRefUpdater child, not via effect
 
   const routeAsset  = route?.params?.asset;
   const routeSymbol = route?.params?.symbol;
@@ -324,9 +336,9 @@ export default function AIChatScreen({ route }: any) {
     [routeAsset, routeSymbol, allAssets]
   );
   const symbol   = asset?.symbol ?? routeSymbol ?? 'NIFTY50';
-  const cp       = prices[symbol];
+  // cp read via cpRef.current (no reactive subscription)
   const srcLabel = SRC_LABEL[asset?.src] ?? asset?.src ?? 'Unknown';
-  useEffect(() => { cpRef.current = cp; }, [cp]);
+  // cpRef updated by PriceRefUpdater — no effect needed
 
   // ── State ─────────────────────────────────────────────────────────────────
   // committedMessages: FlatList data. Never changes during streaming.
@@ -761,7 +773,12 @@ export default function AIChatScreen({ route }: any) {
   const showSuggestions = committedMessages.length === 0 && !isStreaming && contextReady;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }} edges={['bottom']}>
+    <>
+      {/* Zero-render ref updaters — PriceRefUpdater/NewsRefUpdater render null */}
+      {/* They keep cpRef and newsRef current WITHOUT causing AIChatScreen re-renders */}
+      <PriceRefUpdater symbol={symbol} onPrice={updatePrice} />
+      <NewsRefUpdater onNews={updateNews} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }} edges={['bottom']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
         <View style={{ flex: 1 }}>
           <FlatList
@@ -777,16 +794,36 @@ export default function AIChatScreen({ route }: any) {
             maxToRenderPerBatch={8}
             windowSize={5}
             initialNumToRender={15}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            // maintainVisibleContentPosition removed — causes Android hangs
             ListEmptyComponent={
               isStreaming ? null :
               contextReady ? (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
-                  <Text style={{ fontSize: 32, marginBottom: 12 }}>✦</Text>
-                  <Text style={{ color: T.text, fontSize: 18, fontWeight: '700', marginBottom: 6 }}>Quantis AI</Text>
-                  <Text style={{ color: T.textDim, fontSize: 13, textAlign: 'center', maxWidth: 260 }}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 24 }}>
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>✦</Text>
+                  <Text style={{ color: T.text, fontSize: 18, fontWeight: '700', marginBottom: 4 }}>Quantis AI</Text>
+                  <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center', maxWidth: 260, marginBottom: 20 }}>
                     Ask me anything about {asset?.name ?? symbol} — price action, trade setups, risk levels, or market context.
                   </Text>
+                  {/* Daily news/events section */}
+                  <View style={{ width: '100%', paddingHorizontal: 16, marginBottom: 12 }}>
+                    <Text style={{ color: T.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 10 }}>TODAY'S MARKET</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {NEWS_SUGGESTIONS.map(s => (
+                        <Pressable key={s.text}
+                          onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); send(s.text); }}
+                          android_ripple={{ color: T.accent + '30', borderless: false }}
+                          style={({ pressed }: { pressed: boolean }) => ({
+                            flexDirection: 'row', alignItems: 'center', gap: 5,
+                            backgroundColor: pressed ? T.bg3 : T.bg2,
+                            borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6,
+                            borderWidth: 1, borderColor: pressed ? T.accent : T.border + '80',
+                          })}>
+                          <Text style={{ fontSize: 12 }}>{s.icon}</Text>
+                          <Text style={{ color: T.textDim, fontSize: 11, fontWeight: '600' }}>{s.text}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
                 </View>
               ) : contextErr ? (
                 <View style={{ padding: 20, alignItems: 'center' }}>
@@ -887,5 +924,6 @@ export default function AIChatScreen({ route }: any) {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </>
   );
 }
