@@ -430,19 +430,50 @@ export default function AIChatScreen({ route }: any) {
   const buildContext = useCallback(async () => {
     setContextErr('');
     const tf = (route?.params as any)?.tf || '15m';
+    const params = route?.params as any;
+
+    // ── PHASE 1: INSTANT context from params (0ms, no network) ───────────────
+    // Build context immediately from data ChartScreen already computed.
+    // User can type RIGHT AWAY — no waiting for network.
+    const liveCp0 = cpRef.current;
+    const instantPrice = liveCp0?.price ?? (asset as any)?.base ?? 0;
+    if (instantPrice > 0) {
+      contextRef.current = buildChatContext({
+        assetName: asset?.name ?? symbol, symbol,
+        type: asset?.type ?? 'CRYPTO', tf, srcLabel,
+        price: instantPrice, chgPct: liveCp0?.chg ?? 0,
+        rsi: null, ma20: null, ma50: null,
+        ohlc: 'Loading latest candles...',
+        mlSignal: params?.mlSignal ?? null,
+        vpSnap: params?.vpSnap ?? null,
+        regimeSnap: params?.regimeSnap ?? null,
+        mtfSnap: params?.mtfSnap ?? null,
+        techSummary: params?.techSummary ?? null,
+        openPosition: params?.openPosition ?? null,
+      });
+      setContextReady(true); // ← INSTANT: chat usable immediately
+    }
+
     try {
       const [historyRaw, candles] = await Promise.all([
         KVStore.get(HISTORY_KEY(symbol)).catch(() => null),
+        // ── PHASE 2: Try cache first (50ms AsyncStorage, no network) ──────────
         (async () => {
+          try {
+            const { getCachedCandles } = await import('../utils/candleCache');
+            const cached = await getCachedCandles(symbol, tf);
+            if (cached?.candles?.length) return cached.candles;
+          } catch {}
+          // ── PHASE 3: Fetch from network (background, doesn't block UI) ──────
           if (asset?.src === 'binance' && asset?.bnSym)
-            return fetchCandlesWithCache(symbol, tf, async () => fetchBnKlines(asset.bnSym!, tf, 50), { maxCandles: 50 }).catch(() => [] as any[]);
+            return fetchCandlesWithCache(symbol, tf, async () => fetchBnKlines(asset.bnSym!, tf, 200), { maxCandles: 200 }).catch(() => [] as any[]);
           if (asset?.src === 'coindcx' && (asset as any).cdxSym)
-            return fetchCdxCandles((asset as any).cdxSym, tf, 50);
+            return fetchCdxCandles((asset as any).cdxSym, tf, 200).catch(() => []);
           if (asset?.src === 'av' && asset?.avSym)
-            return fetchCandlesWithCache(symbol, tf, async () => fetchAVKlines(asset.avSym!, tf, avKey), { maxCandles: 50 });
+            return fetchCandlesWithCache(symbol, tf, async () => fetchAVKlines(asset.avSym!, tf, avKey), { maxCandles: 200 });
           if ((asset?.src === 'ao' || asset?.src === 'ao_futures') && asset?.aoToken && asset?.aoEx && aoSession?.jwtToken)
-            return fetchCandlesWithCache(symbol, tf, async () => aoCandles(asset.aoToken!, asset.aoEx!, tf, aoSession!), { maxCandles: 50 });
-          return fetchCandlesWithCache(symbol, tf, async () => [], { maxCandles: 50 });
+            return fetchCandlesWithCache(symbol, tf, async () => aoCandles(asset.aoToken!, asset.aoEx!, tf, aoSession!), { maxCandles: 200 });
+          return [];
         })(),
       ]);
       if (historyRaw) {
@@ -481,16 +512,34 @@ export default function AIChatScreen({ route }: any) {
       const liveNews    = newsRef.current;
       const newsSummary = liveNews?.slice(0, 3).map((n: any) => n.headline).join(' | ') ?? '';
       let fearGreedSummary = '';
+      // Fetch Fear&Greed + fundamentals in background (doesn't block)
+      let fundamentalsSummary = '';
       if (asset?.src === 'binance' || asset?.src === 'coindcx') {
         try {
           const ctx = await fetchCryptoContextPartial(symbol, ['FEAR_GREED', 'MARKET_CAP']);
           if (ctx?.fearGreed?.value) fearGreedSummary = `Fear&Greed: ${ctx.fearGreed.value} (${ctx.fearGreed.classification})`;
         } catch {}
+        // Calculate support/resistance from candle history
+        try {
+          if (candles && candles.length >= 50) {
+            const highs = candles.map((c: any) => c.high).sort((a: number, b: number) => b - a);
+            const lows  = candles.map((c: any) => c.low).sort((a: number, b: number) => a - b);
+            const allTimeHigh = highs[0]?.toFixed(2);
+            const allTimeLow  = lows[0]?.toFixed(2);
+            // Pivot point support/resistance
+            const recentHigh = Math.max(...candles.slice(-20).map((c: any) => c.high));
+            const recentLow  = Math.min(...candles.slice(-20).map((c: any) => c.low));
+            const pivot      = ((recentHigh + recentLow + candles[candles.length-1].close) / 3).toFixed(2);
+            const r1         = (2 * Number(pivot) - recentLow).toFixed(2);
+            const s1         = (2 * Number(pivot) - recentHigh).toFixed(2);
+            fundamentalsSummary = `Range high: ${allTimeHigh} | Range low: ${allTimeLow} | Pivot: ${pivot} | R1: ${r1} | S1: ${s1}`;
+          }
+        } catch {}
       }
       contextRef.current = buildChatContext({
         assetName: asset.name, symbol, type: asset.type, tf, srcLabel,
         price: last.close, chgPct: liveCp?.chg ?? 0, rsi, ma20, ma50, ohlc,
-        newsSummary: [newsSummary, fearGreedSummary].filter(Boolean).join(' | ') || undefined,
+        newsSummary: [newsSummary, fearGreedSummary, fundamentalsSummary].filter(Boolean).join(' | ') || undefined,
         mlSignal: (route?.params as any)?.mlSignal ?? null, vpSnap: (route?.params as any)?.vpSnap ?? null,
         regimeSnap: (route?.params as any)?.regimeSnap ?? null, mtfSnap: (route?.params as any)?.mtfSnap ?? null,
         techSummary: (route?.params as any)?.techSummary ?? null, openPosition: (route?.params as any)?.openPosition ?? null,
