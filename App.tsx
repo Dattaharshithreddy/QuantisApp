@@ -95,31 +95,47 @@ function AppShell() {
 }
 
 export default function App() {
-  const [locked, setLocked] = React.useState(false); // start unlocked, check async
+  const [locked, setLocked] = React.useState(false);
 
+  // ALL hooks must be declared before any conditional return
   React.useEffect(() => {
-    // Check lock settings with timeout — never block app startup
-    const timeout = setTimeout(() => setLocked(false), 2000); // 2s max wait
+    // Check lock with 2s timeout — never block app startup
+    const timeout = setTimeout(() => setLocked(false), 2000);
     getLockSettings().then(({ enabled }) => {
       clearTimeout(timeout);
-      if (enabled) setLocked(true);
+      setLocked(!!enabled);
     }).catch(() => {
       clearTimeout(timeout);
       setLocked(false);
     });
   }, []);
 
-  if (locked) return (
-    <LockScreen onUnlock={() => setLocked(false)} />
-  );
-
   React.useEffect(() => {
-    // Request notification permission on first launch
     requestPermission().catch(() => {});
-    // Handle notification taps → navigate to correct screen
     const unsub = setupNotificationTapHandler();
     return unsub;
   }, []);
+
+  // Re-lock after 30s in background
+  const bgTimer = React.useRef<any>(null);
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'background') {
+        bgTimer.current = setTimeout(async () => {
+          const { enabled } = await getLockSettings();
+          if (enabled) setLocked(true);
+        }, 30000);
+      } else if (state === 'active') {
+        if (bgTimer.current) clearTimeout(bgTimer.current);
+      }
+    });
+    return () => { sub.remove(); if (bgTimer.current) clearTimeout(bgTimer.current); };
+  }, []);
+
+  // Conditional is INSIDE the return — no hooks after this
+  if (locked) {
+    return <LockScreen onUnlock={() => setLocked(false)} />;
+  }
 
   return (
     <AuthProvider>
