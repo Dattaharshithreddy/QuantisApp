@@ -1,6 +1,6 @@
 import 'react-native-reanimated';
 import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { View, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
