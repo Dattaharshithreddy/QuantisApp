@@ -117,17 +117,20 @@ export function openBinanceAggTradeStream(
   let closed = false;
 
   function connect() {
-    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
+    const url = `wss://stream.binance.com:9443/ws/${stream}`;
+    ws = new WebSocket(url);
+    ws.onopen = () => console.log(`[BN-AGG] connected: ${stream}`);
     ws.onmessage = (evt: any) => {
       try {
         const msg = JSON.parse(evt.data);
-        // aggTrade payload: { p: "price", m: isBuyerMaker }
+        // aggTrade payload: { p: price string, m: isBuyerMaker }
         const price = parseFloat(msg.p);
         if (price > 0) onTrade(price);
       } catch (_) {}
     };
-    ws.onerror = () => {};
-    ws.onclose = () => {
+    ws.onerror = (e: any) => console.warn(`[BN-AGG] error on ${stream}:`, e?.message);
+    ws.onclose = (e: any) => {
+      console.log(`[BN-AGG] closed: ${stream} code=${e?.code}`);
       if (closed) return;
       retryT = setTimeout(connect, 3000);
     };
@@ -150,38 +153,83 @@ export function subscribeToBnKline(
   onCandle: (c: { time: number; open: number; high: number; low: number; close: number; volume: number; isClosed: boolean }) => void,
   onStatus: (s: 'live' | 'connecting' | 'reconnecting' | 'error') => void,
 ) {
-  const stream = `${bnSym.toLowerCase()}@kline_${interval}`;
+  // FIX: Apply TF_BN mapping before building stream URL.
+  // Binance kline WebSocket requires lowercase intervals ('1d', '1w').
+  // Without this, '1D'/'1W' produce invalid stream names that Binance
+  // silently rejects by closing the connection — causing no live updates
+  // on daily/weekly charts despite historical REST fetches working fine.
+  const bnInterval = TF_BN[interval] ?? interval.toLowerCase();
+  const stream = `${bnSym.toLowerCase()}@kline_${bnInterval}`;
+
   let ws: WebSocket | null = null;
   let retryT: any = null;
   let closed = false;
+  let reconnectCount = 0;
+
   function connect() {
     onStatus('connecting');
-    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
-    ws.onopen = () => onStatus('live');
+    const url = `wss://stream.binance.com:9443/ws/${stream}`;
+    console.log(`[BN-WS] connecting: ${url} (attempt ${reconnectCount + 1})`);
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      reconnectCount = 0;
+      console.log(`[BN-WS] connected: ${stream}`);
+      onStatus('live');
+    };
+
     ws.onmessage = (evt: any) => {
       try {
         const msg = JSON.parse(evt.data);
         const k = msg.k;
-        if (!k) return;
-        onCandle({
-          time:     parseInt(k.t),
+        if (!k) {
+          // Could be a ping frame or other control message — ignore silently
+          return;
+        }
+        const candle = {
+          time:     parseInt(k.t),       // kline open time in ms
           open:     parseFloat(k.o),
           high:     parseFloat(k.h),
           low:      parseFloat(k.l),
           close:    parseFloat(k.c),
           volume:   parseFloat(k.v),
-          isClosed: k.x === true});
-      } catch (_) {}
+          isClosed: k.x === true,        // true when candle is closed/final
+        };
+        console.log(
+          `[BN-WS] ${k.s} ${bnInterval} ` +
+          `O:${candle.open} H:${candle.high} L:${candle.low} C:${candle.close} ` +
+          `V:${candle.volume.toFixed(2)} closed:${candle.isClosed} ` +
+          `t:${new Date(candle.time).toISOString()}`
+        );
+        onCandle(candle);
+      } catch (e: any) {
+        console.warn(`[BN-WS] parse error on ${stream}:`, e?.message, evt?.data?.slice?.(0, 100));
+      }
     };
-    ws.onerror = () => onStatus('error');
-    ws.onclose = () => {
+
+    ws.onerror = (e: any) => {
+      console.warn(`[BN-WS] error on ${stream}:`, e?.message ?? 'unknown');
+      onStatus('error');
+    };
+
+    ws.onclose = (e: any) => {
+      console.log(`[BN-WS] closed: ${stream} code=${e?.code} reason=${e?.reason ?? ''}`);
       if (closed) return;
+      reconnectCount++;
+      const delay = Math.min(5000 * reconnectCount, 30000); // back-off up to 30s
+      console.log(`[BN-WS] reconnecting in ${delay}ms (attempt ${reconnectCount})`);
       onStatus('reconnecting');
-      retryT = setTimeout(connect, 5000);
+      retryT = setTimeout(connect, delay);
     };
   }
+
   connect();
-  return () => { closed = true; ws?.close(); clearTimeout(retryT); };
+  return () => {
+    closed = true;
+    console.log(`[BN-WS] unsubscribing: ${stream}`);
+    ws?.close();
+    clearTimeout(retryT);
+  };
 }
 
 // Phase 2: REST snapshot — get current prices for all symbols in one call
