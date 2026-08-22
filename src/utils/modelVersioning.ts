@@ -20,6 +20,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KVStore } from '../services/storage';
+import { saveModel, loadModel } from '../services/mlStorage';
 import { logger } from './logger';
 import { ARCHITECTURE_VERSION, FEATURE_COUNT } from './modelConstants';
 
@@ -189,14 +191,14 @@ async function _firestoreGetChampion(symbol: string, tf: string): Promise<Champi
 // ── Version list helpers ──────────────────────────────────────────────────────
 async function _loadVersionList(symbol: string, tf: string): Promise<VersionedModelMetadata[]> {
   try {
-    const raw = await AsyncStorage.getItem(VERSION_LIST_KEY(symbol, tf));
+    const raw = await KVStore.get(VERSION_LIST_KEY(symbol, tf));
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
 async function _saveVersionList(symbol: string, tf: string, list: VersionedModelMetadata[]): Promise<void> {
   try {
-    await AsyncStorage.setItem(VERSION_LIST_KEY(symbol, tf), JSON.stringify(list));
+    await KVStore.set(VERSION_LIST_KEY(symbol, tf), JSON.stringify(list));
   } catch (e: any) {
     logger.warn('modelVersioning', `Version list write failed: ${e?.message ?? e}`);
   }
@@ -219,14 +221,14 @@ function _nextSlot(list: VersionedModelMetadata[]): number {
 // ── Champion pointer helpers ──────────────────────────────────────────────────
 async function _loadChampionLocal(symbol: string, tf: string): Promise<ChampionPointer | null> {
   try {
-    const raw = await AsyncStorage.getItem(CHAMPION_KEY(symbol, tf));
+    const raw = await KVStore.get(CHAMPION_KEY(symbol, tf));
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
 async function _saveChampionLocal(symbol: string, tf: string, pointer: ChampionPointer): Promise<void> {
   try {
-    await AsyncStorage.setItem(CHAMPION_KEY(symbol, tf), JSON.stringify(pointer));
+    await KVStore.set(CHAMPION_KEY(symbol, tf), JSON.stringify(pointer));
   } catch (e: any) {
     logger.warn('modelVersioning', `Champion pointer write failed: ${e?.message ?? e}`);
   }
