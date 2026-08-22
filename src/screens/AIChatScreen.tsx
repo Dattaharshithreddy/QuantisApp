@@ -48,6 +48,8 @@ import { chatWithClaudeStream, buildChatContext, ChatMessage } from '../api/clau
 import { fetchCandlesWithCache } from '../utils/candleCache';
 import { fetchCryptoContextPartial } from '../utils/cryptoMarketContext/cryptoMarketContextFetch';
 import { calcRSI, calcMA } from '../utils/indicators';
+import { usePriceRef, PriceRefUpdater } from '../hooks/usePriceRef';
+import { useNewsRef, NewsRefUpdater } from '../hooks/useNewsRef';
 
 const SRC_LABEL: Record<string, string> = {
   ao: 'Angel One', ao_futures: 'Angel One NFO', av: 'Alpha Vantage',
