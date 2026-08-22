@@ -11,7 +11,7 @@
 //   standard React pattern for side-effect injection — identical to how
 //   useEffect cleanup functions work.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Candle } from '../../../utils/indicators';
 import { useData } from '../../../context/DataContext';
 import { resolveVariant, findAssetByLegacySymbol } from '../../../utils/assetResolver';
@@ -21,6 +21,7 @@ import { fetchCdxCandles, fetchCdxFuturesCandles, subscribeToCdxKline } from '..
 import { fetchAVKlines } from '../../../api/alphaVantage';
 import { aoCandles, aoCandlesBefore, openAOMarketFeed } from '../../../api/angelOne';
 import { getCachedCandles, setCachedCandles, mergeCandles } from '../../../utils/candleCache';
+import { memGet, memSet, memEvict, getAdjacentTfs } from '../../../utils/candleMemoryCache';
 import { recordSampleCount } from '../../../utils/sampleHistory';
 import { detectGaps, repairGaps } from '../../../utils/gapDetection';
 import { getPricePrecision, getPricePrecisionSync } from '../../../utils/pricePrecision';
@@ -210,15 +211,29 @@ export function useChartData(
     setErrMsg('');
     setCandleLoadExplanation('');
 
-    // 1. Show cached data instantly if available so the chart never sits blank
+    // 1a. L1: Memory cache (0ms) — fastest possible, survives TF switches
+    const memCached = memGet(symbol, tf);
+    if (memCached?.length) {
+      setCandles(memCached);
+      setDataSrc('live');
+      setLoading(false);
+      // Still refresh in background if memory is stale (>3 min for 1m, etc.)
+      // but don't wait for it — user sees data instantly
+    }
+
+    // 1b. L2: AsyncStorage cache (~50ms) — survives app restarts
     const cached = await getCachedCandles(symbol, tf);
     if (myRequestId !== loadRequestRef.current) return;
 
     if (cached?.candles?.length) {
-      setCandles(cached.candles);
+      if (!memCached?.length) {
+        // Only update if memory cache was empty (don't downgrade fresh memory)
+        setCandles(cached.candles);
+        memSet(symbol, tf, cached.candles); // promote to L1
+      }
       setDataSrc('live');
       setLoading(false);
-      if (cached.isFresh) {
+      if (cached.isFresh && memCached?.length) {
         // Cache is within TTL — skip network entirely, no stale data risk
         await recordSampleCount(
           symbol, tf, cached.candles.length,
@@ -339,7 +354,8 @@ export function useChartData(
 
       setCandles(merged);
       setDataSrc('live');
-      setCachedCandles(symbol, tf, merged).catch(() => {});
+      memSet(symbol, tf, merged); // L1: 0ms for next TF switch this session
+      setCachedCandles(symbol, tf, merged).catch(() => {}); // L2: persists across restarts
       await recordSampleCount(symbol, tf, merged.length).catch(() => {});
     } catch (e: any) {
       if (myRequestId !== loadRequestRef.current) return;
@@ -352,6 +368,38 @@ export function useChartData(
   // Auto-reload when symbol/TF changes
   useEffect(() => { loadCandles(); }, [loadCandles]);
 
+  // Evict memory cache for previous symbol to free memory
+  const prevSymbolRef = React.useRef(symbol);
+  useEffect(() => {
+    if (prevSymbolRef.current !== symbol) {
+      memEvict(prevSymbolRef.current);
+      prevSymbolRef.current = symbol;
+    }
+  }, [symbol]);
+
+  // ── Adjacent TF prefetch — makes TF switching instant ────────────────────────
+  // After loading candles for current TF, silently prefetch adjacent TFs
+  // so switching to them reads from memory (0ms) instead of network (800ms).
+  // Fire-and-forget — never blocks the current chart load.
+  React.useEffect(() => {
+    if (!variant?.bnSym || !candles.length) return;
+    const adjacentTfs = getAdjacentTfs(tf);
+    adjacentTfs.forEach(adjTf => {
+      // Skip if already in memory (already prefetched or loaded before)
+      if (memGet(symbol, adjTf)) return;
+      // Fire-and-forget background fetch
+      fetchBnKlines(variant!.bnSym!, adjTf, 300)
+        .then(data => {
+          if (data.length) {
+            memSet(symbol, adjTf, data);
+            setCachedCandles(symbol, adjTf, data).catch(() => {});
+          }
+        })
+        .catch(() => {}); // silent — prefetch failure is non-fatal
+    });
+  }, [symbol, tf, candles.length > 0]); // only runs when candles actually loaded
+
+  // ── Kline stream: real-time OHLCV + candle-close detection ──────────
   // ── Binance kline stream: real-time OHLCV + candle-close detection ──────────
   // Provides live cumulative volume for the forming candle and a proper isClosed
   // flag — replacing the synthetic candle approach and fixing the stale volume label.
