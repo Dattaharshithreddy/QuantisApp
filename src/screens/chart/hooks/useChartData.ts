@@ -228,7 +228,10 @@ export function useChartData(
         return;
       }
     } else {
+      // No cache for this TF — show loading but keep previous candles visible
+      // so chart doesn't go blank during TF switch
       setLoading(true);
+      // Don't clear candles here — let old candles show until new ones arrive
     }
 
     // 2. Fetch fresh data from the appropriate source
@@ -237,7 +240,7 @@ export function useChartData(
 
       if (variant?.src === 'binance' && variant?.bnSym) {
         const _nw = Date.now();
-        data = await fetchBnKlines(variant!.bnSym!, tf, 500);
+        data = await fetchBnKlines(variant!.bnSym!, tf, 300); // 300 = ~40% faster than 500, still enough for all indicators
         setDataSrc('live');
       } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
         data = await fetchCdxCandles(variant!.cdxSym!, tf, 500);

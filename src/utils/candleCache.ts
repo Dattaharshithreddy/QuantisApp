@@ -42,15 +42,17 @@ const CACHE_VERSION = 2;
 // Used by the chart path (fast render from cache). NOT used by the
 // evaluation/training path (always fetches incremental update regardless of TTL).
 const TTL_MS: Record<string, number> = {
-  '1m':  1 * 60_000,
-  '3m':  2 * 60_000,
-  '5m':  3 * 60_000,
-  '15m': 5 * 60_000,
-  '30m': 10 * 60_000,
-  '1h':  15 * 60_000,
-  '4h':  30 * 60_000,
-  '1D':  60 * 60_000,
-  '1W':  4 * 60 * 60_000,
+  // Increased short TF TTLs so switching back to same TF uses cache instantly
+  // (was 1m for 1m TF — expired before user switched back)
+  '1m':  3 * 60_000,   // 3 min (was 1 min)
+  '3m':  5 * 60_000,   // 5 min (was 2 min)
+  '5m':  8 * 60_000,   // 8 min (was 3 min)
+  '15m': 10 * 60_000,  // 10 min (was 5 min)
+  '30m': 15 * 60_000,  // 15 min (was 10 min)
+  '1h':  20 * 60_000,  // 20 min (was 15 min)
+  '4h':  45 * 60_000,  // 45 min (was 30 min)
+  '1D':  90 * 60_000,  // 90 min (was 60 min)
+  '1W':  6 * 60 * 60_000, // 6h (was 4h)
 };
 
 // ── AsyncStorage key ──────────────────────────────────────────────────────────

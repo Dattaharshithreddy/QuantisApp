@@ -216,10 +216,11 @@ export function subscribeToBnKline(
       console.log(`[BN-WS] closed: ${stream} code=${e?.code} reason=${e?.reason ?? ''}`);
       if (closed) return;
       reconnectCount++;
-      const delay = Math.min(5000 * reconnectCount, 30000); // back-off up to 30s
-      console.log(`[BN-WS] reconnecting in ${delay}ms (attempt ${reconnectCount})`);
+      // Flat 5s reconnect — no scaling back-off
+      // Scaling back-off caused 10s, 15s delays on TF switch which felt laggy
+      console.log(`[BN-WS] reconnecting in 5000ms (attempt ${reconnectCount})`);
       onStatus('reconnecting');
-      retryT = setTimeout(connect, delay);
+      retryT = setTimeout(connect, 5000);
     };
   }
 
