@@ -378,6 +378,76 @@ export default function ChartScreen({ route, navigation }: any) {
   const priceColor = isPos ? T.green : T.red;
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
+
+  // Pre-build chat context in background whenever data changes
+  // So when user taps Chat, context is already 100% ready
+  React.useEffect(() => {
+    if (!candles?.length || !symbol || preBuildingRef.current) return;
+    preBuildingRef.current = true;
+    const buildInBackground = async () => {
+      try {
+        const liveCp  = cpRef.current;
+        const price   = liveCp?.price ?? (asset as any)?.base ?? 0;
+        if (!price) return;
+        const last    = candles[candles.length - 1];
+        const rsi     = calcRSI(candles, 14);
+        const ma20Arr = calcMA(candles, 20);
+        const ma50Arr = calcMA(candles, 50);
+        const ma20    = ma20Arr[ma20Arr.length - 1] ?? null;
+        const ma50    = ma50Arr[ma50Arr.length - 1] ?? null;
+        const recent  = candles.slice(-8);
+        const ohlc    = recent.map((c: any) =>
+          `${new Date(c.time).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})} O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
+        ).join('\n');
+        // Calculate S/R levels
+        let fundamentalsSummary = '';
+        try {
+          const highs   = Math.max(...candles.map((c: any) => c.high));
+          const lows    = Math.min(...candles.map((c: any) => c.low));
+          const ph      = Math.max(...candles.slice(-20).map((c: any) => c.high));
+          const pl      = Math.min(...candles.slice(-20).map((c: any) => c.low));
+          const pivot   = ((ph + pl + last.close) / 3).toFixed(2);
+          const r1      = (2 * Number(pivot) - pl).toFixed(2);
+          const s1      = (2 * Number(pivot) - ph).toFixed(2);
+          fundamentalsSummary = `Range: ${lows.toFixed(2)}–${highs.toFixed(2)} | Pivot: ${pivot} | R1: ${r1} | S1: ${s1}`;
+        } catch {}
+        // Fear&Greed removed from pre-build — it's a 5-15s external API call
+        // that blocks the JS thread while user might be tapping Chat.
+        // Claude will request it via buildContext when actually needed.
+        let fearGreed = '';
+        const srcLabelMap: Record<string,string> = {
+          binance:'Binance',coindcx:'CoinDCX',coindcx_futures:'CDX Perps',
+          ao:'Angel One',ao_futures:'Angel One NFO',av:'Alpha Vantage',
+        };
+        preBuildRef.current = buildChatContext({
+          assetName: asset?.name ?? symbol, symbol,
+          type: asset?.type ?? 'CRYPTO', tf,
+          srcLabel: srcLabelMap[asset?.src ?? ''] ?? asset?.src ?? 'Unknown',
+          price: last.close, chgPct: liveCp?.chg ?? 0,
+          rsi, ma20, ma50, ohlc,
+          newsSummary: [fearGreed, fundamentalsSummary].filter(Boolean).join(' | ') || undefined,
+          mlSignal: ml.data ? {
+            action: ml.data.action, direction: ml.data.direction,
+            ensembleProbUp: ml.data.ensembleProbUp, confidence: ml.data.confidence,
+            walkForwardAccuracy: ml.data.walkForwardAccuracy,
+            topFeatures: ml.data.topFeatures?.slice(0,6) ?? [],
+            memoryResult: ml.data.memoryResult ?? null,
+            suggestedEntry: ml.data.suggestedEntry,
+            suggestedStopLoss: ml.data.suggestedStopLoss,
+            suggestedTakeProfit: ml.data.suggestedTakeProfit,
+          } : null,
+          vpSnap: vpSnap ? { poc: vpSnap.poc, vah: vpSnap.vah, val: vpSnap.val, sessionVwap: vwapSnap?.sessionVwap } : null,
+          regimeSnap: regimeSnap ? { label: regimeSnap.label, confidence: regimeSnap.confidence } : null,
+          mtfSnap: mtfSnap ? { trend: mtfSnap.trend, alignment: mtfSnap.alignment } : null,
+          techSummary: techSummary ? { atr: techSummary.atr, rsi: techSummary.rsi, bbPosition: techSummary.bbPosition, macdState: techSummary.macdState, trend: techSummary.trend } : null,
+          openPosition: overlays.openPosition ? { direction: overlays.openPosition.direction, entryPrice: overlays.openPosition.entryPrice, stopLoss: overlays.openPosition.stopLoss, takeProfit: overlays.openPosition.takeProfit, pnlPct: overlays.openPosition.pnlPct } : null,
+        });
+      } catch {}
+      preBuildingRef.current = false;
+    };
+    buildInBackground();
+  }, [candles, ml.data, symbol, tf]); // re-build when data changes
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg0 }}>
       <ScrollView
@@ -837,72 +907,3 @@ export default function ChartScreen({ route, navigation }: any) {
     </SafeAreaView>
   );
 }
-
-  // Pre-build chat context in background whenever data changes
-  // So when user taps Chat, context is already 100% ready
-  React.useEffect(() => {
-    if (!candles?.length || !symbol || preBuildingRef.current) return;
-    preBuildingRef.current = true;
-    const buildInBackground = async () => {
-      try {
-        const liveCp  = cpRef.current;
-        const price   = liveCp?.price ?? (asset as any)?.base ?? 0;
-        if (!price) return;
-        const last    = candles[candles.length - 1];
-        const rsi     = calcRSI(candles, 14);
-        const ma20Arr = calcMA(candles, 20);
-        const ma50Arr = calcMA(candles, 50);
-        const ma20    = ma20Arr[ma20Arr.length - 1] ?? null;
-        const ma50    = ma50Arr[ma50Arr.length - 1] ?? null;
-        const recent  = candles.slice(-8);
-        const ohlc    = recent.map((c: any) =>
-          `${new Date(c.time).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})} O:${c.open.toFixed(2)} H:${c.high.toFixed(2)} L:${c.low.toFixed(2)} C:${c.close.toFixed(2)}`
-        ).join('\n');
-        // Calculate S/R levels
-        let fundamentalsSummary = '';
-        try {
-          const highs   = Math.max(...candles.map((c: any) => c.high));
-          const lows    = Math.min(...candles.map((c: any) => c.low));
-          const ph      = Math.max(...candles.slice(-20).map((c: any) => c.high));
-          const pl      = Math.min(...candles.slice(-20).map((c: any) => c.low));
-          const pivot   = ((ph + pl + last.close) / 3).toFixed(2);
-          const r1      = (2 * Number(pivot) - pl).toFixed(2);
-          const s1      = (2 * Number(pivot) - ph).toFixed(2);
-          fundamentalsSummary = `Range: ${lows.toFixed(2)}–${highs.toFixed(2)} | Pivot: ${pivot} | R1: ${r1} | S1: ${s1}`;
-        } catch {}
-        // Fear&Greed removed from pre-build — it's a 5-15s external API call
-        // that blocks the JS thread while user might be tapping Chat.
-        // Claude will request it via buildContext when actually needed.
-        let fearGreed = '';
-        const srcLabelMap: Record<string,string> = {
-          binance:'Binance',coindcx:'CoinDCX',coindcx_futures:'CDX Perps',
-          ao:'Angel One',ao_futures:'Angel One NFO',av:'Alpha Vantage',
-        };
-        preBuildRef.current = buildChatContext({
-          assetName: asset?.name ?? symbol, symbol,
-          type: asset?.type ?? 'CRYPTO', tf,
-          srcLabel: srcLabelMap[asset?.src ?? ''] ?? asset?.src ?? 'Unknown',
-          price: last.close, chgPct: liveCp?.chg ?? 0,
-          rsi, ma20, ma50, ohlc,
-          newsSummary: [fearGreed, fundamentalsSummary].filter(Boolean).join(' | ') || undefined,
-          mlSignal: ml.data ? {
-            action: ml.data.action, direction: ml.data.direction,
-            ensembleProbUp: ml.data.ensembleProbUp, confidence: ml.data.confidence,
-            walkForwardAccuracy: ml.data.walkForwardAccuracy,
-            topFeatures: ml.data.topFeatures?.slice(0,6) ?? [],
-            memoryResult: ml.data.memoryResult ?? null,
-            suggestedEntry: ml.data.suggestedEntry,
-            suggestedStopLoss: ml.data.suggestedStopLoss,
-            suggestedTakeProfit: ml.data.suggestedTakeProfit,
-          } : null,
-          vpSnap: vpSnap ? { poc: vpSnap.poc, vah: vpSnap.vah, val: vpSnap.val, sessionVwap: vwapSnap?.sessionVwap } : null,
-          regimeSnap: regimeSnap ? { label: regimeSnap.label, confidence: regimeSnap.confidence } : null,
-          mtfSnap: mtfSnap ? { trend: mtfSnap.trend, alignment: mtfSnap.alignment } : null,
-          techSummary: techSummary ? { atr: techSummary.atr, rsi: techSummary.rsi, bbPosition: techSummary.bbPosition, macdState: techSummary.macdState, trend: techSummary.trend } : null,
-          openPosition: overlays.openPosition ? { direction: overlays.openPosition.direction, entryPrice: overlays.openPosition.entryPrice, stopLoss: overlays.openPosition.stopLoss, takeProfit: overlays.openPosition.takeProfit, pnlPct: overlays.openPosition.pnlPct } : null,
-        });
-      } catch {}
-      preBuildingRef.current = false;
-    };
-    buildInBackground();
-  }, [candles, ml.data, symbol, tf]); // re-build when data changes
