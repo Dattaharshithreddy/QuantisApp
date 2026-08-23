@@ -368,7 +368,11 @@ ${techSection}${regimeSection}${vpSection}${mlSection}${posSection}
 
 RECENT ${tf.toUpperCase()} BARS (newest last):
 ${ohlc}
-${newsSummary ? '\nRECENT NEWS: ' + newsSummary : ''}
+${newsSummary ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIVE CRYPTO NEWS & SENTIMENT
+${newsSummary}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` : ''}
 
 RULES:
 - Ground every answer in the real numbers above. Never invent prices or indicators.

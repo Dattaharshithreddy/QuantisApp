@@ -467,11 +467,14 @@ export default function AIChatScreen({ route }: any) {
     // ── PHASE 1: INSTANT context (0ms) ──────────────────────────────────────
     // Always fire setContextReady immediately — never block chat
     const liveCp0 = cpRef.current;
-    const instantPrice = liveCp0?.price ?? (asset as any)?.base ?? 0;
+    // Use params price (from ChartScreen last candle) as most reliable source
+    // cpRef may be null or from different symbol on first open
+    const paramsPrice = params?.lastCandleClose ?? 0;
+    const instantPrice = paramsPrice || liveCp0?.price || (asset as any)?.base || 0;
     const quickContext = buildChatContext({
       assetName: asset?.name ?? symbol, symbol,
       type: asset?.type ?? 'CRYPTO', tf, srcLabel,
-      price: instantPrice || 0, chgPct: liveCp0?.chg ?? 0,
+      price: instantPrice, chgPct: liveCp0?.chg ?? params?.lastCandleChg ?? 0,
       rsi: null, ma20: null, ma50: null,
       ohlc: instantPrice > 0 ? `Current price: ${instantPrice}` : 'Loading...',
       mlSignal: params?.mlSignal ?? null,

@@ -12,6 +12,7 @@ import { getAllExchangePreferences, setExchangePreference, clearExchangePreferen
 import { bnFuturesGetTicker } from '../api/binanceFuturesApi';
 import { fetchForexRates, fxPrice } from '../api/forex';
 import { fetchAVQuote, fetchAVNews, NewsItem } from '../api/alphaVantage';
+import { fetchCryptoNews, CryptoNewsItem } from '../api/cryptoNews';
 import { aoLTP, AOSession, openAOMarketFeed } from '../api/angelOne';
 import { DepthLevel } from '../utils/orderBook';
 import { checkAlerts } from '../utils/alerts';
@@ -778,8 +779,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     clearInterval(newsPollRef.current);
     if (!avKey) { setNews([]); return; }
     async function load() {
-      const items = await fetchAVNews(avKey, 'financial_markets,earnings,economy_macro');
-      if (items?.length) setNews(items);
+      // Try CryptoPanic first (no API key, crypto-specific, reliable)
+      const cryptoItems = await fetchCryptoNews(
+        logicalAssets.filter(a => a.type === 'CRYPTO').map(a => a.id).slice(0, 3)
+      );
+      if (cryptoItems.length) {
+        // Map CryptoNewsItem to NewsItem shape for compatibility
+        setNews(cryptoItems.map(n => ({
+          headline: n.headline,
+          source: n.source,
+          url: n.url,
+          time: n.publishedAt,
+          summary: `${n.sentiment === 'positive' ? '📈' : n.sentiment === 'negative' ? '📉' : '📰'} ${n.currencies?.join(', ') ?? ''}`,
+        } as any)));
+      } else if (avKey) {
+        // Fallback: Alpha Vantage (only if API key set, to avoid quota burn)
+        const items = await fetchAVNews(avKey, 'blockchain,financial_markets');
+        if (items?.length) setNews(items);
+      }
     }
     load();
     newsPollRef.current = setInterval(load, 300000);

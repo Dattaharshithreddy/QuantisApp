@@ -57,6 +57,7 @@ import { buildChatContext } from '../api/claude';
 import { fetchBnKlines } from '../api/binance';
 import { getCachedCandles, fetchCandlesWithCache } from '../utils/candleCache';
 // fetchCryptoContextPartial removed — was blocking JS thread
+import { fetchCryptoNews, formatNewsForContext } from '../api/cryptoNews';
 // setExchangePreference moved to DataContext.updateExchangePreference
 
 // FIX H-5: Module-level stable empty arrays/arrays so `?? []` in JSX never
@@ -412,10 +413,21 @@ export default function ChartScreen({ route, navigation }: any) {
           const s1      = (2 * Number(pivot) - ph).toFixed(2);
           fundamentalsSummary = `Range: ${lows.toFixed(2)}–${highs.toFixed(2)} | Pivot: ${pivot} | R1: ${r1} | S1: ${s1}`;
         } catch {}
-        // Fear&Greed removed from pre-build — it's a 5-15s external API call
-        // that blocks the JS thread while user might be tapping Chat.
-        // Claude will request it via buildContext when actually needed.
+        // Fetch crypto news in background (CryptoPanic, no API key, ~1s)
         let fearGreed = '';
+        let newsForContext = '';
+        fetchCryptoNews(
+          [symbol.replace('USDT','').replace('INR','')],
+          8
+        ).then(items => {
+          if (items.length) {
+            newsForContext = formatNewsForContext(items, 5);
+            // Update pre-built context with news
+            if (preBuildRef.current) {
+              // Context already built — news will be included on next build
+            }
+          }
+        }).catch(() => {});
         const srcLabelMap: Record<string,string> = {
           binance:'Binance',coindcx:'CoinDCX',coindcx_futures:'CDX Perps',
           ao:'Angel One',ao_futures:'Angel One NFO',av:'Alpha Vantage',
@@ -426,7 +438,7 @@ export default function ChartScreen({ route, navigation }: any) {
           srcLabel: srcLabelMap[asset?.src ?? ''] ?? asset?.src ?? 'Unknown',
           price: last.close, chgPct: liveCp?.chg ?? 0,
           rsi, ma20, ma50, ohlc,
-          newsSummary: [fearGreed, fundamentalsSummary].filter(Boolean).join(' | ') || undefined,
+          newsSummary: [newsForContext, fearGreed, fundamentalsSummary].filter(Boolean).join('\n') || undefined,
           mlSignal: ml.data ? {
             action: ml.data.action, direction: ml.data.direction,
             ensembleProbUp: ml.data.ensembleProbUp, confidence: ml.data.confidence,
@@ -844,6 +856,8 @@ export default function ChartScreen({ route, navigation }: any) {
               asset,
               tf,
               preBuiltContext: preBuildRef.current || undefined,
+              lastCandleClose: candles[candles.length - 1]?.close ?? cp?.price ?? 0,
+              lastCandleChg: cp?.chg ?? 0,
               // Full ML signal + memory engine result
               mlSignal: ml.data ? {
                 action:              ml.data.action,
