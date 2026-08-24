@@ -48,7 +48,7 @@ const FILTERS: { key: string; label: string; icon: string }[] = [
 
 export default function MarketsScreen({ navigation }: any) {
   const { theme: T, themeName, toggleTheme } = useTheme();
-  const { prices, liveCount, wsStatus, aoSession, allAssets, logicalAssets, exchangePrefs, removeAsset, hideAsset, restoreBuiltins, hiddenCount } = useData();
+  const { prices, liveCount, wsStatus, aoSession, allAssets, logicalAssets, exchangePrefs, removeAsset, hideAsset } = useData();
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -58,7 +58,6 @@ export default function MarketsScreen({ navigation }: any) {
   }, []);
   const [filter, setFilter] = useState('ALL');
   const [removeTarget, setRemoveTarget] = useState<{ symbol: string; src: string; isCustom?: boolean } | null>(null);
-  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   // MarketsScreen uses logicalAssets (one entry per instrument) for display.
   // allAssets (flat Asset[]) is still available for everything else — search,
   // alerts, scanner, journal etc. continue using allAssets unchanged.
@@ -104,13 +103,6 @@ export default function MarketsScreen({ navigation }: any) {
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: aoSession?.jwtToken ? T.orange : T.textDim }} />
             <Text style={{ color: T.textSub, fontSize: 10 }}>{aoSession?.jwtToken ? 'Angel One connected' : 'Angel One disconnected'}</Text>
           </View>
-          <TouchableOpacity onPress={() => setShowRestoreConfirm(true)} activeOpacity={0.7}
-            style={{ minHeight: 28, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={{ color: hiddenCount > 0 ? T.blue : T.textDim, fontSize: 10, fontWeight: '600' }}>
-              {hiddenCount > 0 ? `${hiddenCount} hidden` : 'Restore defaults'}
-            </Text>
-            {hiddenCount > 0 && <Text style={{ color: T.blue, fontSize: 10, fontWeight: '700' }}>· restore</Text>}
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -201,17 +193,6 @@ export default function MarketsScreen({ navigation }: any) {
               if (removeTarget) (removeTarget.isCustom ? removeAsset(removeTarget.symbol, removeTarget.src) : hideAsset(removeTarget.symbol, removeTarget.src));
               setRemoveTarget(null);
             }},
-        ]}
-      />
-      <ConfirmDialog
-        visible={showRestoreConfirm}
-        title="Restore default assets?"
-        message={hiddenCount > 0 ? `${hiddenCount} built-in asset(s) are hidden. Restore them to the watchlist?` : 'Restore all default built-in assets to the watchlist?'}
-        theme={T}
-        onRequestClose={() => setShowRestoreConfirm(false)}
-        actions={[
-          { label: 'Cancel', onPress: () => setShowRestoreConfirm(false) },
-          { label: 'Restore all', primary: true, onPress: () => { restoreBuiltins(); setShowRestoreConfirm(false); } },
         ]}
       />
     </SafeAreaView>
