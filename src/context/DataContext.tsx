@@ -424,8 +424,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Phase 2: REST snapshot — fires immediately on mount, fills prices before WebSocket connects
   // Also fires when app comes to foreground (AppState 'active') after being backgrounded.
+  //
+  // FIX: variantsForExchange('binance') only reads the static ASSETS constant.
+  // Symbols added via Symbol Search live in customAssets and were NEVER
+  // included here (or in the WebSocket subscription below) — so every
+  // custom-added Binance symbol got no snapshot and no live ticks at all,
+  // staying stuck at its seeded placeholder (price:1, chg:0) forever. This
+  // is what "chart not loading / stuck at 0%" for search-added coins was.
+  const bnCustomVariants = useMemo(() =>
+    customAssets
+      .filter(a => a.src === 'binance' && a.bnSym)
+      .map(a => ({ asset: null as any, variant: a })),
+    [customAssets.filter(a => a.src === 'binance').map(a => a.bnSym).join(',')]
+  );
+
   const runBnSnapshot = useCallback(async () => {
-    const bnVariants = variantsForExchange('binance');
+    const bnVariants = [...variantsForExchange('binance'), ...bnCustomVariants];
     if (!bnVariants.length) return;
     const snapshot = await fetchBnSpotSnapshot(bnVariants.map(({ variant }) => variant.bnSym!).filter(Boolean));
     if (!Object.keys(snapshot).length) return;
@@ -444,7 +458,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       return n;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedulePricesCacheSave]); // allAssets intentionally omitted — variantsForExchange() uses stable ASSETS constant
+  }, [schedulePricesCacheSave, bnCustomVariants]); // bnCustomVariants added so custom Binance symbols get re-snapshotted when the list changes
 
   // Fire REST snapshot on mount and on foreground
   useEffect(() => { runBnSnapshot(); }, [runBnSnapshot]);
@@ -455,10 +469,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [runBnSnapshot]);
 
-  // Binance WS
+  // Binance WS — includes custom (search-added) Binance symbols, same fix as
+  // runBnSnapshot above (see comment there for why this was needed).
   useEffect(() => {
     bnUnsubRef.current?.();
-    const bnVariants = variantsForExchange('binance');
+    const bnVariants = [...variantsForExchange('binance'), ...bnCustomVariants];
     if (!bnVariants.length) return;
     const close = openBinanceStream(
       bnVariants.map(({ variant }) => variant.bnSym!).filter(Boolean),
@@ -480,7 +495,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     );
     bnUnsubRef.current = close;
     return () => close();
-  }, [hiddenKeys.join(','), schedulePricesCacheSave]);
+  }, [hiddenKeys.join(','), schedulePricesCacheSave, bnCustomVariants]);
 
   // Binance Futures price poll — every 5s via public fapi/v1/ticker/24hr
   // No auth required. Covers src:'binance_futures' perp assets (BTC-PERP etc.)
