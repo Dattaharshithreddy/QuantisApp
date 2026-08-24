@@ -78,7 +78,11 @@ export default function SymbolSearchScreen({ navigation, route }: any) {
     // before Phase 6. The assetId+exchange approach broke symbol search because
     // not all searched assets resolve cleanly to a LogicalAsset id.
     // ChartScreen's backward-compat shim handles { symbol } correctly for all cases.
-    navigation.navigate('MainTabs', { screen: returnTo, params: { symbol: asset.symbol } });
+    // _ts forces ChartScreen's route-param effect to re-fire even when Chart is
+    // already the focused tab and/or the new symbol happens to match a stale
+    // params object — without it, tapping a search result while already on
+    // Chart silently kept showing whatever was previously loaded (e.g. NIFTY50).
+    navigation.navigate('MainTabs', { screen: returnTo, params: { symbol: asset.symbol, _ts: Date.now() } });
   }
 
   return (
