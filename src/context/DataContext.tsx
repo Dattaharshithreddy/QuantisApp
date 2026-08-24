@@ -17,7 +17,7 @@ import { aoLTP, AOSession, openAOMarketFeed } from '../api/angelOne';
 import { DepthLevel } from '../utils/orderBook';
 import { checkAlerts } from '../utils/alerts';
 import { logger } from '../utils/logger';
-import { getCustomAssets, addCustomAsset, removeCustomAsset, getHiddenBuiltins, hideBuiltinAsset, restoreAllBuiltins } from '../utils/watchlist';
+import { getCustomAssets, addCustomAsset, removeCustomAsset, getHiddenBuiltins, hideBuiltinAsset, hideBuiltinAssetById, restoreAllBuiltins } from '../utils/watchlist';
 
 // Phase 1: price cache key — persisted across sessions
 const PRICE_CACHE_KEY = 'quantis_price_cache_v1';
@@ -394,15 +394,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setCustomAssets(updated);
   }, []);
   const hideAsset = useCallback(async (symbol: string, src: string) => {
-    // Built-in LogicalAssets are keyed by asset.id in hiddenKeys.
-    // Find the LogicalAsset whose variant matches this symbol+src combo,
-    // then hide by asset.id. Custom assets fall back to symbol+'|'+src.
+    // Built-in LogicalAssets are keyed by BARE asset.id in hiddenKeys (see
+    // logicalAssets filter: !hiddenKeys.includes(a.id)). Custom assets are
+    // keyed by symbol+'|'+src (see logicalAssets custom filter).
+    // BUG (fixed): this used to call hideBuiltinAsset(la.id, '') which
+    // stores 'ID|' (id + '|' + empty string) — that key never matched
+    // hiddenKeys.includes(a.id), so built-ins never actually disappeared
+    // from the Markets list even though the hide "succeeded" in storage.
     const la = (ASSETS as LogicalAsset[]).find(a =>
       Object.values(a.exchanges).some(v => v.symbol === symbol && v.src === src)
     );
     const updated = la
-      ? await hideBuiltinAsset(la.id, '')   // hide by LogicalAsset.id
-      : await hideBuiltinAsset(symbol, src); // legacy: custom asset
+      ? await hideBuiltinAssetById(la.id)         // bare id — matches logicalAssets filter
+      : await hideBuiltinAsset(symbol, src);      // custom asset — symbol+'|'+src
     setHiddenKeys(updated);
   }, []);
   const updateExchangePreference = useCallback(async (name: string, src: string) => {

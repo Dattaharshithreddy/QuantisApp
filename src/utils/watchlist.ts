@@ -54,6 +54,18 @@ export async function hideBuiltinAsset(symbol: string, src: string): Promise<str
   return updated;
 }
 
+// Hide a built-in LogicalAsset by its BARE id (e.g. 'NIFTY50', 'ETH').
+// This is the key format DataContext's logicalAssets filter actually checks
+// (!hiddenKeys.includes(a.id)) — kept separate from hideBuiltinAsset() above,
+// which stores a compound symbol+'|'+src key used only for custom assets.
+export async function hideBuiltinAssetById(id: string): Promise<string[]> {
+  const list = await getHiddenBuiltins();
+  if (list.includes(id)) return list;
+  const updated = [...list, id];
+  await KVStore.set(HIDDEN_KEY, JSON.stringify(updated));
+  return updated;
+}
+
 export async function restoreAllBuiltins(): Promise<string[]> {
   await KVStore.set(HIDDEN_KEY, JSON.stringify([]));
   return [];

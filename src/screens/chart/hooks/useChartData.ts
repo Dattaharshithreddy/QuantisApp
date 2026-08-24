@@ -382,21 +382,30 @@ export function useChartData(
   // so switching to them reads from memory (0ms) instead of network (800ms).
   // Fire-and-forget — never blocks the current chart load.
   // Prefetch ALL timeframes in background after first candle load
-  // This makes ALL TF switches instant for the current session
+  // This makes ALL TF switches instant for the current session.
+  //
+  // FIX: this previously only ran when variant?.bnSym was set — i.e. only
+  // for Binance symbols. CoinDCX symbols (variant.cdxSym, no bnSym) got
+  // zero benefit and stayed slow on every TF switch. Extended to prefetch
+  // via whichever exchange the current variant actually uses.
   const prefetchDoneRef = React.useRef<string>('');
   React.useEffect(() => {
-    if (!variant?.bnSym || !candles.length) return;
+    const isBinance = !!variant?.bnSym;
+    const isCoinDcx = !!variant?.cdxSym;
+    if ((!isBinance && !isCoinDcx) || !candles.length) return;
     // Only run once per symbol (not on every TF switch)
-    const cacheKey = `${symbol}_prefetched`;
     if (prefetchDoneRef.current === symbol) return;
     prefetchDoneRef.current = symbol;
 
     const ALL_TFS = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
-    // Stagger fetches to avoid hammering API (200ms apart)
+    // Stagger fetches to avoid hammering API (400ms apart)
     ALL_TFS.filter(t => t !== tf && !memGet(symbol, t))
       .forEach((adjTf, idx) => {
         setTimeout(() => {
-          fetchBnKlines(variant!.bnSym!, adjTf, 300)
+          const fetchPromise = isBinance
+            ? fetchBnKlines(variant!.bnSym!, adjTf, 300)
+            : fetchCdxCandles(variant!.cdxSym!, adjTf, 300);
+          fetchPromise
             .then(data => {
               if (data.length) {
                 memSet(symbol, adjTf, data);
@@ -404,7 +413,7 @@ export function useChartData(
               }
             })
             .catch(() => {});
-        }, (idx + 1) * 400); // 400ms stagger between each TF fetch
+        }, (idx + 1) * 400);
       });
   }, [symbol, !!candles.length]); // only triggers on symbol change or first candle load
 
