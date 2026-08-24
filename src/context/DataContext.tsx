@@ -194,10 +194,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // call (from price ticks every 5s) caused allAssets to be a new array
   // reference, which caused every useCallback dep on allAssets to rebuild,
   // causing loadCandles to rebuild, causing candles to reload on every tick.
-  const logicalAssets = useMemo(
-    () => (ASSETS as LogicalAsset[]).filter(a => !hiddenKeys.includes(a.id)),
-    [hiddenKeys]
-  );
+  const logicalAssets = useMemo(() => {
+    const builtins = (ASSETS as LogicalAsset[]).filter(a => !hiddenKeys.includes(a.id));
+    // Custom assets (added via Symbol Search) are stored as flat Asset[] and
+    // were never wrapped into LogicalAsset shape here, so MarketsScreen (which
+    // renders logicalAssets, not allAssets) never showed newly-added symbols.
+    // Wrap each into a single-exchange LogicalAsset so it appears in the list
+    // and long-press remove resolves the correct symbol+src (see MarketsScreen).
+    const customLogical: LogicalAsset[] = customAssets
+      .filter(a => !hiddenKeys.includes(a.symbol + '|' + a.src))
+      .map(a => ({
+        id: a.symbol + '|' + a.src,
+        name: a.name ?? a.symbol,
+        type: a.type,
+        defaultExchange: a.src,
+        exchanges: { [a.src]: { ...a } as any },
+        custom: true,
+      }));
+    return [...builtins, ...customLogical];
+  }, [hiddenKeys, customAssets]);
 
   const allAssets = useMemo((): Asset[] => {
     const builtinFlatAssets: Asset[] = logicalAssets.flatMap(la =>
