@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -59,12 +59,26 @@ export default function PaperTradingScreen({ navigation, route }: any) {
 
   // Live monitoring: every price tick, check open positions against SL/TP —
   // reuses monitorOpenPositions, which itself reuses the verified close/P&L math.
+  //
+  // FIX: prices ticks multiple times/second on volatile symbols, but each
+  // pass here was firing monitorOpenPositions() -> getPortfolio() then
+  // .then(load) -> ANOTHER getPortfolio() + getTodayPnL(), with no
+  // cancellation. Ticks queued up async chains faster than they resolved,
+  // so whichever stale call finished last would win and overwrite the UI
+  // with an older snapshot — the exact "PnL not up to date / not ticking"
+  // symptom. A ref-based in-flight guard coalesces bursts of ticks into a
+  // single pass; any ticks that arrive while one is running are dropped
+  // (the next tick a few hundred ms later will pick up the latest prices).
+  const monitorInFlightRef = useRef(false);
   useEffect(() => {
     const livePrices: Record<string, number> = {};
     Object.entries(prices).forEach(([sym, p]) => { livePrices[sym] = p.price; });
-    if (Object.keys(livePrices).length) {
-      monitorOpenPositions(livePrices).then(load);
-    }
+    if (!Object.keys(livePrices).length) return;
+    if (monitorInFlightRef.current) return;
+    monitorInFlightRef.current = true;
+    monitorOpenPositions(livePrices)
+      .then(load)
+      .finally(() => { monitorInFlightRef.current = false; });
   }, [prices, load]);
 
   async function handleManualConfirm(accept: boolean) {
