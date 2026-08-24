@@ -255,7 +255,20 @@ const MarketRow = React.memo(function MarketRow({
           // Without it, the tab navigator may serve stale params from the previous visit.
           navigation.navigate('Chart', { assetId, exchange: prefExchange, _ts: Date.now() });
         }}
-      onLongPress={() => onLongPress((item as any).id, (item as any).defaultExchange, (item as any).custom)}
+      onLongPress={() => {
+        const la = item as any;
+        // For LogicalAssets (built-ins), removeAsset/hideAsset must be called
+        // with the ACTUAL variant symbol+src (e.g. 'ETHUSD'/'binance'), not
+        // la.id (e.g. 'ethereum') and la.defaultExchange (e.g. 'binance' as a
+        // label) — those never match any variant and made remove/hide silently
+        // no-op. For custom assets (no .exchanges map), symbol/src are direct.
+        const variant = la.exchanges && la.defaultExchange
+          ? la.exchanges[la.defaultExchange]
+          : null;
+        const sym = variant?.symbol ?? la.symbol ?? la.id;
+        const src = variant?.src ?? la.src ?? la.defaultExchange;
+        onLongPress(sym, src, la.custom);
+      }}
       activeOpacity={0.7}
       style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
                paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.border, minHeight: 65 }}>
