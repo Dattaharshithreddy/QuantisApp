@@ -381,23 +381,32 @@ export function useChartData(
   // After loading candles for current TF, silently prefetch adjacent TFs
   // so switching to them reads from memory (0ms) instead of network (800ms).
   // Fire-and-forget — never blocks the current chart load.
+  // Prefetch ALL timeframes in background after first candle load
+  // This makes ALL TF switches instant for the current session
+  const prefetchDoneRef = React.useRef<string>('');
   React.useEffect(() => {
     if (!variant?.bnSym || !candles.length) return;
-    const adjacentTfs = getAdjacentTfs(tf);
-    adjacentTfs.forEach(adjTf => {
-      // Skip if already in memory (already prefetched or loaded before)
-      if (memGet(symbol, adjTf)) return;
-      // Fire-and-forget background fetch
-      fetchBnKlines(variant!.bnSym!, adjTf, 300)
-        .then(data => {
-          if (data.length) {
-            memSet(symbol, adjTf, data);
-            setCachedCandles(symbol, adjTf, data).catch(() => {});
-          }
-        })
-        .catch(() => {}); // silent — prefetch failure is non-fatal
-    });
-  }, [symbol, tf, candles.length > 0]); // only runs when candles actually loaded
+    // Only run once per symbol (not on every TF switch)
+    const cacheKey = `${symbol}_prefetched`;
+    if (prefetchDoneRef.current === symbol) return;
+    prefetchDoneRef.current = symbol;
+
+    const ALL_TFS = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
+    // Stagger fetches to avoid hammering API (200ms apart)
+    ALL_TFS.filter(t => t !== tf && !memGet(symbol, t))
+      .forEach((adjTf, idx) => {
+        setTimeout(() => {
+          fetchBnKlines(variant!.bnSym!, adjTf, 300)
+            .then(data => {
+              if (data.length) {
+                memSet(symbol, adjTf, data);
+                setCachedCandles(symbol, adjTf, data).catch(() => {});
+              }
+            })
+            .catch(() => {});
+        }, (idx + 1) * 400); // 400ms stagger between each TF fetch
+      });
+  }, [symbol, !!candles.length]); // only triggers on symbol change or first candle load
 
   // ── Kline stream: real-time OHLCV + candle-close detection ──────────
   // ── Binance kline stream: real-time OHLCV + candle-close detection ──────────

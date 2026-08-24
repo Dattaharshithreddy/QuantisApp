@@ -37,12 +37,33 @@ export async function searchBinance(query: string): Promise<Asset[]> {
 const SCRIP_CACHE_KEY = 'aoScripMasterCache';
 const SCRIP_CACHE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 
+// Pre-load scrip master in background — call this on app start
+export async function warmScripMaster(): Promise<void> {
+  try {
+    const cached = await KVStore.get(SCRIP_CACHE_KEY);
+    if (cached) {
+      const { fetchedAt } = JSON.parse(cached);
+      if (Date.now() - fetchedAt < SCRIP_CACHE_MS) return; // already warm
+    }
+    await fetchAOScripMaster().then(fresh =>
+      KVStore.set(SCRIP_CACHE_KEY, JSON.stringify({ data: fresh, fetchedAt: Date.now() }))
+    ).catch(() => {});
+  } catch {}
+}
+
 async function getScripMaster(): Promise<ScripEntry[]> {
   try {
     const cached = await KVStore.get(SCRIP_CACHE_KEY);
     if (cached) {
       const { data, fetchedAt } = JSON.parse(cached);
       if (Date.now() - fetchedAt < SCRIP_CACHE_MS) return data;
+      // Stale cache — return stale data immediately, refresh in background
+      if (data?.length) {
+        fetchAOScripMaster().then(fresh =>
+          KVStore.set(SCRIP_CACHE_KEY, JSON.stringify({ data: fresh, fetchedAt: Date.now() }))
+        ).catch(() => {});
+        return data; // instant response with stale data
+      }
     }
   } catch (_) {}
   const fresh = await fetchAOScripMaster();

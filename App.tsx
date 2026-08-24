@@ -113,6 +113,10 @@ export default function App() {
   React.useEffect(() => {
     requestPermission().catch(() => {});
     const unsub = setupNotificationTapHandler();
+    // Pre-warm NSE scrip master in background so symbol search is instant
+    import('./src/api/symbolSearch').then(({ warmScripMaster }) => {
+      warmScripMaster().catch(() => {});
+    }).catch(() => {});
     return unsub;
   }, []);
 

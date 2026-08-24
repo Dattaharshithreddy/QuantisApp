@@ -40,9 +40,23 @@ export default function SymbolSearchScreen({ navigation, route }: any) {
         r = searchForex(q, rates);
       }
       setResults(r);
-      if (!r.length) setErr('No matches found.');
+      if (!r.length) {
+        if (m === 'nse') setErr('No matches found. Try a shorter query e.g. "ITC", "TCS", "HDFC".');
+        else if (m === 'crypto') setErr('No matches found. Try "ETH", "SOL", "AVAX".');
+        else setErr('No matches found.');
+      }
     } catch (e: any) {
-      setErr(e.message);
+      // Better error messages for common failures
+      const msg = e.message ?? '';
+      if (msg.includes('network') || msg.includes('fetch') || msg.includes('Network')) {
+        setErr('Network error — check your connection and try again.');
+      } else if (msg.includes('HTTP 4') || msg.includes('HTTP 5')) {
+        setErr('Search service temporarily unavailable. Try again in a moment.');
+      } else if (m === 'nse' && msg.includes('Scrip')) {
+        setErr('NSE scrip list is loading — try again in a few seconds.');
+      } else {
+        setErr(msg || 'Search failed. Please try again.');
+      }
       setResults([]);
     }
     setLoading(false);
