@@ -87,11 +87,24 @@ export default function SymbolSearchScreen({ navigation, route }: any) {
     //   → variant useMemo finds the custom asset in allAssets → correct variant
     //
     // _ts still required to force the effect to re-fire when Chart tab is focused.
+    // Pass the full asset object so ChartScreen can build the variant directly
+    // without depending on allAssets/customAssets being up-to-date.
+    // This eliminates the race condition where addAsset's setState hasn't
+    // propagated to useChartData's stale allAssets closure yet.
     navigation.navigate('MainTabs', { screen: returnTo, params: {
-      assetId:  asset.symbol,   // the symbol IS the assetId for custom assets
-      exchange: asset.src,      // 'ao' | 'binance' | 'coindcx' | 'av' | 'forex'
-      symbol:   asset.symbol,   // kept for any consumers that still read symbol param
-      _ts:      Date.now(),
+      assetId:     asset.symbol,
+      exchange:    asset.src,
+      symbol:      asset.symbol,
+      // Flat asset fields — ChartScreen reads these to seed the variant directly
+      src:         asset.src,
+      aoToken:     asset.aoToken,
+      aoEx:        asset.aoEx,
+      bnSym:       asset.bnSym,
+      cdxSym:      (asset as any).cdxSym,
+      avSym:       (asset as any).avSym,
+      assetType:   asset.type,
+      assetName:   asset.name,
+      _ts:         Date.now(),
     }});
   }
 

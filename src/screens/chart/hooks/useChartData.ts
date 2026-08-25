@@ -35,6 +35,13 @@ const TF_MS: Record<string, number> = {
 export const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
 
 type UseChartDataCallbacks = {
+  /** Optional seed asset from navigation params — builds variant directly,
+   *  race-free, without waiting for customAssets to propagate. */
+  seedAsset?: {
+    src: string; symbol: string; aoToken?: string; aoEx?: string;
+    bnSym?: string; cdxSym?: string; avSym?: string;
+    base?: number; vol?: number;
+  } | null;
   /** Called once at the start of every loadCandles invocation.
    *  Use this to reset screen-level state (e.g. AI copilot result)
    *  before new candle data arrives. */
@@ -51,7 +58,7 @@ export function useChartData(
   callbacks: UseChartDataCallbacks = {},
 ) {
   const { prices, aoSession, avKey, allAssets, nftTokenVersion, nftTokenError, updateSpotPrice, customAssets } = useData();
-  const { onBeforeLoad, onCandleClose } = callbacks;
+  const { onBeforeLoad, onCandleClose, seedAsset } = callbacks;
   const onCandleCloseRef = useRef(onCandleClose);
   onCandleCloseRef.current = onCandleClose;
 
@@ -84,7 +91,18 @@ export function useChartData(
     const customFlat = allAssets.find((a: any) =>
       (a.assetId ?? a.symbol) === assetId && (!exchange || a.src === exchange)
     ) ?? allAssets.find((a: any) => (a.assetId ?? a.symbol) === assetId);
-    if (!customFlat) return undefined;
+    if (!customFlat) {
+      // seedAsset: direct variant from navigation params — race-free fallback
+      if (seedAsset && seedAsset.symbol === assetId) {
+        return {
+          src: seedAsset.src as any, symbol: seedAsset.symbol,
+          base: seedAsset.base ?? 1, vol: seedAsset.vol ?? 0.02,
+          bnSym: seedAsset.bnSym, cdxSym: seedAsset.cdxSym,
+          aoToken: seedAsset.aoToken, aoEx: seedAsset.aoEx, avSym: seedAsset.avSym,
+        } as ExchangeVariant;
+      }
+      return undefined;
+    }
     return {
       src: customFlat.src, symbol: customFlat.symbol, base: customFlat.base, vol: customFlat.vol,
       bnSym: customFlat.bnSym, cdxSym: (customFlat as any).cdxSym, cdxMkt: (customFlat as any).cdxMkt,
@@ -97,7 +115,7 @@ export function useChartData(
   // Using a join() key is O(n) but customAssets is typically tiny (<20 items)
   // and this only runs when the custom list actually changes.
   // Built-in assets remain stable — this dep only fires for Search results.
-  }, [assetId, exchange, (customAssets ?? []).map((a: any) => a.symbol).join(',')]);
+  }, [assetId, exchange, seedAsset, (customAssets ?? []).map((a: any) => a.symbol).join(',')]);
 
   // symbol = variant.symbol — the internal ML/cache/price key
   // Fallback chain: variant.symbol → find in allAssets by symbol → assetId itself

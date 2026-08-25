@@ -129,7 +129,26 @@ export default function ChartScreen({ route, navigation }: any) {
   const initialSymbol = route?.params?.symbol || 'NIFTY50';
   const initialAssetId = route?.params?.assetId ?? route?.params?.symbol ?? 'NIFTY50';
   const initialExchange = route?.params?.exchange ?? '';
-  const chartData = useChartData(initialAssetId, initialExchange, { onBeforeLoad, onCandleClose: onCandleCloseStable });
+  // seedAsset: built from nav params when user picks a custom search result.
+  // Passed to useChartData so variant can be resolved immediately without
+  // waiting for customAssets to propagate through DataContext state.
+  const navParams = route?.params as any;
+  const seedAsset = React.useMemo(() => {
+    if (!navParams?.src || !navParams?.assetId) return null;
+    return {
+      src:      navParams.src,
+      symbol:   navParams.assetId,
+      aoToken:  navParams.aoToken,
+      aoEx:     navParams.aoEx,
+      bnSym:    navParams.bnSym,
+      cdxSym:   navParams.cdxSym,
+      avSym:    navParams.avSym,
+      base:     1,
+      vol:      0.02,
+    };
+  }, [navParams?.assetId, navParams?.src, navParams?.aoToken, navParams?.bnSym]);
+
+  const chartData = useChartData(initialAssetId, initialExchange, { onBeforeLoad, onCandleClose: onCandleCloseStable, seedAsset });
   const {
     assetId, setAssetId, exchange, setExchange, variant,
     symbol, setSymbol, tf, setTf, candles, loading, errMsg,

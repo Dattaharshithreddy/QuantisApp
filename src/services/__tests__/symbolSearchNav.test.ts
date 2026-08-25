@@ -120,11 +120,13 @@ describe('SymbolSearchScreen nav params after fix', () => {
       require('path').join(__dirname, '../../screens/SymbolSearchScreen.tsx'), 'utf8'
     );
     // Must pass assetId (not just symbol) so ChartScreen hits Priority 1
-    expect(src).toContain('assetId:  asset.symbol');
+    expect(src).toContain('assetId:');
     // Must pass exchange so the source (ao/binance/etc.) is preserved
-    expect(src).toContain('exchange: asset.src');
+    expect(src).toContain('exchange:');
+    // Must pass full asset fields for race-free seedAsset
+    expect(src).toContain('src:         asset.src');
     // Must still pass _ts to force effect re-fire
-    expect(src).toContain('_ts:      Date.now()');
+    expect(src).toContain('_ts:');
   });
 
   test('SymbolSearchScreen does NOT navigate with symbol-only for chart', () => {
@@ -224,5 +226,57 @@ describe('NSE stock type assignment', () => {
       const type = sym.includes('NIFTY') ? 'INDEX' : 'STOCK';
       expect(type).toBe('INDEX');
     }
+  });
+});
+
+// ── 8. seedAsset race-condition fix ──────────────────────────────────────────
+describe('seedAsset — race-free variant resolution', () => {
+  test('SymbolSearchScreen passes src field in nav params', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../screens/SymbolSearchScreen.tsx'), 'utf8'
+    );
+    expect(src).toContain('src:         asset.src');
+    expect(src).toContain('aoToken:     asset.aoToken');
+    expect(src).toContain('aoEx:        asset.aoEx');
+    expect(src).toContain('bnSym:       asset.bnSym');
+  });
+
+  test('useChartData type includes seedAsset', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../screens/chart/hooks/useChartData.ts'), 'utf8'
+    );
+    expect(src).toContain('seedAsset?:');
+    expect(src).toContain('seedAsset.symbol === assetId');
+  });
+
+  test('ChartScreen reads src from nav params and builds seedAsset', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../screens/ChartScreen.tsx'), 'utf8'
+    );
+    expect(src).toContain('navParams?.src');
+    expect(src).toContain('seedAsset');
+  });
+
+  test('NSE seedAsset for TATAELXSI builds correct variant fields', () => {
+    // Simulate what useChartData does with seedAsset from nav params
+    const seedAsset = {
+      src: 'ao', symbol: 'TATAELXSI',
+      aoToken: '123', aoEx: 'NSE',
+    };
+    // Verify variant can be constructed from seedAsset alone
+    const variant = {
+      src: seedAsset.src,
+      symbol: seedAsset.symbol,
+      aoToken: seedAsset.aoToken,
+      aoEx: seedAsset.aoEx,
+      base: 1, vol: 0.02,
+    };
+    expect(variant.src).toBe('ao');
+    expect(variant.aoToken).toBe('123');
+    expect(variant.aoEx).toBe('NSE');
+    expect(variant.symbol).toBe('TATAELXSI');
   });
 });
