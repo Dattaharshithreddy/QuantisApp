@@ -557,6 +557,7 @@ export function useChartData(
       aoWSChartRef.current?.();
       aoWSChartRef.current = null;
     };
+  }, [variant?.aoToken, variant?.aoEx, aoSession?.feedToken]);
 
   // ── CoinDCX kline poll: real-time candle + candle-close detection ────────────
   // Uses subscribeToCdxKline which polls the latest candle every 3s (REST-based,
@@ -624,7 +625,6 @@ export function useChartData(
       cdxKlineRef.current = null;
     };
   }, [variant?.cdxSym, tf]);
-  }, [variant?.aoToken, variant?.aoEx, aoSession?.feedToken]);
 
   // ── Load older history (scroll-back) ─────────────────────────────────────────
   const loadMoreHistory = useCallback(async () => {
