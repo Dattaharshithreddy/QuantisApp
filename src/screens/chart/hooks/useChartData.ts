@@ -200,10 +200,28 @@ export function useChartData(
 
   // ── Primary candle load — full implementation (previously split across hook
   //    and ChartScreen). Race-guarded with loadRequestRef. ─────────────────────
+  // AbortController ref — cancels the in-flight network request when the
+  // user switches TF before it completes. The loadRequestRef still discards
+  // stale RESULTS; AbortController stops the actual HTTP transfer so rapid
+  // 1m→5m→15m→1h tapping doesn't queue 4 parallel network requests.
+  const abortCtrlRef = React.useRef<AbortController | null>(null);
+
   const loadCandles = useCallback(async () => {
     const myRequestId = ++loadRequestRef.current;
-    // ── PERF PROBE ───────────────────────────────────────────────────────────
-    const _lc0 = Date.now();
+
+    // Cancel any in-flight network request from a previous loadCandles call
+    abortCtrlRef.current?.abort();
+    const ctrl = new AbortController();
+    abortCtrlRef.current = ctrl;
+
+    // ── TIMING INSTRUMENTATION ───────────────────────────────────────────────
+    // Checkpoints printed to console as [CHART_TIMING] symbol/tf stage=Xms
+    // Measures tap→cache→request→response→merge→setState for device-level data.
+    const _t0 = Date.now();
+    const _timing = (stage: string) => {
+      if (__DEV__) console.log(`[CHART_TIMING] ${symbol}/${tf} ${stage}=${Date.now() - _t0}ms`);
+    };
+    _timing('start');
     // ────────────────────────────────────────────────────────────────────────
 
     // Notify caller before any state changes (used to reset AI state)
@@ -218,6 +236,7 @@ export function useChartData(
     //     If L1 exists but may be stale, show it immediately then refresh
     //     via L2 + network in the background below.
     const memCached = memGet(symbol, tf);
+    _timing('l1_lookup');
     if (memCached?.length) {
       setCandles(memCached);
       setDataSrc('live');
@@ -225,6 +244,7 @@ export function useChartData(
       // Ask L2 only to determine freshness — use a separate non-blocking read
       // so we can decide whether to skip the network entirely.
       const l2meta = await getCachedCandles(symbol, tf);
+      _timing('l2_read');
       if (myRequestId !== loadRequestRef.current) return;
       if (l2meta?.isFresh) {
         // L2 still within TTL — L1 data is good, skip network entirely
@@ -257,9 +277,14 @@ export function useChartData(
         }
         // L2 stale — fall through to network refresh below
       } else {
-        // No cache at all — show loading state while network fetches
+        // No cache at all — show spinner only if we have nothing to display.
+        // If candles from a previous TF are still in state, keep them visible
+        // so the chart never goes blank. The network fetch will replace them.
+        // This is the cold-cache path where the user just switched to a TF
+        // they've never loaded this session.
         setLoading(true);
-        // Don't clear existing candles so chart never goes fully blank
+        // Intentionally do NOT setCandles([]) — previous TF candles remain
+        // visible as a placeholder until the real data arrives below.
       }
     }
 
@@ -267,17 +292,17 @@ export function useChartData(
     try {
       let data: Candle[] = [];
 
+      _timing('net_start');
       if (variant?.src === 'binance' && variant?.bnSym) {
-        const _nw = Date.now();
-        data = await fetchBnKlines(variant!.bnSym!, tf, 300); // 300 = ~40% faster than 500, still enough for all indicators
+        data = await fetchBnKlines(variant!.bnSym!, tf, 300, undefined, undefined, ctrl.signal); // 300 = ~40% faster than 500, still enough for all indicators
         setDataSrc('live');
       } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
-        data = await fetchCdxCandles(variant!.cdxSym!, tf, 300); // normalized to 300 (was 500)
+        data = await fetchCdxCandles(variant!.cdxSym!, tf, 300, undefined, ctrl.signal); // normalized to 300
         setDataSrc('live');
       } else if (variant?.src === 'coindcx_futures' && variant?.cdxSym) {
         // fetchCdxFuturesCandles internally converts to spot pair format (ETHUSDT)
         // CoinDCX perp tracks spot price exactly — spot candles are correct
-        data = await fetchCdxFuturesCandles(variant!.cdxSym!, tf, 300); // normalized to 300 (was 500)
+        data = await fetchCdxFuturesCandles(variant!.cdxSym!, tf, 300, undefined, ctrl.signal); // normalized to 300
         setDataSrc('live');
       } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
         // ao_futures uses the same Angel One API as ao — only the exchange (NFO) differs,
@@ -334,6 +359,7 @@ export function useChartData(
         return;
       }
 
+      _timing('net_done');
       if (myRequestId !== loadRequestRef.current) {
         logger.info('useChartData', `Discarding stale candle load for ${symbol}/${tf} (req ${myRequestId}, current ${loadRequestRef.current})`);
         return;
@@ -366,6 +392,7 @@ export function useChartData(
         ? mergeCandles(cached.candles, data)
         : data;
 
+      _timing('set_candles');
       setCandles(merged);
       setDataSrc('live');
       memSet(symbol, tf, merged); // L1: 0ms for next TF switch this session
@@ -373,6 +400,9 @@ export function useChartData(
       await recordSampleCount(symbol, tf, merged.length).catch(() => {});
     } catch (e: any) {
       if (myRequestId !== loadRequestRef.current) return;
+      // AbortError means the user switched TF before this fetch completed.
+      // This is expected — don't show an error to the user.
+      if (e?.name === 'AbortError') return;
       setErrMsg(e.message ?? 'Failed to load candles');
     } finally {
       if (myRequestId === loadRequestRef.current) setLoading(false);
@@ -402,34 +432,55 @@ export function useChartData(
   // for Binance symbols. CoinDCX symbols (variant.cdxSym, no bnSym) got
   // zero benefit and stayed slow on every TF switch. Extended to prefetch
   // via whichever exchange the current variant actually uses.
+  // ── Background prefetch: all 7 TFs after first candle load ─────────────────
+  // This is the primary mechanism that converts cold → warm cache for TF switches.
+  // Runs once per symbol after candles are available. Staggered 400ms to avoid
+  // API rate-limit (Binance: 1200 req/min weight; 7 × 300-candle calls = safe).
+  //
+  // Point 1 (reliability): prefetchDoneRef prevents duplicate prefetches.
+  // If candles.length is 0 the effect returns — it will re-fire when candles arrive
+  // because !!candles.length is in the deps array (false→true transition triggers it).
+  //
+  // Point 3 (next TF prediction): the current tf is placed FIRST in the fetch
+  // order of adjacent TFs so the most likely next tap completes soonest.
   const prefetchDoneRef = React.useRef<string>('');
   React.useEffect(() => {
     const isBinance = !!variant?.bnSym;
     const isCoinDcx = !!variant?.cdxSym;
     if ((!isBinance && !isCoinDcx) || !candles.length) return;
-    // Only run once per symbol (not on every TF switch)
-    if (prefetchDoneRef.current === symbol) return;
+    if (prefetchDoneRef.current === symbol) return; // already prefetching this symbol
     prefetchDoneRef.current = symbol;
 
     const ALL_TFS = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
-    // Stagger fetches to avoid hammering API (400ms apart)
-    ALL_TFS.filter(t => t !== tf && !memGet(symbol, t))
-      .forEach((adjTf, idx) => {
-        setTimeout(() => {
-          const fetchPromise = isBinance
-            ? fetchBnKlines(variant!.bnSym!, adjTf, 300)
-            : fetchCdxCandles(variant!.cdxSym!, adjTf, 300);
-          fetchPromise
-            .then(data => {
-              if (data.length) {
-                memSet(symbol, adjTf, data);
-                setCachedCandles(symbol, adjTf, data).catch(() => {});
-              }
-            })
-            .catch(() => {});
-        }, (idx + 1) * 400);
-      });
-  }, [symbol, !!candles.length]); // only triggers on symbol change or first candle load
+    // Put the adjacent TFs (most likely next taps) first in fetch order
+    const ADJACENT: Record<string, string[]> = {
+      '1m': ['5m', '15m'], '5m': ['1m', '15m'], '15m': ['5m', '1h'],
+      '30m': ['15m', '1h'], '1h': ['15m', '4h'], '4h': ['1h', '1D'], '1D': ['4h', '1W'], '1W': ['1D'],
+    };
+    const adjacent = ADJACENT[tf] ?? [];
+    const rest = ALL_TFS.filter(t => t !== tf && !adjacent.includes(t));
+    const ordered = [...adjacent, ...rest].filter(t => !memGet(symbol, t));
+
+    ordered.forEach((adjTf, idx) => {
+      setTimeout(() => {
+        // Use a separate abort controller per prefetch — prefetches are lower
+        // priority than user-triggered loads but should not interfere with them
+        const prefetchCtrl = new AbortController();
+        const fetchPromise = isBinance
+          ? fetchBnKlines(variant!.bnSym!, adjTf, 300, undefined, undefined, prefetchCtrl.signal)
+          : fetchCdxCandles(variant!.cdxSym!, adjTf, 300, undefined, prefetchCtrl.signal);
+        fetchPromise
+          .then(data => {
+            if (data.length) {
+              memSet(symbol, adjTf, data);
+              setCachedCandles(symbol, adjTf, data).catch(() => {});
+              if (__DEV__) console.log(`[CHART_PREFETCH] ${symbol}/${adjTf} warmed (${data.length} candles)`);
+            }
+          })
+          .catch(() => {}); // silent — prefetch failure is non-fatal
+      }, (idx + 1) * 400); // 400ms stagger between each prefetch
+    });
+  }, [symbol, !!candles.length]); // fires on symbol change + when candles first arrive
 
   // ── Kline stream: real-time OHLCV + candle-close detection ──────────
   // ── Binance kline stream: real-time OHLCV + candle-close detection ──────────

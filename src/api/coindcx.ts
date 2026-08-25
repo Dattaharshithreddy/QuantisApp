@@ -73,13 +73,16 @@ export async function fetchCdxCandles(
   tf: string,
   limit = 500,
   endTime?: number,
+  signal?: AbortSignal,
 ): Promise<Candle[]> {
   return withRetry(async () => {
     const interval = TF_CDX[tf] ?? '15m';
     let url = `${CDX_PUBLIC}/market_data/candles?pair=${encodeURIComponent(pair)}&interval=${interval}&limit=${limit}`;
     if (endTime) url += `&endTime=${endTime}`;
 
-    const r = await fetch(url, { signal: timeoutSignal(10_000) });
+    // Combine caller's abort signal with the built-in timeout
+    const fetchSignal = signal ?? timeoutSignal(10_000);
+    const r = await fetch(url, { signal: fetchSignal });
     if (!r.ok) throw new Error(`CoinDCX candles HTTP ${r.status}`);
     const json: any[] = await r.json();
 

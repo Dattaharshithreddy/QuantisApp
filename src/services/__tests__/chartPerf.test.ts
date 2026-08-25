@@ -188,3 +188,91 @@ describe('L1 cache path isolation', () => {
     memEvict('SYNC_TEST');
   });
 });
+
+// ── 6. AbortController request cancellation ──────────────────────────────────
+describe('AbortController — obsolete request cancellation', () => {
+  test('fetchBnKlines accepts AbortSignal parameter', () => {
+    // Structural test: verify the function signature accepts a signal
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../api/binance.ts'), 'utf8'
+    );
+    expect(src).toContain('signal?: AbortSignal');
+    expect(src).toContain("name !== 'AbortError'"); // shouldRetry guard
+  });
+
+  test('fetchCdxCandles accepts AbortSignal parameter', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../api/coindcx.ts'), 'utf8'
+    );
+    expect(src).toContain('signal?: AbortSignal');
+  });
+
+  test('useChartData creates AbortController and passes signal to fetches', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../screens/chart/hooks/useChartData.ts'), 'utf8'
+    );
+    expect(src).toContain('new AbortController()');
+    expect(src).toContain('ctrl.signal');
+    expect(src).toContain("name === 'AbortError'"); // don't show error on abort
+  });
+});
+
+// ── 7. Timing instrumentation ─────────────────────────────────────────────────
+describe('Timing instrumentation checkpoints', () => {
+  test('CHART_TIMING checkpoints exist in useChartData', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../screens/chart/hooks/useChartData.ts'), 'utf8'
+    );
+    expect(src).toContain('[CHART_TIMING]');
+    expect(src).toContain("_timing('l1_lookup')");
+    expect(src).toContain("_timing('l2_read')");
+    expect(src).toContain("_timing('net_start')");
+    expect(src).toContain("_timing('net_done')");
+    expect(src).toContain("_timing('set_candles')");
+  });
+
+  test('prefetch logs completions in dev', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../screens/chart/hooks/useChartData.ts'), 'utf8'
+    );
+    expect(src).toContain('[CHART_PREFETCH]');
+  });
+});
+
+// ── 8. Prefetch ordering — adjacent TFs first ─────────────────────────────────
+describe('Prefetch ordering', () => {
+  test('adjacent TFs are placed before rest in prefetch order', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../screens/chart/hooks/useChartData.ts'), 'utf8'
+    );
+    // Verify ADJACENT map exists and drives ordering
+    expect(src).toContain('const ADJACENT');
+    expect(src).toContain("'15m': ['5m', '1h']"); // example adjacency
+    expect(src).toContain('[...adjacent, ...rest]'); // ordering pattern
+  });
+});
+
+// ── Device-level timing guide (manual, not automated) ─────────────────────────
+// Run on Android device: adb logcat | findstr CHART_TIMING
+//
+// Expected warm-cache TF switch (after prefetch):
+//   CHART_TIMING ETHUSDT/1h start=0ms
+//   CHART_TIMING ETHUSDT/1h l1_lookup=0ms
+//   CHART_TIMING ETHUSDT/1h l2_read=12ms
+//   CHART_TIMING ETHUSDT/1h set_candles=13ms   ← total <15ms
+//
+// Expected cold-cache TF switch:
+//   CHART_TIMING ETHUSDT/1D start=0ms
+//   CHART_TIMING ETHUSDT/1D l1_lookup=0ms
+//   CHART_TIMING ETHUSDT/1D l2_read=35ms
+//   CHART_TIMING ETHUSDT/1D net_start=35ms
+//   CHART_TIMING ETHUSDT/1D net_done=420ms     ← Binance REST on WiFi
+//   CHART_TIMING ETHUSDT/1D set_candles=425ms  ← total ~425ms
+//
+// Target: warm < 100ms, cold = network-dependent (200–900ms unavoidable)

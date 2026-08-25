@@ -50,17 +50,21 @@ export async function fetchBinanceDepth(bnSym: string, limit: 5 | 10 | 20 = 20):
   }, { tag: 'binance-depth', retries: 2 });
 }
 
-export async function fetchBnKlines(bnSym: string, tf: string, limit = 150, endTime?: number, startTime?: number): Promise<Candle[]> {
+export async function fetchBnKlines(
+  bnSym: string, tf: string, limit = 150,
+  endTime?: number, startTime?: number,
+  signal?: AbortSignal,
+): Promise<Candle[]> {
   return withRetry(async () => {
     const interval = TF_BN[tf] || '15m';
     let url = `https://api.binance.com/api/v3/klines?symbol=${bnSym}&interval=${interval}&limit=${limit}`;
     if (endTime)   url += `&endTime=${endTime}`;
     if (startTime) url += `&startTime=${startTime}`;
-    const r = await fetch(url);
+    const r = await fetch(url, signal ? { signal } : undefined);
     if (!r.ok) throw new Error(`Binance HTTP ${r.status}`);
     const json = await r.json();
     return json.map((k: any[]) => ({ time: +k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
-  }, { tag: 'binance-klines', retries: 2 });
+  }, { tag: 'binance-klines', retries: 2, shouldRetry: (e) => e?.name !== 'AbortError' });
 }
 
 export function openBinanceStream(
