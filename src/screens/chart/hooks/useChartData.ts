@@ -211,42 +211,56 @@ export function useChartData(
     setErrMsg('');
     setCandleLoadExplanation('');
 
-    // 1a. L1: Memory cache (0ms) — fastest possible, survives TF switches
+    // 1a. L1: Memory cache (0ms) — in-process Map.get, survives TF switches
+    //     If the L1 entry exists AND the underlying L2 TTL would still be
+    //     fresh (i.e. this TF was recently fetched this session), return
+    //     immediately without touching AsyncStorage at all.
+    //     If L1 exists but may be stale, show it immediately then refresh
+    //     via L2 + network in the background below.
     const memCached = memGet(symbol, tf);
     if (memCached?.length) {
       setCandles(memCached);
       setDataSrc('live');
       setLoading(false);
-      // Still refresh in background if memory is stale (>3 min for 1m, etc.)
-      // but don't wait for it — user sees data instantly
-    }
-
-    // 1b. L2: AsyncStorage cache (~50ms) — survives app restarts
-    const cached = await getCachedCandles(symbol, tf);
-    if (myRequestId !== loadRequestRef.current) return;
-
-    if (cached?.candles?.length) {
-      if (!memCached?.length) {
-        // Only update if memory cache was empty (don't downgrade fresh memory)
-        setCandles(cached.candles);
-        memSet(symbol, tf, cached.candles); // promote to L1
-      }
-      setDataSrc('live');
-      setLoading(false);
-      if (cached.isFresh && memCached?.length) {
-        // Cache is within TTL — skip network entirely, no stale data risk
+      // Ask L2 only to determine freshness — use a separate non-blocking read
+      // so we can decide whether to skip the network entirely.
+      const l2meta = await getCachedCandles(symbol, tf);
+      if (myRequestId !== loadRequestRef.current) return;
+      if (l2meta?.isFresh) {
+        // L2 still within TTL — L1 data is good, skip network entirely
         await recordSampleCount(
-          symbol, tf, cached.candles.length,
-          `History restored from cache (still within freshness window) — ${cached.candles.length} candles.`,
+          symbol, tf, memCached.length,
+          `L1 memory cache hit (still within L2 freshness window) — ${memCached.length} candles.`,
           'cache_fresh',
         ).catch(() => {});
-        return;
+        return; // ← EARLY RETURN: no network request
       }
+      // L2 is stale — fall through to network refresh below.
+      // User already sees data (set above); network will update silently.
     } else {
-      // No cache for this TF — show loading but keep previous candles visible
-      // so chart doesn't go blank during TF switch
-      setLoading(true);
-      // Don't clear candles here — let old candles show until new ones arrive
+      // 1b. L2: AsyncStorage cache (~10–50ms) — survives app restarts
+      const cached = await getCachedCandles(symbol, tf);
+      if (myRequestId !== loadRequestRef.current) return;
+
+      if (cached?.candles?.length) {
+        setCandles(cached.candles);
+        memSet(symbol, tf, cached.candles); // promote to L1 for next switch
+        setDataSrc('live');
+        setLoading(false);
+        if (cached.isFresh) {
+          await recordSampleCount(
+            symbol, tf, cached.candles.length,
+            `History restored from L2 cache (still within freshness window) — ${cached.candles.length} candles.`,
+            'cache_fresh',
+          ).catch(() => {});
+          return; // ← EARLY RETURN: no network request
+        }
+        // L2 stale — fall through to network refresh below
+      } else {
+        // No cache at all — show loading state while network fetches
+        setLoading(true);
+        // Don't clear existing candles so chart never goes fully blank
+      }
     }
 
     // 2. Fetch fresh data from the appropriate source
@@ -258,12 +272,12 @@ export function useChartData(
         data = await fetchBnKlines(variant!.bnSym!, tf, 300); // 300 = ~40% faster than 500, still enough for all indicators
         setDataSrc('live');
       } else if (variant?.src === 'coindcx' && variant?.cdxSym) {
-        data = await fetchCdxCandles(variant!.cdxSym!, tf, 500);
+        data = await fetchCdxCandles(variant!.cdxSym!, tf, 300); // normalized to 300 (was 500)
         setDataSrc('live');
       } else if (variant?.src === 'coindcx_futures' && variant?.cdxSym) {
         // fetchCdxFuturesCandles internally converts to spot pair format (ETHUSDT)
         // CoinDCX perp tracks spot price exactly — spot candles are correct
-        data = await fetchCdxFuturesCandles(variant!.cdxSym!, tf, 500);
+        data = await fetchCdxFuturesCandles(variant!.cdxSym!, tf, 300); // normalized to 300 (was 500)
         setDataSrc('live');
       } else if ((variant?.src === 'ao' || variant?.src === 'ao_futures') && aoSession?.jwtToken && variant?.aoToken && variant?.aoEx) {
         // ao_futures uses the same Angel One API as ao — only the exchange (NFO) differs,

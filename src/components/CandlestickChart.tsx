@@ -118,12 +118,25 @@ const ChartSvg = React.memo(function ChartSvg({
 
   if (!data.length) return <View style={{ height, backgroundColor: T.bg0, borderRadius: 8 }} />;
 
-  // Phase 3 overlays — computed here (before the price range) so Phase 5's
-  // auto-scaling can include them; reused calculations, not duplicated.
-  const bollingerSeries = overlays?.bollinger ? bollinger(data) : null;
-  const keltnerSeries = overlays?.keltner ? keltnerChannel(data) : null;
-  const donchianSeries = overlays?.donchian ? donchianChannel(data) : null;
-  const snapshot = (overlays?.fib || overlays?.pivots) ? getMarketStructureSnapshot(data) : null;
+  // Phase 3 overlays — memoized per indicator type.
+  // Each only recomputes when (a) candle data changes or (b) its own overlay
+  // toggle changes. Unrelated toggles (e.g. fib) don't trigger bollinger recompute.
+  const bollingerSeries = useMemo(
+    () => overlays?.bollinger ? bollinger(data) : null,
+    [data, overlays?.bollinger],
+  );
+  const keltnerSeries = useMemo(
+    () => overlays?.keltner ? keltnerChannel(data) : null,
+    [data, overlays?.keltner],
+  );
+  const donchianSeries = useMemo(
+    () => overlays?.donchian ? donchianChannel(data) : null,
+    [data, overlays?.donchian],
+  );
+  const snapshot = useMemo(
+    () => (overlays?.fib || overlays?.pivots) ? getMarketStructureSnapshot(data) : null,
+    [data, overlays?.fib, overlays?.pivots],
+  );
 
   // Phase 5 — auto price scaling: candles alone used to set the visible
   // range, silently clipping Bollinger/Keltner/Donchian bands and
@@ -171,12 +184,14 @@ const ChartSvg = React.memo(function ChartSvg({
     return <View style={{ height, backgroundColor: T.bg0, borderRadius: 8 }} />;
   }
 
-  const maLines = showMA ? [20, 50].map((p, idx) => {
+  // useMemo: calcMA only runs when candles (data) or showMA changes.
+  // Previously ran on every render including livePrice ticks (2hz).
+  const maLines = useMemo(() => showMA ? [20, 50].map((p, idx) => {
     const ma = calcMA(data, p);
     let d = '';
     ma.forEach((v, i) => { if (v == null) return; d += (d === '' ? 'M' : 'L') + `${toX(i)},${toY(v)} `; });
     return { d, color: T.ma[idx] };
-  }) : [];
+  }) : [], [data, showMA, toX, toY, T.ma]);
 
   // Build band paths: upper/lower outlines + closed fill polygon.
   // Each band type gets a distinct visual style (see render section below).
