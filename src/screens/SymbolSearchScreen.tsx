@@ -74,15 +74,25 @@ export default function SymbolSearchScreen({ navigation, route }: any) {
 
   async function handlePick(asset: Asset) {
     await addAsset(asset);
-    // Navigate back using the original symbol approach — this is what worked
-    // before Phase 6. The assetId+exchange approach broke symbol search because
-    // not all searched assets resolve cleanly to a LogicalAsset id.
-    // ChartScreen's backward-compat shim handles { symbol } correctly for all cases.
-    // _ts forces ChartScreen's route-param effect to re-fire even when Chart is
-    // already the focused tab and/or the new symbol happens to match a stale
-    // params object — without it, tapping a search result while already on
-    // Chart silently kept showing whatever was previously loaded (e.g. NIFTY50).
-    navigation.navigate('MainTabs', { screen: returnTo, params: { symbol: asset.symbol, _ts: Date.now() } });
+    // Navigate with assetId + exchange so ChartScreen hits the Priority 1 path
+    // (setAssetId + setExchange) rather than the legacy setSymbol path.
+    //
+    // The legacy path (symbol-only) broke NSE stocks because:
+    //   setSymbol('RELIANCE') → findAssetByLegacySymbol('RELIANCE') → null
+    //   (BY_LEGACY_SYMBOL only knows built-in ASSETS, not custom search results)
+    //   → setExchange('') → variant useMemo can't find it → falls to NIFTY50.
+    //
+    // With assetId+exchange, Priority 1 fires directly:
+    //   setAssetId('RELIANCE'), setExchange('ao')
+    //   → variant useMemo finds the custom asset in allAssets → correct variant
+    //
+    // _ts still required to force the effect to re-fire when Chart tab is focused.
+    navigation.navigate('MainTabs', { screen: returnTo, params: {
+      assetId:  asset.symbol,   // the symbol IS the assetId for custom assets
+      exchange: asset.src,      // 'ao' | 'binance' | 'coindcx' | 'av' | 'forex'
+      symbol:   asset.symbol,   // kept for any consumers that still read symbol param
+      _ts:      Date.now(),
+    }});
   }
 
   return (

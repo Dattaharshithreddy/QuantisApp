@@ -120,6 +120,7 @@ function canUpdate(current: PriceInfo | undefined, incomingSource: PriceSource, 
 
 type DataCtx = {
   prices: Record<string, PriceInfo>;
+  customAssets: Asset[];  // exposed so useChartData can re-run variant memo on custom asset add
   nftTokenVersion: number; // bumped when NFO aoTokens are resolved; consumers use as dep
   nftTokenError: string | null;  // null=ok/pending, string=error message from failed token fetch
   retryNFOTokens: () => void;    // manually retry scrip master fetch after failure
@@ -886,7 +887,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <Ctx.Provider value={{
-      prices, logicalAssets, allAssets, nftTokenVersion, nftTokenError, retryNFOTokens, addAsset, removeAsset, hideAsset, restoreBuiltins, hiddenCount: hiddenKeys.length, exchangePrefs, updateExchangePreference,
+      prices, logicalAssets, allAssets, customAssets, nftTokenVersion, nftTokenError, retryNFOTokens, addAsset, removeAsset, hideAsset, restoreBuiltins, hiddenCount: hiddenKeys.length, exchangePrefs, updateExchangePreference,
       avKey, setAvKey, anthropicKey, setAnthropicKey, aoSession, setAoSession, wsStatus, news, liveCount, updateSpotPrice}}>
       {children}
     </Ctx.Provider>

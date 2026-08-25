@@ -50,7 +50,7 @@ export function useChartData(
   initialExchange?: string,
   callbacks: UseChartDataCallbacks = {},
 ) {
-  const { prices, aoSession, avKey, allAssets, nftTokenVersion, nftTokenError, updateSpotPrice } = useData();
+  const { prices, aoSession, avKey, allAssets, nftTokenVersion, nftTokenError, updateSpotPrice, customAssets } = useData();
   const { onBeforeLoad, onCandleClose } = callbacks;
   const onCandleCloseRef = useRef(onCandleClose);
   onCandleCloseRef.current = onCandleClose;
@@ -92,7 +92,12 @@ export function useChartData(
       fxKey: customFlat.fxKey, fxInv: customFlat.fxInv,
     } as ExchangeVariant;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assetId, exchange]); // allAssets intentionally omitted — built-ins are stable
+  // customAssetsKey added: when a new symbol is added via Search (addAsset),
+  // the memo must re-run so the new custom asset is found in allAssets.
+  // Using a join() key is O(n) but customAssets is typically tiny (<20 items)
+  // and this only runs when the custom list actually changes.
+  // Built-in assets remain stable — this dep only fires for Search results.
+  }, [assetId, exchange, (customAssets ?? []).map((a: any) => a.symbol).join(',')]);
 
   // symbol = variant.symbol — the internal ML/cache/price key
   // Fallback chain: variant.symbol → find in allAssets by symbol → assetId itself
