@@ -242,15 +242,19 @@ export function useChartData(
     //     via L2 + network in the background below.
     const memCached = memGet(symbol, tf);
     _timing('l1_lookup');
+    // cached declared at outer scope so the merge step below can use it
+    // regardless of which path (L1 hit vs L1 miss) was taken.
+    let cached: { candles: Candle[]; isFresh: boolean } | null = null;
+
     if (memCached?.length) {
       setCandles(memCached);
       setDataSrc('live');
       setLoading(false);
-      // Ask L2 only to determine freshness — use a separate non-blocking read
-      // so we can decide whether to skip the network entirely.
+      // Ask L2 only to determine freshness — no need to re-render from it.
       const l2meta = await getCachedCandles(symbol, tf);
       _timing('l2_read');
       if (myRequestId !== loadRequestRef.current) return;
+      cached = l2meta; // store for merge step below
       if (l2meta?.isFresh) {
         // L2 still within TTL — L1 data is good, skip network entirely
         await recordSampleCount(
@@ -261,10 +265,10 @@ export function useChartData(
         return; // ← EARLY RETURN: no network request
       }
       // L2 is stale — fall through to network refresh below.
-      // User already sees data (set above); network will update silently.
+      // User already sees data from L1 (set above); network will update silently.
     } else {
       // 1b. L2: AsyncStorage cache (~10–50ms) — survives app restarts
-      const cached = await getCachedCandles(symbol, tf);
+      cached = await getCachedCandles(symbol, tf);
       if (myRequestId !== loadRequestRef.current) return;
 
       if (cached?.candles?.length) {
@@ -285,8 +289,6 @@ export function useChartData(
         // No cache at all — show spinner only if we have nothing to display.
         // If candles from a previous TF are still in state, keep them visible
         // so the chart never goes blank. The network fetch will replace them.
-        // This is the cold-cache path where the user just switched to a TF
-        // they've never loaded this session.
         setLoading(true);
         // Intentionally do NOT setCandles([]) — previous TF candles remain
         // visible as a placeholder until the real data arrives below.
